@@ -129,7 +129,7 @@ function stressCombinedSources(totalPerSystem, ldVolume) {
     const sigemCode = `C1O_RNEST_U32_8.1.${eap3}.${eap4}_INS_RIR_nt-MIX-${index}`;
     const pwCode = `C1O-RNEST-U32-8.1.${eap3}.${eap4}-INS-RIR-MIX-${index}`;
     sigem[index] = { document: sigemCode, revision: "0", status: "Em Análise", sourceRow: index + 2 };
-    pw[index] = { document: pwCode, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "SIM", sourceRow: index + 2 };
+    pw[index] = { document: pwCode, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "SIM", company: "CSG", sourceRow: index + 2 };
   }
   for (let index = 0; index < ldVolume; index += 1) {
     const group = Math.floor(index / 1000).toString(36).toUpperCase().padStart(3, "0");
@@ -138,7 +138,7 @@ function stressCombinedSources(totalPerSystem, ldVolume) {
     const target = etVolume + index;
     ld[index] = { document: code, revision: "0", sourceRow: index + 2 };
     sigem[target] = { document: code, revision: "0", status: "Postado", sourceRow: target + 2 };
-    pw[target] = { document: code, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "SIM", sourceRow: target + 2 };
+    pw[target] = { document: code, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "SIM", company: "CSG", sourceRow: target + 2 };
   }
 
   const heapBefore = process.memoryUsage().heapUsed;
@@ -175,7 +175,7 @@ function stressCore(volume) {
       revisionComplete: "0",
       documentType: "RIR",
       state: "Liberado",
-      lastEmission: "SIM",
+      lastEmission: "SIM", company: "CSG",
       sourceRow: index + 2,
     };
   }
