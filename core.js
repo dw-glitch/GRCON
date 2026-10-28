@@ -2058,11 +2058,21 @@
       if (sameSheet.length) technicalCandidates = sameSheet;
     }
     technicalCandidates = [...technicalCandidates].sort(recordCompare);
+    // A Consulta Geral confirma o STATUS, mas pode não transportar os campos
+    // GRDT/data efetiva. Buscar esses campos na mesma revisão do histórico da
+    // LD sem usar o status desse histórico para classificar o documento.
+    const historyCandidates = (group.history || [])
+      .filter((item) => normalizeRevision(item.revision) === normalizeRevision(revision))
+      .filter((item) => text(item.grdt) || text(item.effectiveDate))
+      .sort(recordCompare);
+    const historyEmissionItem = historyCandidates[0] || null;
+    const emissionCandidates = statusHasEmissionFields ? [statusItem]
+      : historyCandidates.length ? historyCandidates : technicalCandidates;
 
     // Títulos diferentes entre linhas antigas e atuais não são evidência de conflito.
     // Para Em Análise, só há conflito quando duas linhas da mesma revisão trazem
     // GRDT/data efetiva preenchidas e realmente incompatíveis.
-    const emissionSignatures = new Set(technicalCandidates
+    const emissionSignatures = new Set(emissionCandidates
       .filter((item) => text(item.grdt) || text(item.effectiveDate))
       .map((item) => {
         const parsed = parseDate(item.effectiveDate);
@@ -2072,14 +2082,15 @@
         return `${norm(item.grdt)}|${dateKey}`;
       }));
     const technicalEvidenceConflict = emissionSignatures.size > 1;
-    const valueItem = statusHasEmissionFields ? statusItem : technicalCandidates[0] || null;
+    const valueItem = statusHasEmissionFields ? statusItem : historyEmissionItem || technicalCandidates[0] || null;
+    const valueFromHistory = Boolean(statusHasEmissionFields || historyEmissionItem);
     return {
       item: valueItem,
       statusSource: evidenceLocation(statusItem, "Status SIGEM"),
-      emissionSource: evidenceLocation(valueItem, statusHasEmissionFields ? "GRDT e data da Colar SIGEM" : "GRDT e data da linha técnica"),
-      sourceKind: statusHasEmissionFields ? "history" : valueItem ? "technical" : "missing",
+      emissionSource: evidenceLocation(valueItem, valueFromHistory ? "GRDT e data da Colar SIGEM" : "GRDT e data da linha técnica"),
+      sourceKind: valueFromHistory ? "history" : valueItem ? "technical" : "missing",
       conflict: !statusHasEmissionFields && technicalEvidenceConflict,
-      candidates: statusHasEmissionFields ? [statusItem] : technicalCandidates,
+      candidates: emissionCandidates,
     };
   }
 
