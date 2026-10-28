@@ -222,6 +222,13 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
 
 async function rebuildModelAsync(): Promise<boolean> {
   const generation = ++state.modelGeneration;
+  // Bases antigas sem identificação comprovada da coluna C não podem gerar KPI oficial.
+  if (state.pw.meta && (state.pw.meta.companyColumn !== "C" || state.pw.meta.scopeCompanyColumnMissing === true)) {
+    state.model = null;
+    state.aggregates = null;
+    state.result = null;
+    return false;
+  }
   let built: WorkerModelPayload;
   try {
     built = await modelInWorker(generation);
