@@ -49,8 +49,8 @@
     "Cloudflare API with controlled AI binding",
     "PGlite permission/isolation/immutability/retry tests"
   ],
-  "migrationStatus": "Applied to Supabase and privileges introspected; no operational datasets inserted",
-  "deploymentStatus": "Published and commit/assets verified at 7fd267d554febb804afe73f3021574d4bd09c110; authenticated production flow and independent technical homologation remain pending",
+  "migrationStatus": "Applied to Supabase and privileges introspected; source datasets unchanged; one real four-document audit saved during owner production smoke test",
+  "deploymentStatus": "Published and commit/assets verified; owner authenticated sample exercised, independent technical homologation and other production paths remain pending",
   "productionEvidence": {
     "verifiedDate": "2026-10-28",
     "commit": "7fd267d554febb804afe73f3021574d4bd09c110",
@@ -69,7 +69,27 @@
       "ok": true,
       "citedItems": 2
     },
-    "authenticatedAuditorProductionFlow": "not exercised: browser requires GRCON sign-in",
+    "authenticatedAuditorProductionFlow": {
+      "role": "owner",
+      "contractsExercised": 1,
+      "documents": 4,
+      "results": {
+        "clear": 0,
+        "confirmedErrors": 0,
+        "suggestions": 0,
+        "pending": 4
+      },
+      "loadedFromGenerator": true,
+      "detailsAndFiscalHistory": true,
+      "savedAuditRuns": 1,
+      "restoredAudit": true,
+      "correctionDecisions": 0,
+      "officialPackageGenerated": false,
+      "zipDownload": "triggered; bytes unavailable for inspection",
+      "semanticConsultation": "fallback: unverifiable response; fix proposed in PR 329",
+      "otherRoles": "not exercised in production",
+      "crossContractSwitch": "not exercised in production"
+    },
     "semanticAuditorQuality": "not homologated"
   }
 }
