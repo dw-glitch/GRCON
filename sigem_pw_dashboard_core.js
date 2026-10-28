@@ -837,18 +837,24 @@
     const pwScope = partitionPwCompanyRecords(pwRecords);
     const sourceSigem = normalizeRecords(sigemScope.eligible, "sigem", ldUniverse, enforceLd);
     const sourcePw = normalizeRecords(pwScope.eligible, "pw", ldUniverse, enforceLd);
-    const isEligible = (record) => !requireN1710Ld || record.documentClass !== "N-1710"
-      || (ldAvailable && record.inQualityLd);
+    const isEligible = (record) => !requireN1710Ld || (!record.n1710Candidate
+      && (record.documentClass !== "N-1710" || (ldAvailable && record.inQualityLd)));
     const normalizedSigem = sourceSigem.filter(isEligible);
     const normalizedPw = sourcePw.filter(isEligible);
     const excludedSigemN1710 = sourceSigem.filter((record) => record.documentClass === "N-1710" && !isEligible(record));
     const excludedPwN1710 = sourcePw.filter((record) => record.documentClass === "N-1710" && !isEligible(record));
-    const candidates = sourceSigem.filter((record) => record.n1710Candidate);
+    const candidates = [
+      ...sourceSigem.filter((record) => record.n1710Candidate).map((record) => ({ ...record, auditSource: "sigem" })),
+      ...sourcePw.filter((record) => record.n1710Candidate).map((record) => ({ ...record, auditSource: "pw" })),
+    ];
     const sigemEntries = buildEntryMap(normalizedSigem, "sigem");
     const pwEntries = buildEntryMap(normalizedPw, "pw");
     return {
       ldUniverse, ldAvailable, requireN1710Ld,
       excludedSigemN1710, excludedPwN1710, n1710Candidates: candidates,
+      sourceSigemEntries: buildEntryMap(sourceSigem, "sigem"),
+      sourcePwEntries: buildEntryMap(sourcePw, "pw"),
+      sourcePwDocuments: buildDocumentMap(sourcePw, "pw"),
       comparisonScope: {
         rule: "PW: CSG/QTM na coluna C; N-1710 oficial: código presente na LD", version: PW_SCOPE_VERSION,
         sigemAccepted: normalizedSigem.length, pwAccepted: normalizedPw.length,
@@ -1082,14 +1088,20 @@
     const lists = buildComparisonLists(sigem, pw, { revisionScope, pwDocuments: source.pwAll });
     const auditRows = (records, kind, reason) => {
       const map = scopeRevisionMap(buildEntryMap(records || [], kind), revisionScope);
-      return [...map.values()].filter((entry) => documentPasses(entry, kind, filters)).map((entry) => ({
+      return [...map.values()].filter((entry) => documentPasses(entry, kind, filters)).map((entry) => {
+        const relatedPw = source.sourcePwEntries?.get(entry.key) || source.sourcePwDocuments?.get(entry.documentKey);
+        const relatedSigem = source.sourceSigemEntries?.get(entry.key);
+        return ({
         ...comparisonRow("audit:" + kind + ":" + reason + ":" + entry.key,
-          kind === "sigem" ? entry : null, kind === "pw" ? entry : null),
+          kind === "sigem" ? entry : relatedSigem || null,
+          kind === "pw" ? entry : source.sourcePwEntries?.get(entry.key) || null,
+          kind === "sigem" && relatedPw && !source.sourcePwEntries?.has(entry.key) ? { pwDocumentEntry: relatedPw } : undefined),
         situationKey: reason,
         situation: reason === "ldUnavailableN1710" ? "LD N-1710 indisponível: conferência pendente"
           : "N-1710 não localizado na LD validada",
         ldStatus: reason === "ldUnavailableN1710" ? "LD INDISPONÍVEL" : "NÃO",
-      }));
+      });
+      });
     };
     const ldReason = source.ldAvailable ? "outsideLdN1710" : "ldUnavailableN1710";
     lists.sigemN1710OutsideLd = source.ldAvailable ? auditRows(source.excludedSigemN1710, "sigem", ldReason) : [];
@@ -1098,8 +1110,11 @@
       ...auditRows(source.excludedSigemN1710, "sigem", ldReason),
       ...auditRows(source.excludedPwN1710, "pw", ldReason),
     ];
-    lists.n1710Candidates = auditRows(source.n1710Candidates, "sigem", "n1710Candidate")
-      .map((row) => ({ ...row, situation: "Código semelhante a N-1710: verificar formato completo" }));
+    lists.n1710Candidates = [
+      ...auditRows((source.n1710Candidates || []).filter((row) => row.auditSource === "sigem"), "sigem", "n1710Candidate"),
+      ...auditRows((source.n1710Candidates || []).filter((row) => row.auditSource === "pw"), "pw", "n1710Candidate"),
+    ].map((row) => ({ ...row, ldStatus: "A CONFERIR",
+      situation: "Código semelhante a N-1710: verificar formato completo" }));
     const sigemAllCodes = new Set([
       ...(source.normalizedSigem || []), ...(source.excludedSigemN1710 || []),
     ].map((record) => record.documentKey));
