@@ -60,6 +60,27 @@ Referências oficiais consultadas em 26/10/2026:
 - https://developers.cloudflare.com/workflows/reference/pricing/
 - https://developers.cloudflare.com/workflows/build/workers-api/
 
+## Crescimento acima da franquia de etapas (28/10/2026)
+
+Com 39 snapshots/919.639 registros, o plano estimado atingiu 2.765 etapas,
+acima do teto operacional conservador de 2.700 por execução do GRCON. A
+preparação anterior recusava toda a cópia com `SIGEM_JOB_STEP_LIMIT`.
+
+O planejador agora separa as versões em **ondas** que respeitam os limites
+de 2.700 etapas agregadas e até 1.000 por frente. Depois de concluir cópia,
+selo, segunda auditoria integral e recibos válidos, o painel informa quantas
+versões faltam e libera **Iniciar próxima etapa**. A etapa seguinte é iniciada
+explicitamente após verificar o consumo diário de Workflows; não há execução
+ilimitada ou contratação automática. A franquia Free anunciada pela Cloudflare
+é de 3.000 etapas/dia, compartilhada com outros Workflows da conta.
+
+Uma onda completa **não** é migração completa. O status só declara
+`complete:true` quando o inventário original permanece estável, nenhuma
+versão está pendente e cada snapshot tem um recibo íntegro de auditoria.
+Para retomadas, o servidor reconfere os recibos anteriores no Turso e R2.
+Uma alteração do inventário exige nova reconciliação. O modo `turso` como
+fonte oficial e a limpeza do Supabase seguem bloqueados.
+
 ## Recuperação corporativa pelo GitHub Actions
 
 O workflow manual `SIGEM — Recuperação real de backup` usa as credenciais
