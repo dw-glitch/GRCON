@@ -118,10 +118,10 @@ const classified = Dashboard.aggregate(
     { document: et("000003"), revision: "0", status: "Postado" },
   ],
   [
-    { document: et("000002"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
-    { document: et("000003"), revision: "0", state: "Liberado", lastEmission: "Sim" },
-    { document: et("000004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
-    { document: et("000005"), revision: "0", state: "Liberado", lastEmission: "Sim" },
+    { document: et("000002"), revision: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
+    { document: et("000003"), revision: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
+    { document: et("000004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
+    { document: et("000005"), revision: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
   ],
 );
 assert.equal(classified.summary.sigemOnly, 1);
