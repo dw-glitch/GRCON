@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const VERSION = "sigem-pw-audit-1";
+  const VERSION = "sigem-pw-audit-2-csg-qtm";
   const CLASSES = Object.freeze(["ET", "N-1710", "CV", "Não classificado"]);
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
@@ -46,6 +46,7 @@
       { key: "emission-balance", label: "Emissões contidas na base cadastrada", passed: emitted <= validEntries },
       { key: "identity", label: "Código e revisão normalizados", passed: identityComplete },
       { key: "scope-version", label: "Regra de escopo vigente aplicada", passed: Number(meta.scopeVersion || 0) >= Number(Dashboard.PW_SCOPE_VERSION || 0) },
+      { key: "company-column", label: "Siglas da empresa lidas da coluna C", passed: meta.companyColumn === "C" && meta.scopeCompanyColumnMissing !== true },
       { key: "quality-ld", label: "Cadastro PW independe da LD; vínculo com LD é apenas informativo", passed: true },
     ];
     return {
@@ -68,6 +69,9 @@
         snapshotId: text(meta.snapshotId),
         scopeVersion: Number(meta.scopeVersion || 0),
         scopeRule: text(meta.scopeRule),
+        companyColumn: text(meta.companyColumn),
+        companyCounts: meta.scopeCompanyCounts || {},
+        excludedReasons: meta.scopeExcludedReasons || {},
         ldSnapshotId: scopeLdSnapshotId,
         ldFileName: scopeLdSnapshotId && scopeLdSnapshotId === activeLdId ? text(ldBase.meta.fileName) : "",
       },
@@ -91,6 +95,12 @@
       { Grupo: "Emissão", Indicador: "PW emitido", Valor: metrics.emittedEntries },
       { Grupo: "Emissão", Indicador: "PW não emitido", Valor: metrics.notEmittedEntries },
       { Grupo: "Qualidade", Indicador: "Duplicidades técnicas consolidadas", Valor: metrics.consolidatedDuplicates },
+      { Grupo: "Escopo", Indicador: "Coluna da sigla", Valor: trace.companyColumn || "Não validada" },
+      { Grupo: "Escopo", Indicador: "Linhas CSG", Valor: trace.companyCounts.CSG || 0 },
+      { Grupo: "Escopo", Indicador: "Linhas QTM", Valor: trace.companyCounts.QTM || 0 },
+      { Grupo: "Escopo", Indicador: "Linhas com múltiplas siglas válidas", Valor: trace.companyCounts.MULTIPLAS || 0 },
+      { Grupo: "Escopo", Indicador: "Outras empresas", Valor: trace.excludedReasons.empresa_divergente || 0 },
+      { Grupo: "Escopo", Indicador: "Sem sigla", Valor: trace.excludedReasons.sigla_ausente || 0 },
       { Grupo: "Origem", Indicador: "Arquivo PW", Valor: trace.fileName || "—" },
       { Grupo: "Origem", Indicador: "Data da importação", Valor: trace.importedAt || "—" },
       { Grupo: "Origem", Indicador: "Snapshot PW", Valor: trace.snapshotId || "—" },

@@ -64,6 +64,8 @@
           && count(summary.classifiedTotal) === count(summary.sigem) + count(summary.pwRegistered) - count(summary.matched), loaded.sigem && loaded.pw),
       check("quality-ld", "LD da Qualidade usada apenas para conferência de localização (sem bloquear cadastro PW)",
         true, loaded.pw),
+      check("company-column", "Base PW identifica a empresa pela coluna C (CSG/QTM)",
+        !Boolean(source.pw?.meta?.scopeCompanyColumnMissing) && (!source.pw?.meta || source.pw.meta.companyColumn === "C"), loaded.pw),
       check("scope-version", "Base PW processada pela regra de escopo vigente",
         count(source.pw && source.pw.meta && source.pw.meta.scopeVersion) >= count(Dashboard && Dashboard.PW_SCOPE_VERSION), loaded.pw),
     ];

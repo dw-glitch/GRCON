@@ -44,8 +44,8 @@ const server=http.createServer(async(req,res)=>{
   }
   const a=await client('owner'),b=await client('operator');
   await a.evaluate(async()=>{
-   const records=Array.from({length:2001},(_,i)=>({document:'C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-'+String(i).padStart(6,'0'),revision:'0',state:'Liberado',lastEmission:i%2?'Sim':'Previsto'}));
-   const base=await GrconSigemPwDashboard.savePwBase({meta:{fileName:'PW-1.csv',importedAt:'2026-10-20T10:00:00Z'},records});
+   const records=Array.from({length:2001},(_,i)=>({document:'C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-'+String(i).padStart(6,'0'),revision:'0',state:'Liberado',lastEmission:i%2?'Sim':'Previsto',company:'CSG'}));
+   const base=await GrconSigemPwDashboard.savePwBase({meta:{companyColumn:'C',fileName:'PW-1.csv',importedAt:'2026-10-20T10:00:00Z'},records});
    await GrconSharedPwQuery.publish(base);
   });
   const first=await b.evaluate(async()=>{const data=await GrconSigemPwDashboard.loadBases();return {id:data.pw.meta.snapshotId,records:data.pw.records.length,original:data.pw.sourceRecords.length,source:data.pw.meta.source,canPublish:GrconSharedPwQuery.canPublish()};});
@@ -54,7 +54,7 @@ const server=http.createServer(async(req,res)=>{
   await b.evaluate(async()=>{
    const previous=await GrconSigemPwDashboard.loadPwBase();
    const records=previous.sourceRecords.slice(0,3).map(r=>({...r,revision:'A'}));
-   await GrconSharedPwQuery.publish({meta:{fileName:'PW-2.csv',importedAt:'2026-10-21T10:00:00Z'},records});
+   await GrconSharedPwQuery.publish({meta:{companyColumn:'C',fileName:'PW-2.csv',importedAt:'2026-10-21T10:00:00Z'},records});
   });
   const second=await b.evaluate(async()=>{const data=await GrconSigemPwDashboard.loadBases();const historical=await GrconSharedPwQuery.loadSnapshot('pw-1');return {id:data.pw.meta.snapshotId,records:data.pw.records.length,versions:GrconSharedPwQuery.state.versions.length,historical:historical.records.length};});
   assert.deepEqual(second,{id:'pw-2',records:3,versions:2,historical:2001});

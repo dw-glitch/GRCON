@@ -8,25 +8,25 @@ const Revision=require('../sigem_pw_revision_core.js');
 const Readiness=require('../sigem_pw_readiness_core.js');
 const et=n=>`C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${String(n).padStart(6,'0')}`;
 const statuses=['Previsto','Em análise','Cancelado','Superado','Qualquer estado',''];
-const csv=['NumeroDocumentoCliente;RevisaoCompleta;o_statename;Última emissão;o_filename',
- ...statuses.map((status,i)=>[et(i+1),i%2?'A':'',status,i===1?'Sim':i===2?'Não':i===3?'???':'',`arquivo-${i}.pdf`].join(';')),
- ['DOCUMENTO-EXTERNO','B','Estado externo','','externo.pdf'].join(';'),
- [et(1).replaceAll('_','-'),'','Outro estado','','duplicado.docx'].join(';'),
- [et(2),'A','Repetido','Sim','duplicado.pdf'].join(';'),
- [et(2),'B','Outra revisão','','revisao-b.pdf'].join(';')].join('\n');
+const csv=['NumeroDocumentoCliente;RevisaoCompleta;Sigla da Empresa;o_statename;Última emissão;o_filename',
+ ...statuses.map((status,i)=>[et(i+1),i%2?'A':'','CSG',status,i===1?'Sim':i===2?'Não':i===3?'???':'',`arquivo-${i}.pdf`].join(';')),
+ ['DOCUMENTO-EXTERNO','B','OUT','Estado externo','','externo.pdf'].join(';'),
+ [et(1).replaceAll('_','-'),'','CSG','Outro estado','','duplicado.docx'].join(';'),
+ [et(2),'A','CSG','Repetido','Sim','duplicado.pdf'].join(';'),
+ [et(2),'B','CSG','Outra revisão','','revisao-b.pdf'].join(';')].join('\n');
 const parsed=Core.parsePwCsv(csv,{fileName:'pw-completo.csv'});
 const prepared=Core.sanitizePwBase(parsed,[]);
-assert.equal(prepared.records.length,10,'nenhum estado, classe ou revisão exclui uma linha com código');
-assert.equal(prepared.meta.scopeExcludedCount,0);
-assert.equal(prepared.meta.uniqueDocumentCount,7);
-assert.equal(prepared.meta.validRevisionRecordCount,8);
+assert.equal(prepared.records.length,9,'somente CSG/QTM da coluna C são elegíveis sem restringir estado ou revisão');
+assert.equal(prepared.meta.scopeExcludedCount,1);
+assert.equal(prepared.meta.uniqueDocumentCount,6);
+assert.equal(prepared.meta.validRevisionRecordCount,7);
 assert.equal(prepared.meta.duplicateRevisionCount,2);
-assert.equal(Core.parsePwCsv('NumeroDocumentoCliente\nCODIGO-SEM-OUTRAS-COLUNAS').records.length,1);
-assert.throws(()=>Core.parsePwCsv('Status\nPrevisto'),/NumeroDocumentoCliente/);
+assert.equal(Core.parsePwCsv('NumeroDocumentoCliente;Revisao;Sigla da Empresa\nCODIGO-SEM-OUTRAS-COLUNAS;0;QTM').records.length,1);
+assert.throws(()=>Core.parsePwCsv('Status;Revisao;Sigla da Empresa\nPrevisto;0;CSG'),/NumeroDocumentoCliente/);
 const sigem=[...statuses.map((_,i)=>({document:et(i+1),revision:'0',status:'Postado'})),{document:'DOCUMENTO-EXTERNO',revision:'0'}, {document:et(99),revision:'0'}];
 const model=Core.createModel(sigem,prepared.records,[]);
-assert.equal(model.comparisonScope.pwOutOfScope,1,'documento externo permanece separado');
-assert.equal(model.comparisonScope.sigemOutOfScope,1);
+assert.equal(model.comparisonScope.pwOutOfScope,0,'a base PW saneada contém somente CSG/QTM');
+assert.equal(model.comparisonScope.sigemOutOfScope,0,'a Consulta Geral não pode ser filtrada por C1O');
 const all=Core.aggregateModel(model,{}, {revisionScope:'all'});
 assert.equal(all.summary.pwRegistered,7,'somente C1O conta; repetições não inflam o total de cadastros');
 assert.equal(all.quality.pwSourceRows,9,'registros externos ficam fora das estatísticas C1O');
@@ -37,18 +37,19 @@ assert.deepEqual(all.lists.pwDuplicates.map(r=>r.pwSourceRow),[2,9,3,10]);
 assert.ok(all.lists.pwDuplicates.every(r=>r.duplicateCount===2 && r.inPw));
 assert.equal(new Set(all.lists.pwDuplicates.map(r=>r.key)).size,4);
 assert.equal(all.lists.pwDuplicates.filter(r=>r.pwOriginalCode===et(2)&&r.revision==='B').length,0,'outra revisão não é uma duplicata');
-assert.equal(all.summary.sigemOnly,1);
-assert.equal(all.lists.sigemOnly[0].document,et(99));
+assert.equal(all.summary.sigemOnly,2);
+assert.ok(all.lists.sigemOnly.some(r=>r.document===et(99)));
+assert.ok(all.lists.sigemOnly.some(r=>r.document==='DOCUMENTO-EXTERNO'));
 assert.equal(all.lists.sigem.filter(r=>r.inPw).length,6,'somente documentos C1O presentes no PW são cadastrados');
 assert.ok(all.lists.bothOtherRevision.every(r=>r.inPw&&!r.pwRevisionMatched&&r.pwEmission==='Revisão não confirmada'));
 assert.equal(all.lists.pw.length,7,'a evidência reutilizada por outra revisão não é um novo cadastro');
 const rev0=Core.aggregateModel(model,{}, {revisionScope:'revision0'});
 assert.equal(rev0.lists.sigem.filter(r=>r.inPw).length,6,'presença consulta o subconjunto C1O no PW mesmo na visão revisão 0');
 assert.equal(rev0.lists.pwDuplicates.length,4,'duplicados continuam auditáveis no recorte revisão 0');
-assert.equal(rev0.summary.sigemOnly,1);
+assert.equal(rev0.summary.sigemOnly,2);
 const onlyUnknown=Core.aggregateModel(model,{documentClass:'Não classificado'},{revisionScope:'all'});
 assert.equal(onlyUnknown.summary.pwRegistered,0,'documento externo sem C1O deve ficar somente na lista segregada');
-assert.ok(onlyUnknown.lists.sigem.every(r=>r.inPw));
+assert.ok(onlyUnknown.lists.sigem.some(r=>r.document==='DOCUMENTO-EXTERNO'&&!r.inPw));
 const hiddenByStatus=Core.aggregateModel(model,{pwStatus:'NUNCA EXISTIU'},{revisionScope:'all'});
 assert.equal(hiddenByStatus.lists.sigem.filter(r=>r.inPw).length,6,'filtro de apresentação nunca muda a prova de cadastro C1O');
 const legacy=Scope.aggregateModel(Scope.createModel(sigem,prepared.records),{}, {revisionScope:'all'});
@@ -56,7 +57,7 @@ assert.deepEqual(legacy.summary,all.summary,'core principal e fachada legada usa
 const readiness=Readiness.assess({sigem:{meta:{},records:sigem},pw:prepared,ld:{meta:null,records:[]}},all);
 assert.equal(readiness.ready,true,JSON.stringify(readiness.failedChecks));
 for(const status of statuses){
- const r=Revision.analyze(Core.createModel([{document:et(1),revision:'0'}],[{document:et(1),state:status,lastEmission:''}],[]));
+ const r=Revision.analyze(Core.createModel([{document:et(1),revision:'0'}],[{document:et(1),state:status,lastEmission:'',company:'CSG'}],[]));
  assert.notEqual(r.rows[0].situation,Revision.SITUATIONS.NOT_FOUND);
  assert.match(r.rows[0].reason,/cadastrado/i);
 }
@@ -69,7 +70,7 @@ assert.deepEqual(response.aggregates['revision0:all'].summary,rev0.summary);
 const Evo=require('../sigem_pw_evolution_core.js');
 const universe=Evo.buildLdUniverse([],[]);
 const sameCode='DOCUMENTO-C1O-EXTERNO';
-const make=(system,revision)=>Evo.buildSnapshot(system,{meta:{recordCount:1},records:[{document:sameCode,revision}]},universe);
+const make=(system,revision)=>Evo.buildSnapshot(system,{meta:{recordCount:1},records:[{document:sameCode,revision,company:'CSG'}]},universe);
 const evoSigem=make('sigem','B'),evoPw=make('pw','B');
 assert.equal(evoSigem.records.length,1);assert.equal(evoPw.records.length,1);
 assert.equal(evoSigem.audit.classes['Não classificado'],1);

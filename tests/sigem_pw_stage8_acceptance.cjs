@@ -79,7 +79,7 @@ function validResult() {
 (function completeConsistentSetIsReady() {
   const assessment = Readiness.assess({
     sigem: base({ snapshotId: "sigem:1" }, []),
-    pw: base({ snapshotId: "pw:1", scopeVersion: Dashboard.PW_SCOPE_VERSION, scopeLdSnapshotId: "ld:1" }, []),
+    pw: base({ snapshotId: "pw:1", scopeVersion: Dashboard.PW_SCOPE_VERSION, companyColumn: "C", scopeCompanyColumnMissing: false, scopeLdSnapshotId: "ld:1" }, []),
     ld: base({ snapshotId: "ld:1" }, []),
   }, validResult());
   assert.equal(assessment.status, "ready");

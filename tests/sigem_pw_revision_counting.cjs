@@ -15,6 +15,7 @@ const pw = (document, revision, extra = {}) => ({
   revisionComplete: revision,
   state: "Liberado",
   lastEmission: "Sim",
+  company: "CSG",
   ...extra,
 });
 

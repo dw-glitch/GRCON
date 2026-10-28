@@ -14,6 +14,7 @@ const p = (id, revision, lastEmission, extra = {}) => ({
   revisionComplete: revision,
   state: lastEmission === "Previsto" ? "Cadastrado" : "Liberado",
   lastEmission,
+  company: "CSG",
   ...extra,
 });
 const universe = Evo.buildLdUniverse(

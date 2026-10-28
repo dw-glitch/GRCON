@@ -222,6 +222,13 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
 
 async function rebuildModelAsync(): Promise<boolean> {
   const generation = ++state.modelGeneration;
+  // Bases antigas sem identificação comprovada da coluna C não podem gerar KPI oficial.
+  if (state.pw.meta && (state.pw.meta.companyColumn !== "C" || state.pw.meta.scopeCompanyColumnMissing === true)) {
+    state.model = null;
+    state.aggregates = null;
+    state.result = null;
+    return false;
+  }
   let built: WorkerModelPayload;
   try {
     built = await modelInWorker(generation);
@@ -759,6 +766,7 @@ async function exportCurrentList(): Promise<void> {
       "Mesma revisão confirmada": row.pwRevisionMatched ? "SIM" : "NÃO",
       "Status PW": row.pwStatus,
       "Emissão PW": row.pwEmission,
+      "Sigla empresa PW (coluna C)": row.pwCompany || "",
       "Situação": row.situation,
       ...(exportMeta.list === "pwDuplicates" ? {
         "Código original PW": row.pwOriginalCode || "", "Ocorrências do grupo": row.duplicateCount || 0,
@@ -775,6 +783,7 @@ async function exportCurrentList(): Promise<void> {
       { Item: "PW utilizada", Valor: text(exportMeta.pw.importedAt) },
       { Item: "Regra de cadastro", Valor: Core().EMISSION_RULE },
       { Item: "PW ID", Valor: text(exportMeta.pw.snapshotId) },
+      { Item: "Filtro de empresa", Valor: "Sigla na coluna C = CSG ou QTM" },
       { Item: "Escopo de revisão", Valor: exportMeta.list === "pwDuplicates" ? "Base PW completa (duplicados por código + revisão)" : exportMeta.scope === "revision0" ? "Revisão 0" : "Todas as revisões" },
       { Item: "Filtros", Valor: JSON.stringify(exportMeta.filters) },
       { Item: "Lista", Valor: exportMeta.list },

@@ -31,6 +31,7 @@ export interface SigemPwRecord {
   status?: string;
   state?: string;
   lastEmission?: string;
+  company?: string;
   documentClass?: string;
   sourceRow?: number;
   [key: string]: unknown;
@@ -63,6 +64,7 @@ export interface SigemPwRow {
   pwStatus: string;
   pwEmission: string;
   pwLastEmission?: string;
+  pwCompany?: string;
   sigemOriginalCode?: string;
   pwOriginalCode?: string;
   pwRevisionEvidence?: string;

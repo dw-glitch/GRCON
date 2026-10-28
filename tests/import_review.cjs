@@ -7,10 +7,10 @@ const result=api.compare(previous,next);assert.equal(result.added,1);assert.equa
 const Core=require('../sigem_pw_dashboard_core.js');
 const mapping={delimiter:';',columns:{document:'Codigo',revision:'Revisao QA',documentType:'Tipo QA',state:'Estado QA',lastEmission:'Emissao QA'}};
 api.saveProfile('PW Qualidade',mapping);api.selectProfile('PW Qualidade');
-const parsed=Core.parsePwCsv('Codigo;Revisao QA;Tipo QA;Estado QA;Emissao QA\nRL-5290.00-22313-ABC-C1O-001;0;RL;Em Workflow;Sim',{mappingProfile:api.profile()});assert.equal(parsed.records.length,1);assert.equal(parsed.records[0].revision,'0');
-assert.throws(()=>Core.parsePwCsv('Codigo;Codigo;Revisao QA;Tipo QA;Estado QA;Emissao QA\nDOC;DOC;0;RL;State;Sim',{mappingProfile:api.profile()}),/ambígua/);
-assert.throws(()=>Core.parsePwCsv('Outro;Revisao QA;Tipo QA;Estado QA;Emissao QA\nDOC;0;RL;State;Sim',{mappingProfile:api.profile()}),/ausente/);
-const documentOnly=Core.parsePwCsv('Codigo\nDOCUMENTO-SEM-METADADOS',{mappingProfile:api.profile()});assert.equal(documentOnly.records.length,1);assert.equal(documentOnly.records[0].lastEmission,'');
+const parsed=Core.parsePwCsv('Codigo;Revisao QA;Sigla da Empresa;Tipo QA;Estado QA;Emissao QA\nRL-5290.00-22313-ABC-C1O-001;0;CSG;RL;Em Workflow;Sim',{mappingProfile:api.profile()});assert.equal(parsed.records.length,1);assert.equal(parsed.records[0].revision,'0');
+assert.throws(()=>Core.parsePwCsv('Codigo;Codigo;Sigla da Empresa;Revisao QA;Tipo QA;Estado QA;Emissao QA\nDOC;DOC;CSG;0;RL;State;Sim',{mappingProfile:api.profile()}),/ambígua/);
+assert.throws(()=>Core.parsePwCsv('Outro;Revisao QA;Sigla da Empresa;Tipo QA;Estado QA;Emissao QA\nDOC;0;CSG;RL;State;Sim',{mappingProfile:api.profile()}),/ausente/);
+const documentOnly=Core.parsePwCsv('Codigo;Outra Coluna;Sigla da Empresa\nDOCUMENTO-SEM-METADADOS;;CSG',{mappingProfile:api.profile()});assert.equal(documentOnly.records.length,1);assert.equal(documentOnly.records[0].lastEmission,'');
 api.saveProfile('Só código',{columns:{document:'Codigo'}});
 api.saveSession({filters:{query:'RL-5290'},revisionScope:'all'});assert.equal(api.session().filters.query,'RL-5290');
 root.GrconCloud.state.membership.workspace_id='other';assert.equal(api.profiles().length,0);assert.equal(api.session(),null);

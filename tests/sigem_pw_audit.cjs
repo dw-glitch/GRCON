@@ -11,13 +11,13 @@ const quality = "RL-5290.00-22313-ABC-C1O-001";
 const unrelated = "RL-5290.00-99999-ABC-C1O-999";
 const ld = { meta: { fileName: "LD Qualidade.xlsx", importedAt: "2026-09-14T10:00:00Z", snapshotId: "ld:quality" }, records: [{ document: quality }] };
 const raw = {
-  meta: { fileName: "PW.csv", importedAt: "2026-09-14T11:00:00Z", fileSize: 12345, sourceRecordCount: 5 },
+  meta: { fileName: "PW.csv", importedAt: "2026-09-14T11:00:00Z", fileSize: 12345, sourceRecordCount: 5, companyColumn: "C" },
   records: [
-    { document: et, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim" },
-    { document: et, revision: "A", revisionComplete: "A", state: "Rascunho", lastEmission: "Previsto" },
-    { document: et, revision: "A", revisionComplete: "A", state: "Rascunho", lastEmission: "Previsto" },
-    { document: quality, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Não" },
-    { document: unrelated, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim" },
+    { document: et, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
+    { document: et, revision: "A", revisionComplete: "A", state: "Rascunho", lastEmission: "Previsto", company: "CSG" },
+    { document: et, revision: "A", revisionComplete: "A", state: "Rascunho", lastEmission: "Previsto", company: "CSG" },
+    { document: quality, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Não", company: "CSG" },
+    { document: unrelated, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
   ],
 };
 

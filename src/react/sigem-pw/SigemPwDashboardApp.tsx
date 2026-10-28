@@ -46,6 +46,9 @@ export function SigemPwDashboardApp() {
       </div>
 
       <SigemPwReadiness readiness={state.readiness} />
+      {state.pw.meta && (state.pw.meta.companyColumn !== "C" || state.pw.meta.scopeCompanyColumnMissing === true) ? (
+        <div className="spw-empty" role="alert"><strong>Reimportação do PW necessária</strong><span>A base atual não comprova a leitura da sigla da empresa pela coluna C. Os indicadores foram suspensos até importar uma consulta PW com essa coluna, evitando contagens incorretas.</span></div>
+      ) : null}
 
       <UiPanel className="spw-section-panel spw-bases-panel" labelledBy="spw-bases-title">
         <div className="spw-section-heading">
@@ -78,7 +81,7 @@ export function SigemPwDashboardApp() {
           <div>
             <span className="spw-kicker">VISÃO CONSOLIDADA</span>
             <h3 id="spw-overview-title">Totais e pendências operacionais</h3>
-            <p>Comparação exclusiva de códigos contendo C1O. Demais registros: “Fora do escopo C1O”.</p>
+            <p>Somente registros PW com sigla CSG ou QTM na coluna C são considerados. Demais empresas ficam separadas para auditoria.</p>
             <p>{state.revisionScope === "revision0"
               ? "Visão principal do cadastro inicial: ocorrências em revisão 0 e cadastros sem revisão; a existência usa a base PW completa."
               : "Visão de movimentação documental: cada Documento + Revisão é uma ocorrência independente."}</p>
@@ -88,11 +91,13 @@ export function SigemPwDashboardApp() {
         <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
         <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} />
         {state.pw.meta ? <section className="spw-pw-audit" aria-label="Conferência da lista PW" id="spw-pw-audit">
-          <div><strong>{fmt(state.result?.quality.pwSourceRows || 0)}</strong><span>linhas PW com código</span></div>
+          <div><strong>{fmt(state.result?.quality.pwSourceRows || 0)}</strong><span>linhas PW com código · CSG/QTM</span></div>
+          <div><strong>{fmt(Number(state.pw.meta?.scopeExcludedCount) || 0)}</strong><span>linhas PW de outras empresas ou sem sigla</span></div>
+          {state.pw.meta?.scopeCompanyColumnMissing ? <small role="alert">A base PW anterior não registra a coluna C. Reimporte a consulta com sigla de empresa para validar os totais.</small> : null}
           <div><strong>{fmt(state.result?.quality.pwDuplicateGroups || 0)}</strong><span>grupos de código + revisão repetidos</span></div>
           <div><strong>{fmt(state.result?.quality.pwDuplicateExtraRows || 0)}</strong><span>repetições adicionais</span></div>
           <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwDuplicates")}>Ver duplicados PW</button>
-          <small>A lista de duplicados usa apenas os códigos C1O do PW. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
+          <small>A lista de duplicados usa apenas o PW das empresas CSG/QTM. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
         </section> : null}
         <SigemPwSituationCards
           state={state}
