@@ -28,13 +28,13 @@ const Scope = require("../sigem_pw_scope_fix.js");
   });
 
   const csv = [
-    "NumeroDocumentoCliente;RevisaoCompleta;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão",
-    "RL-5290.00-22313-ABC-C1O-001;0;0;RL;Relatório;DOC;Documentação;Liberado;Sim",
-    "RL-5290.00-22313-ABC-C1O-001;A;A;RL;Relatório;DOC;Documentação;Liberado;Não",
-    "CE-5290.00-22313-856-C1O-002;A;A;CE;Certificado;DOC;Documentação;Superado;Não",
-    "DE-5290.00-99999-856-C1O-003;0;0;DE;Desenho;PRJ;Projeto;Liberado;Sim",
-    "RL-5290.00-22313-856-ABC-004;0;0;RL;Relatório;DOC;Documentação;Liberado;Sim",
-    "ZZ-1111.00-99999-AAA-XXX-001;0;0;ZZ;Externo;EXT;Externo;Liberado;Sim",
+    "NumeroDocumentoCliente;RevisaoCompleta;Sigla da Empresa;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão",
+    "RL-5290.00-22313-ABC-C1O-001;0;0;CSG;RL;Relatório;DOC;Documentação;Liberado;Sim",
+    "RL-5290.00-22313-ABC-C1O-001;A;A;CSG;RL;Relatório;DOC;Documentação;Liberado;Não",
+    "CE-5290.00-22313-856-C1O-002;A;A;CSG;CE;Certificado;DOC;Documentação;Superado;Não",
+    "DE-5290.00-99999-856-C1O-003;0;0;CSG;DE;Desenho;PRJ;Projeto;Liberado;Sim",
+    "RL-5290.00-22313-856-ABC-004;0;0;CSG;RL;Relatório;DOC;Documentação;Liberado;Sim",
+    "ZZ-1111.00-99999-AAA-XXX-001;0;0;CSG;ZZ;Externo;EXT;Externo;Liberado;Sim",
   ].join("\n");
 
   const parsed = Scope.parsePwCsv(csv, { fileName: "pw.csv", importedAt: "2026-09-11T18:00:00Z" });
@@ -59,8 +59,8 @@ const Scope = require("../sigem_pw_scope_fix.js");
   assert.strictEqual(Object.hasOwn(sanitized, "discardedRecords"), false);
 
   const stalePw = [
-    { document: "RL-5290.00-22313-ABC-C1O-001", revision: "0", state: "Liberado", lastEmission: "Sim" },
-    { document: "DE-5290.00-99999-856-C1O-003", revision: "0", state: "Liberado", lastEmission: "Sim" },
+    { document: "RL-5290.00-22313-ABC-C1O-001", revision: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
+    { document: "DE-5290.00-99999-856-C1O-003", revision: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
   ];
   const sigem = [
     { document: "RL-5290.00-22313-ABC-C1O-001", revision: "0", status: "Sem Comentários" },
