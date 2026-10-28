@@ -25,8 +25,8 @@ assert.equal(flags.futureOneDriveSupport, true);
 assert.equal(Object.isFrozen(flags), true);
 
 assert.doesNotMatch(html, /id="grdt-save-to-vault"/);
-assert.match(html, /grcon_storage_policy\\.js/);
-assert.match(sw, /"grcon_storage_policy\\.js"/);
+assert.match(html, /grcon_storage_policy\.js/);
+assert.match(sw, /"grcon_storage_policy\.js"/);
 assert.match(vault, /if \(storageFeatures\.showStorageUI !== true\) return;/);
 assert.match(vault, /if \(storageFeatures\.enableAutomaticUpload !== true\) return null;/);
 assert.match(vault, /if \(storageFeatures\.enableManualUpload !== true\) return;/);
