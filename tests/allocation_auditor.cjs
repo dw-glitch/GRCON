@@ -34,3 +34,18 @@ test('model output can only reference supplied evidence and never establish norm
 
 test('later rejection supersedes earlier approval for the same field',()=>{const a={lineage:'L',field:'title',decision:'accepted'};assert.equal(C.approvedChanges([a,{...a,decision:'rejected'}]).length,0);assert.equal(C.approvedChanges([{...a,decision:'rejected'},a]).length,1);});
 test('Central ET_LD_004 matches sheet ET in the correct LD and excludes LD003',()=>{const a={ld:'LD-5290.00-22313-91A-C1O-004_0001_A.xlsx',ldSheet:'ET'};assert.equal(C.ldIdentity(a).id,'004');assert.equal(C.sameLd(a,{ldSheet:'ET_LD_004'}),true);assert.equal(C.sameLd(a,{ldSheet:'ET_LD_003'}),false);});
+
+test('header detection prefers the complete allocation header after a decorative title',()=>{
+ const headers=['NomeDocumento','Data Prevista','Workflow','Documento Ativo','Ação','Data da Linha Base','Propósito de Emissão Original','Documento Crítico','Observação','Caminho Data Book','N1','N2','N3','N4','N5','N6'];
+ const parsed=C.parseRows([['Documento'],[],headers,[doc,'01/01/2026','WF','','INCLUSÃO','','PARA CONSTRUÇÃO','','','UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR','U32','','','','','']],{contract:'contract-a'});
+ assert.equal(parsed.headerRow,3);
+ assert.equal(parsed.model,'official-16');
+ assert.equal(parsed.records.length,1);
+ assert.equal(parsed.records[0].document,doc);
+});
+test('header mapping recognizes alternate documentary column labels without guessing values',()=>{
+ const parsed=C.parseRows([['Nº Documento','Título do Documento','Revisão'],[doc,'Relatório de inspeção','0']],{contract:'contract-a'});
+ assert.equal(parsed.records.length,1);
+ assert.equal(parsed.records[0].title,'Relatório de inspeção');
+ assert.equal(parsed.records[0].revision,'0');
+});
