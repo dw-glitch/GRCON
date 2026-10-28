@@ -14,13 +14,21 @@ const crypto=require('node:crypto');
   await page.evaluate(()=>{
    window.__master=true;window.GrconCloud={isMasterOwner:()=>window.__master,refreshMasterOwner:async()=>window.__master,loadInvitations:async()=>{},loadAuditEvents:async()=>{},state:{session:{user:{id:'master'},access_token:'synthetic-session'},membership:{workspace_id:'w1',role:'owner'},contracts:[{workspace_id:'w1',contract_id:'c1',code:'UHDT-D',active:true,settings:{}}],client:{functions:{invoke:async()=>({data:{ok:true,users:[]}})}}}};
   });
-  let copyScenario='disabled',inventoryReads=0,steps=[];
+  let copyScenario='disabled',inventoryReads=0,steps=[],backgroundScenario=null,backgroundLaunched=false;
   const checksums=['a'.repeat(64),'b'.repeat(64),'c'.repeat(64)];
   const digest=checksums.reduce((previous,checksum)=>crypto.createHash('sha256').update(previous+'\n'+checksum).digest('hex'),'0'.repeat(64));
   await page.route('**/api/sigem-storage/**',async route=>{
    assert.equal(route.request().headers().authorization,'Bearer synthetic-session');
    const action=new URL(route.request().url()).pathname.split('/').pop();steps.push(action);
    const input=route.request().postDataJSON();
+   if(backgroundScenario){
+    let result;
+    if(action==='background-copy'){backgroundLaunched=true;result={started:true};}
+    else if(action==='background-status')result={started:true,records:893493,copied:893493,validated:893493,inventoryStable:backgroundLaunched,complete:backgroundLaunched,nextWaveReady:false,
+     reconciliationReady:!backgroundLaunched&&!['running','pending'].includes(backgroundScenario),reports:[{status:backgroundScenario==='running'?'running':backgroundScenario==='failed-unauthorized'?'failed':'complete'}]};
+    else result={source:'supabase',mode:'supabase',records:919639,snapshots:39,externalStorageAuthorized:!['unauthorized','failed-unauthorized'].includes(backgroundScenario),preflightApproved:backgroundScenario!=='preflight',turso:{configured:true,connected:backgroundScenario!=='disconnected',databaseBytes:4096}};
+    return route.fulfill({json:{ok:true,...result}});
+   }
    if(copyScenario!=='disabled'){
     let result;
     if(copyScenario==='retry'&&action==='copy'&&steps.filter(x=>x==='copy').length===1)return route.fulfill({status:503,json:{ok:false,error:'TURSO_UNAVAILABLE'}});
@@ -62,6 +70,23 @@ const crypto=require('node:crypto');
    else if(scenario==='changed')assert.equal(report.migration.inventoryStable,false);
    else if(scenario==='pending')assert.equal(steps.includes('copy'),false,'pending uploads block the copy');
    else assert.match(report.migration.error,/SIGEM_AUDIT_/);
+  }
+  // Production regression: all old lanes completed, but a new import changed
+  // the inventory. Reconciliation is an explicit action, never an auto-launch.
+  for(const scenario of ['reconcile','running','pending','unauthorized','preflight','disconnected','failed-unauthorized']){
+   backgroundScenario=scenario;backgroundLaunched=false;steps=[];
+   await page.locator('[data-storage-refresh]').click();
+   await page.locator('[data-storage-background-progress]').filter({hasText:scenario==='running'||scenario==='pending'?'Cópia em segundo plano':'A execução anterior terminou'}).waitFor();
+   assert.equal(steps.includes('background-copy'),false,'polling cannot launch a migration');
+   assert.equal(await page.locator('[data-storage-background]').isDisabled(),scenario!=='reconcile');
+   assert.equal(await page.locator('[data-storage-copy]').isDisabled(),true,'reconciliation must use existing audited background orchestration');
+   if(scenario==='reconcile'){
+    assert.equal(await page.locator('[data-storage-background]').textContent(),'Reconciliar novas versões');
+    await page.locator('[data-storage-background]').click();
+    await page.locator('[data-storage-background-progress]').filter({hasText:'Cópia e auditoria integral concluídas'}).waitFor();
+    assert.equal(steps.filter(x=>x==='background-copy').length,1);
+    assert.equal(steps.includes('copy'),false);
+   }
   }
   await page.locator('#grcon-admin-close').click();await page.evaluate(()=>{window.__master=false;window.dispatchEvent(new Event('grcon:cloud-ready'));});
   assert.equal(await page.locator('#grcon-administration-shortcut').count(),0,'operator has no infrastructure shortcut');

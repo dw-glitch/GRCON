@@ -71,6 +71,18 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   assert.equal(incomplete.pendingSnapshots,1);
   objects.set(completedKey,trustedReport);
 
+  const newerInventory={snapshots:[...inventory.snapshots,{...source,id:uuid(80)}],pendingSnapshots:0};
+  const reconcile=await M.migrationStatus(env,uuid(1),newerInventory);
+  assert.equal(reconcile.complete,false);
+  assert.equal(reconcile.nextWaveReady,false);
+  assert.equal(reconcile.reconciliationReady,true,'finished stale inventory must allow explicit reconciliation');
+  assert.equal(reconcile.pendingSnapshots,1);
+  assert.equal((await M.migrationStatus(env,uuid(1),{...newerInventory,pendingSnapshots:1})).reconciliationReady,false,'pending uploads block reconciliation');
+  objects.set(completedKey,JSON.stringify({...JSON.parse(trustedReport),status:'running'}));
+  assert.equal((await M.migrationStatus(env,uuid(1),newerInventory)).reconciliationReady,false,'a running lane must not enable a competing launch');
+  objects.set(completedKey,trustedReport);
+  assert.equal((await M.migrationStatus(env,uuid(1),inventory)).reconciliationReady,false,'stable completed inventory needs no reconciliation');
+
   assert.equal(engine.prepare('select count(*) n from sigem_rows').get().n,2501,'replay cannot duplicate source rows');
   assert.equal(JSON.stringify(outputs).includes('SENTINEL_CORPORATE_ROW'),false,'workflow state must not contain corporate row payloads');
   assert.equal(JSON.stringify(outputs).includes('file_name'),false,'full snapshot metadata stays outside Workflow state');

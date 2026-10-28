@@ -214,6 +214,7 @@ export async function migrationStatus(env,workspace,inventory){
  return {started:true,id,wave:grant.wave||0,createdAt:grant.createdAt,records:grant.records||grant.lanes.flatMap(l=>l.snapshots).reduce((n,s)=>n+s.record_count,0),reusedAuditRecords:reused,completedSnapshots:grant.completed||[],
   copied:reused+reports.reduce((n,r)=>n+(r.copied||0),0),validated:reused+reports.reduce((n,r)=>n+(r.validated||0),0),
   pendingSnapshots,plannedNextWave:grant.deferred?.length||0,nextWaveReady:stable&&waveFinished&&pendingSnapshots>0,
+  reconciliationReady:!stable&&waveFinished&&inventory.pendingSnapshots===0,
   inventoryStable:stable,complete:stable&&waveFinished&&pendingSnapshots===0,reports};
 }
 async function hmacKey(env){return crypto.subtle.importKey('raw',new TextEncoder().encode('grcon-sigem-job-v1\n'+env.SUPABASE_SECRET_KEY),{name:'HMAC',hash:'SHA-256'},false,['sign','verify']);}
