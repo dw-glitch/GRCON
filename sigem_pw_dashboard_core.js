@@ -369,7 +369,7 @@
     if (!companyHeader || (headers || []).length <= PW_COMPANY_COLUMN_INDEX) {
       return ["Base PW inválida: coluna C (sigla da empresa) ausente. Atualize a consulta ProjectWise antes de importar."];
     }
-    if (!companyAliases.has(companyHeader) && !/\\b(SIGLA|EMPRESA|CONTRATADA|COMPANY)\\b/.test(companyHeader)) {
+    if (!companyAliases.has(companyHeader) && !/\b(SIGLA|EMPRESA|CONTRATADA|COMPANY)\b/.test(companyHeader)) {
       return ["Base PW inválida: o cabeçalho da coluna C não identifica a sigla da empresa. Confira o layout da consulta antes de importar."];
     }
     if (!missing.length) return [];
@@ -878,6 +878,7 @@
       pwStatus,
       pwEmission,
       pwLastEmission,
+      pwCompany: text(pwEvidence && pwEvidence.current && pwEvidence.current.company),
       sigemOriginalCode: text(sigemEntry && sigemEntry.document),
       pwOriginalCode: text(pwEvidence && pwEvidence.document),
       pwRevisionEvidence: sigemEntry && reference.documentClass === "CV" && !pwEntry ? "Revisão PW não exigida para CV" : !pwEntry && pwEvidence ? "Correspondência da revisão não confirmada" : pwEntry && pwEntry.revisionKey === "__SEM_REVISAO__" ? "Não informada no PW" : "Informada no PW",
@@ -1066,6 +1067,7 @@
         const row = comparisonRow(`duplicate:${entry.key}:${index}`, null, entry);
         duplicateRows.push({ ...row, document: record.document, revision: record.revisionLabel,
           pwStatus: text(record.state), pwLastEmission: text(record.lastEmission),
+          pwCompany: text(record.company),
           pwEmission: record.emittedEvidence ? "Emitido" : "Não emitido", situationKey: "pwDuplicates",
           situation: "Código + revisão repetidos na base PW", duplicateGroup: entry.key,
           duplicateCount: entry.rows.length, duplicateOccurrence: index + 1,
