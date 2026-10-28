@@ -19,6 +19,15 @@ test('acceptance with comments does not equal full compliance',()=>{assert.equal
 test('review decisions require evidence for critical changes and closure',()=>{const r=audit(row());assert.throws(()=>C.reviewEvent(r,{state:'Resolvido com evidência',justification:'Corrigido'},'actor'),/evidência/);assert.throws(()=>C.reviewEvent(r,{state:'Correção proposta',field:'tag',decision:'accepted',value:'T',justification:'Conferido'},'actor'),/evidência/);const e=C.reviewEvent(r,{state:'Correção proposta',field:'title',decision:'rejected',value:'NEW',justification:'Sem comprovação'},'actor');assert.equal(e.decision,'rejected');assert.equal(r.title,row().title);});
 test('lineage split groups revisions and allocations of the same full code',()=>{const a=row({contract:'contract-a'});assert.equal(C.splitGroup(a),C.splitGroup({...a,revision:'B',allocation:'OTHER'}));});
 test('cable title checks ask for technical evidence without inventing conductor details',()=>{const r=audit(row());const f=r.findings.find(f=>f.id==='CABLE-DETAILS');assert.ok(f);assert.match(f.message,/Não completar/);assert.ok(!f.suggestion);});
+test('cable section units adjacent to numbers are recognized without approving the document',()=>{
+ for(const section of ['12X2,5MM²','1x35mm2','1 × 6 mm²','2.5MM²']){
+  const out=audit(row({title:'RELATÓRIO DE INSPEÇÃO DE RECEBIMENTO - CABO PVC - '+section+' - 0,6/1KV'}));
+  assert.ok(!out.findings.some(f=>f.id==='CABLE-DETAILS'),section);
+  assert.ok(out.findings.some(f=>f.id==='EAP-BASE-MISSING'),'Other unproven requirements remain pending');
+ }
+ const out=audit(row({title:'RELATÓRIO DE INSPEÇÃO DE RECEBIMENTO - CABO PVC - BOBINA 195M - 0,6/1KV'}));
+ assert.deepEqual(out.findings.find(f=>f.id==='CABLE-DETAILS').evidence[0].missing,['configuração / seção'],'Length in metres does not supply conductor section');
+});
 test('N1710 sequence letters are flagged with an explicit reference',()=>{const out=audit(row({document:'PR-5290.00-22313-91A-C1O-12A'}));assert.equal(out.findings.find(f=>f.id==='N1710-SEQUENCE').source,'N-1710 Rev. N §6.7');});
 test('other contract cannot enter an audit',()=>{assert.throws(()=>audit(row({contract:'OTHER'})),/outro contrato/);});
 test('model output can only reference supplied evidence and never establish normative proof',async()=>{const {prepareAuditPrompt,validateAuditAnswer}=await import('../cloudflare/allocation-audit-ai.mjs');const p=prepareAuditPrompt({document:doc,title:'T',findings:[{id:'finding:0',field:'title',message:'Conferir',evidence:[]}]});assert.throws(()=>validateAuditAnswer({findingIds:['invented'],rationale:'X',missingEvidence:[]},p),/INVALID/);const a=validateAuditAnswer({findingIds:['finding:0'],rationale:'Falta evidência técnica.',missingEvidence:['Classe de tensão']},p);assert.equal(a.normativeProof,false);assert.equal(a.humanReview,true);});
