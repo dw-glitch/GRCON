@@ -53,11 +53,11 @@ ET N/P/Q/R, N-1710, Workflows, Apêndice de bens tagueados e caminhos foram loca
 
 ## Verificações executadas
 
-- TypeScript e build de todas as nove ilhas React: aprovados.
+- `npm run verify` completo aprovado em 28/10/2026: TypeScript, build das nove ilhas, sintaxe, Workers, referências, versões, dependências, Supabase, toda a regressão existente e desempenho do Cofre.
 - 20 testes unitários específicos; 28 verificações de banco em PGlite; suites de Worker/XLSX/ZIP, rota de IA e interface React em DOM: aprovados.
 - Importação real das 15.441 linhas da Central, preservação das 436 variantes de comentários e distinção entre datas e textos: aprovada.
 - A interface com React e Worker reais foi exercitada para análise, busca exata 121/122, seleção, detalhes, ZIP e limpeza de contexto. Catálogo do Gerador e RPC foram controlados nesse teste; a autorização real do banco foi testada separadamente em PGlite.
-- 121 comandos anteriores ao teste do mascote e 12 comandos posteriores da suite existente passaram. O teste do mascote não pôde completar por falta da cópia local de `grcon-mascot-sprite.png`.
+- O impedimento da imagem original do mascote foi removido em 28/10: cópia recuperada com SHA Git `d9e87bcdda99aebfebccd83968f5ee71054c3367`, idêntica à do repositório. Os testes do mascote passaram na nova execução de regressão.
 - Gerador, seu banco, Central compartilhada, API de alocação, Corretor de Títulos e navegação também passaram nas verificações direcionadas.
 - Sintaxe, Workers externos, hashes das dependências e verificação Supabase: aprovados.
 - As duas migrations foram aplicadas ao projeto existente. Introspecção confirmou RLS nas três tabelas, ausência de leitura direta para `anon`/`authenticated`, RPC negado a `anon`, execução permitida a `authenticated` e zero análises operacionais inseridas.
@@ -79,18 +79,24 @@ A partição candidata contém 9.189 registros de desenvolvimento, 3.069 de vali
 | 6 — reapresentações | Associação e estados auditáveis implementados; aliases entre códigos alterados dependem de confirmação. |
 | 7 — correções | Revisão, pacote e títulos em cópia da LD implementados; edição preservada de outros campos não liberada. |
 | 8 — Gerador | Integração e exportadores reutilizados; fluxo completo em produção pendente. |
-| 9 — React | Integração e teste DOM funcionais; inspeção visual em navegador real pendente. |
+| 9 — React | Integração e teste DOM funcionais; fluxo sintético em Chromium real validado; fluxo autenticado em produção pendente. |
 | 10 — estabilidade/segurança | Lotes, escopo, validação, cache e idempotência testados; retomada após fechar o navegador pendente. |
 | 11 — homologação | Testes técnicos e benchmark concluídos; conjunto rotulado independente e métricas de qualidade pendentes. |
-| 12 — publicação | Banco aplicado; frontend/Worker não publicados. Login Cloudflare e validação final são necessários. |
+| 12 — publicação | Banco aplicado; tentativa de publicação pelo GitHub autorizada após tornar o repositório público. Publicação e acesso efetivo ao R2 ainda dependem da execução do runner e da credencial existente. |
 
 ## Publicação e custos
 
-Não foram disparados workflows, habilitados serviços pagos nem alterados limites de cobrança. A branch de entrega usa anotação `[skip ci]`; não se deve remover essa anotação ou executar Actions sem autorização. Os workflows existentes foram inspecionados e usam eventos compatíveis com essa anotação.
+Em 28/10/2026 o usuário tornou o repositório público e autorizou retomar a criação/verificação do bucket e publicação pelo GitHub. Os novos jobs usam somente o runner padrão `ubuntu-latest`. O deploy e o workflow de liberação verificam que o repositório permanece público; não foram alterados planos, assinaturas, limites de cobrança ou segredos.
 
-A sessão de navegador chegou a `https://dash.cloudflare.com/login`; não há credencial Cloudflare disponível no ambiente. O navegador Chromium para QA local não pôde ser instalado: o download retornou arquivo inválido. O build do pacote Cloudflare gerou os recursos, mas sua verificação completa falhou apenas nas referências à imagem original do mascote, ausente da cópia local por limite do conector em arquivo binário grande. **A imagem continua no repositório remoto e não foi removida nem substituída.** O pacote local incompleto não foi publicado.
+`scripts/ensure-cloudflare-r2.mjs` consulta apenas o bucket existente `grcon-documents`. Cria esse mesmo nome, em Standard, somente após HTTP 404. Uma resposta 401/403/429/500 nunca aciona criação; conflito de criação exige nova consulta. O script verifica acesso r2.dev desativado e ausência de domínio customizado ativo. Não lê, grava, lista nem exclui objetos, não apaga/recria buckets existentes e não habilita acesso público. Onze testes cobrem esses casos, concorrência e ausência/redação de credenciais.
 
-A retomada deve usar um checkout completo da branch, preservar a imagem existente, executar `npm ci --ignore-scripts`, `npm run build`, `npm run test:allocation-auditor`, verificações de pacote e QA visual. Só então publicar pelo caminho autorizado da Cloudflare, sem depender de GitHub Actions, e conferir metadados e fluxo autenticado em produção.
+A API precisa da credencial `CLOUDFLARE_API_TOKEN` já existente no GitHub e de `CLOUDFLARE_ACCOUNT_ID`. Permissão de deploy de Worker não implica permissão R2: eventual recusa deve ser registrada sem expor o segredo. Se R2 não estiver contratado, o fluxo não ativa assinatura automaticamente. O consumo de armazenamento/operações continua sujeito à franquia e aos limites existentes do R2.
+
+O pacote Cloudflare completo passou: 334 arquivos, referências locais íntegras. O Chromium existente no ambiente executou o React e Worker reais com contrato/RPC sintéticos: dois documentos, distinção exata 121/122, seleção, revisão, download ZIP, limpeza ao trocar contrato e zero erros de página. A imagem desktop foi inspecionada. Isso não comprova autenticação real, permissões reais em produção, inferência real nem homologação normativa.
+
+A reexecução do último deploy bem-sucedido (`40534508430`) foi aceita pela API em 28/10/2026, mas permaneceu na fila sem jobs no momento desta atualização. Os commits de infraestrutura foram enviados à mesma branch do Auditor. Não há comprovação de criação de bucket ou nova publicação enquanto as etapas autenticadas não terminarem com sucesso. O workflow de produção exige verificação completa, testes do Auditor e R2, pacote íntegro, bucket privado, deploy e comparação do commit/arquivos publicados. A verificação pós-deploy inclui os quatro assets do Auditor e recusa HTTP 401 da rota sem sessão.
+
+Rollback: o código pode ser revertido pelo commit de integração ou uma versão anterior do Worker; os registros históricos e originais do R2 não são alterados por esta entrega. As migrations devem permanecer quando houver análises salvas; o SQL de rollback recusa apagá-las nesse caso.
 
 ## Uso após a publicação
 

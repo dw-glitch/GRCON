@@ -16,7 +16,7 @@ concurrency:
 jobs:
   deploy:
     name: Publicar Workers Static Assets
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event.repository.private == false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

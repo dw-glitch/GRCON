@@ -27,7 +27,7 @@ const server = http.createServer((req,res) => {
 (async () => {
   fs.mkdirSync(out,{recursive:true});
   await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
-  const browser = await chromium.launch({headless:true});
+  const browser = await chromium.launch({headless:true,...(process.env.GRCON_CHROMIUM_PATH?{executablePath:process.env.GRCON_CHROMIUM_PATH}: {})});
   try {
     const page = await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -49,7 +49,7 @@ const server = http.createServer((req,res) => {
     assert.doesNotMatch(await page.locator('tbody tr').innerText(),/121/);
     await page.getByRole('button',{name:'Revisar',exact:true}).click();
     await page.getByRole('region',{name:'Detalhes da auditoria',exact:true}).waitFor();
-    await page.getByLabel('Proposto',{exact:true}).fill('RELATÓRIO DE INSPEÇÃO DE RECEBIMENTO DE CABO — CONFERIR BOBINA 122');
+    await page.getByLabel('Valor proposto',{exact:true}).fill('RELATÓRIO DE INSPEÇÃO DE RECEBIMENTO DE CABO — CONFERIR BOBINA 122');
     await page.getByLabel('Justificativa',{exact:true}).fill('Sugestão sintética para conferência humana.');
     await page.getByRole('button',{name:'Registrar decisão',exact:true}).click();
     await page.getByText(/Decisão registrada/).waitFor();
