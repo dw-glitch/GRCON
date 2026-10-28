@@ -3679,7 +3679,8 @@ await (async () => {
   assert.equal(emAnalise.status, "Em Análise");
   assert.equal(emAnalise.grdt, "GRDT-2026-0091");
   assert.ok(emAnalise.analysisEvidence, "a evidência da revisão em análise precisa ser preenchida");
-  assert.equal(emAnalise.analysisEvidence.statusSource.sheet, "Colar SIGEM");
+  assert.equal(emAnalise.sigemStatusSource, "shared-general-query");
+  assert.equal(emAnalise.analysisEvidence.emissionSource.sheet, "Colar SIGEM", "evidência técnica permanece na LD");
   checks.push(nome);
 })();
 
