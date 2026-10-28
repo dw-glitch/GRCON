@@ -73,6 +73,24 @@
   for(const r of context.ldRecords||[]){const list=ld.get(text(r.document))||[];list.push(r);ld.set(text(r.document),list);}
   return {byDocument,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
  }
+
+ // Compatibiliza um código documental longo com seu último ancestral cadastrado.
+ // Opções múltiplas no mesmo ancestral são selecionadas pela disciplina do Workflow.
+ function workflowDiscipline(workflow){
+  const w=norm(workflow),label=w.match(/C\s*&\s*M\s*\/\s*([^/]+)$/)?.[1]||w.split('/').pop()||'';
+  const hints=[['ELETRICA',/ELETRIC/],['TUBULACAO',/TUBULAC/],['INSTRUMENTACAO',/INSTRUMENT/],['ESTRUTURA METALICA',/ESTRUTURA METAL/],['CIVIL',/\bCIVIL\b/],['DINAMICOS',/DINAMIC/],['ESTATICOS',/ESTATIC/],['HVAC',/\bHVAC\b/],['TELECOM',/TELECOM/],['SEGURANCA',/SEGURANCA/],['FORNOS',/FORNOS/]];
+  return hints.find(([,regex])=>regex.test(label))?.[0]||'';
+ }
+ function chooseEap(code,workflow,index){
+  const parts=text(code).split('.');let matchedCode='',candidates=[];
+  for(let len=parts.length;len>0;len--){const p=parts.slice(0,len).join('.');if(index.eaps.has(p)){matchedCode=p;candidates=index.eaps.get(p);break;}}
+  if(!candidates.length)return {matchedCode:'',entry:null,candidates:[],ambiguous:false,discipline:''};
+  const discipline=workflowDiscipline(workflow);
+  if(candidates.length===1)return {matchedCode,entry:candidates[0],candidates,ambiguous:false,discipline};
+  if(!discipline)return {matchedCode,entry:null,candidates,ambiguous:true,discipline};
+  const selected=candidates.filter(item=>(item.levels||[]).some(level=>{const val=norm(level);return val.endsWith(discipline)||val.includes('.'+discipline);}));
+  return selected.length===1?{matchedCode,entry:selected[0],candidates,ambiguous:false,discipline}:{matchedCode,entry:null,candidates,ambiguous:true,discipline};
+ }
  function auditRecord(input,context,index=prepare(context)){
   if(!text(context.contract))throw Error('Contrato obrigatório.');
   if(input.contract&&input.contract!==context.contract)throw Error('Documento de outro contrato.');
