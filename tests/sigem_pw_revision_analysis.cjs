@@ -11,7 +11,7 @@ const pwEt = (tag, eap = "3.1.1.1") => `C1O-RNEST-U32-${eap}-INS-RIR-${tag}`;
 const sigemRows = [];
 const pwRows = [];
 const addSigem = (doc, revision, status, sourceRow) => sigemRows.push({ document: doc, revision, status, sourceRow });
-const addPw = (doc, revision, state, lastEmission, sourceRow) => pwRows.push({ document: doc, revision, revisionComplete: revision, state, lastEmission, sourceRow, emittedEvidence: ["SIM", "NAO"].includes(Core.norm(lastEmission)) });
+const addPw = (doc, revision, state, lastEmission, sourceRow) => pwRows.push({ document: doc, company: "CSG", revision, revisionComplete: revision, state, lastEmission, sourceRow, emittedEvidence: ["SIM", "NAO"].includes(Core.norm(lastEmission)) });
 
 // 1. Mesma revisão emitida.
 addSigem(et("PI-000001"), "B", "Em Workflow", 1);
