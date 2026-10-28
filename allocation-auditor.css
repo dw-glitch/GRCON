@@ -45,3 +45,19 @@
 .aa-app .aa-comparison{margin:14px 0;gap:12px}.aa-app .aa-comparison textarea{border:1px solid #cbd6e1;border-radius:9px;padding:12px;font-size:13px}
 @media(max-width:1100px){.aa-app{padding:14px}.aa-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.aa-app{padding:10px}.aa-app .ag-card{padding:16px}.aa-app .aa-hero{padding:17px}.aa-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.aa-step{font-size:11px}.aa-card-head{align-items:center}.aa-app .ag-toolbar label{width:100%}.aa-app label.aa-file-upload{width:100%}.aa-app .ag-toolbar button{max-width:100%}}
+
+
+/* Mesma paleta de superfícies do tema escuro do GRCON. */
+html[data-theme="dark"] .aa-app{color:var(--text-1,#ecf2f8)}
+html[data-theme="dark"] .aa-app .aa-hero{background:linear-gradient(125deg,var(--surface-2,#263346),var(--surface-1,#192535));border-color:var(--border-2,#3a4b5c)}
+html[data-theme="dark"] .aa-app .aa-hero p,html[data-theme="dark"] .aa-app .aa-hero small,html[data-theme="dark"] .aa-results-heading p{color:var(--text-2,#b0c1d1)}
+html[data-theme="dark"] .aa-app .ag-card,html[data-theme="dark"] .aa-empty-state{background:var(--surface-1,#192535);color:var(--text-1,#e5ecf3);border-color:var(--border-2,#3a4b5c)}
+html[data-theme="dark"] .aa-step{background:var(--surface-2,#263346);border-color:var(--border-2,#3a4b5c);color:var(--text-2,#b0c1d1)}
+html[data-theme="dark"] .aa-step-active{background:#193f58;color:#c5e8ff;border-color:#4d7d9b}
+html[data-theme="dark"] .aa-import-details,html[data-theme="dark"] .aa-preview-list>div,html[data-theme="dark"] .aa-summary>div,html[data-theme="dark"] .aa-app .aa-finding{background:var(--surface-2,#263346);border-color:var(--border-2,#3a4b5c);color:var(--text-1,#edf4fb)}
+html[data-theme="dark"] .aa-import-details strong,html[data-theme="dark"] .aa-app .aa-table td{color:var(--text-1,#e3edf7)}
+html[data-theme="dark"] .aa-import-details span,html[data-theme="dark"] .aa-preview-list small,html[data-theme="dark"] .aa-empty-state p{color:var(--text-2,#b0c1d1)}
+html[data-theme="dark"] .aa-app label.aa-file-upload{background:#203d52;border-color:#427590;color:#d1e9f7}
+html[data-theme="dark"] .aa-app .aa-table th{background:var(--surface-2,#263346);color:var(--text-2,#b0c1d1)}
+html[data-theme="dark"] .aa-app .aa-table tbody tr:hover{background:#2a4254}
+html[data-theme="dark"] .aa-app .ag-toolbar input:not([type=checkbox]):not([type=file]),html[data-theme="dark"] .aa-app .ag-toolbar select,html[data-theme="dark"] .aa-app .aa-comparison textarea{background:var(--surface-2,#263346);color:var(--text-1,#ecf2f8);border-color:var(--border-2,#3a4b5c)}
