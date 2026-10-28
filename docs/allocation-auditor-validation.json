@@ -49,6 +49,72 @@
     "Cloudflare API with controlled AI binding",
     "PGlite permission/isolation/immutability/retry tests"
   ],
-  "migrationStatus": "Applied to Supabase and privileges introspected; no operational datasets inserted",
-  "deploymentStatus": "Not published: Cloudflare session requires authentication; complete local static-asset validation blocked by unavailable upstream mascot sprite"
+  "migrationStatus": "Applied to Supabase and privileges introspected; source datasets unchanged; one real four-document audit saved during owner production smoke test",
+  "deploymentStatus": "Published and commit/assets verified; owner authenticated sample exercised, independent technical homologation and other production paths remain pending",
+  "productionEvidence": {
+    "verifiedDate": "2026-10-28",
+    "commit": "7fd267d554febb804afe73f3021574d4bd09c110",
+    "workflowRun": "https://github.com/dw-glitch/GRCON/actions/runs/40698617954",
+    "workflowConclusion": "success",
+    "workflowWorkerVersion": "5503d2df-e360-4001-9044-3cd98fb2a8ab",
+    "packageFileCount": 334,
+    "servedMetadataBuild": "74e1eaed-8c24-411d-bc35-1317a5418f2d",
+    "servedMetadataGeneratedAt": "2026-10-28T13:44:32.331Z",
+    "productionUrl": "https://grcon-cloudflare.grcon-qualidade.workers.dev/",
+    "privateBucketCheck": "passed in workflow",
+    "publishedAuditorAssets": "verified against repository by production check",
+    "anonymousCatalogStatus": 401,
+    "anonymousAuditorStatus": 401,
+    "generalWorkersAiSyntheticProbe": {
+      "ok": true,
+      "citedItems": 2
+    },
+    "authenticatedAuditorProductionFlow": {
+      "role": "owner",
+      "contractsExercised": 2,
+      "documents": 4,
+      "results": {
+        "clear": 0,
+        "confirmedErrors": 0,
+        "suggestions": 0,
+        "pending": 4
+      },
+      "loadedFromGenerator": true,
+      "detailsAndFiscalHistory": true,
+      "savedAuditRuns": 1,
+      "restoredAudit": true,
+      "correctionDecisions": 0,
+      "officialPackageGenerated": false,
+      "zipDownload": "triggered; bytes unavailable for inspection",
+      "semanticConsultation": "verified structured response after PR 329; humanReview=true, normativeProof=false; quality not independently homologated",
+      "otherRoles": "not exercised in production",
+      "crossContractSwitch": "owner UI switch UHDT-D to UGH cleared documents/results; UGH audit history empty; returned through contract selector; not an adversarial authorization test",
+      "additionalImportedSample": {
+        "allocationDocuments": 4,
+        "sourceLdFiles": 5,
+        "titleAndRevisionRecovered": true,
+        "timeout": "one shared-context attempt failed; next attempt completed; cause not conclusively traced",
+        "exactCodeFilter": true,
+        "sourceFilesChanged": false,
+        "savedAsAdditionalAudit": false
+      }
+    },
+    "semanticAuditorQuality": "not homologated",
+    "aiFix": {
+      "pullRequest": 329,
+      "commit": "a09c9c38d6ee5476f24c3ab3734d2593e2e23791",
+      "workflowRun": "https://github.com/dw-glitch/GRCON/actions/runs/40708443357",
+      "workflowConclusion": "success",
+      "workerVersion": "97d0a2d1-74ce-4ea5-a646-bb5d880a4224",
+      "servedMetadataBuild": "cf6bc8e9-5e05-48cc-a2c8-5b48ecc193f2",
+      "servedMetadataGeneratedAt": "2026-10-28T14:43:36.929Z",
+      "realStructuredResponse": true
+    },
+    "cableSectionRecognition": {
+      "pullRequest": 330,
+      "engineVersion": "1.0.1",
+      "unitTests": 21,
+      "requiresIndependentHomologation": true
+    }
+  }
 }
