@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.5-c1o";
+  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.6-csg-qtm";
   const VALID_CLASSES = new Set(["ET", "N-1710", "CV", "Não classificado"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -214,7 +214,7 @@
     const identity = documentIdentity(record && record.document);
     const common = [norm(identity.key), revisionOf(record), versionOf(record), norm(record && record.documentType), norm(record && record.discipline), norm(record && record.title)];
     const specific = system === SYSTEMS.PW
-      ? [norm(record && record.state), norm(record && record.lastEmission), norm(record && record.fileName), norm(record && record.category), norm(record && record.sentGrd), normalizeDate(record && record.sentDate), norm(record && record.incomingGrd), normalizeDate(record && record.incomingDate), normalizeDate(record && record.createdAt), normalizeDate(record && record.stateChangedAt), norm(record && record.emissionSequence)]
+      ? [norm(record && record.company), norm(record && record.state), norm(record && record.lastEmission), norm(record && record.fileName), norm(record && record.category), norm(record && record.sentGrd), normalizeDate(record && record.sentDate), norm(record && record.incomingGrd), normalizeDate(record && record.incomingDate), normalizeDate(record && record.createdAt), normalizeDate(record && record.stateChangedAt), norm(record && record.emissionSequence)]
       : [norm(record && record.status), norm(record && record.situation), norm(record && record.observation), normalizeDate(record && record.includedAt), normalizeDate(record && record.modifiedAt)];
     return [...common, ...specific].join("|");
   }
@@ -227,6 +227,7 @@
     return {
       system,
       document: text(raw && raw.document),
+      company: system === SYSTEMS.PW ? text(raw && raw.company) : "",
       documentKey: norm(identity.key),
       canonicalDocument: text(identity.canonical),
       documentClass: cls,
@@ -279,6 +280,7 @@
     return {
       system,
       document: text(raw && raw.document),
+      company: system === SYSTEMS.PW ? text(raw && raw.company) : "",
       documentKey: norm(documentIdentity(raw && raw.document).key),
       revision: revisionOf(raw),
       documentRevisionKey: documentRevisionKey(raw),
@@ -308,7 +310,7 @@
       const identity = documentIdentity(raw.document);
       // O filtro de escopo antecede qualquer indicador ou conciliação histórica.
       const reason = !identity.key ? "codigo_vazio_ou_invalido"
-        : !Dashboard.isC1OCode(raw.document) ? "fora_do_escopo_c1o" : "";
+        : system === SYSTEMS.PW && !Dashboard.isPwCompanyInScope(raw) ? "empresa_pw_fora_de_csg_qtm" : "";
       if (reason) {
         const item = rejectRecord(raw, system, reason);
         rejected.push(item);
@@ -394,7 +396,7 @@
       ldDocuments: universe && universe.qualityAvailable ? universe.qualityDocumentCount : 0,
       ldFingerprint: universe && universe.available ? universe.fingerprint : "",
       comparisonGranularity: "ocorrencia-tecnica; documento+revisao auditavel em paralelo",
-      registrationRule: system === SYSTEMS.PW ? "Cadastrado = documento+revisão válido presente na relação PW" : "Presente = documento+revisão válido na Consulta Geral",
+      registrationRule: system === SYSTEMS.PW ? "Cadastrado = documento+revisão presente na relação PW com empresa CSG/QTM na coluna C" : "Presente = documento+revisão válido na Consulta Geral",
       emissionRule: system === SYSTEMS.PW ? "Emitido = Última emissão SIM (atual) ou NÃO (histórica); não emitido determinável = PREVISTO; ausente/desconhecido = indeterminado" : "",
       registrationDateField: system === SYSTEMS.PW ? "datacriacao" : "Data de inclusão/modificação quando disponível",
       emissionDateField: system === SYSTEMS.PW ? "DataEnvioGRDCliente; se ausente, a data de emissão fica não determinável" : "",
@@ -411,7 +413,8 @@
     const previousRejected = system === SYSTEMS.PW
       ? (base.meta.scopeDiscardedRecords || base.discardedRecords || (options && options.preRejected) || [])
       : ((options && options.preRejected) || []);
-    const prepared = prepareRecords(system, base.records, universe, { preRejected: previousRejected });
+    const sourceRows = system === SYSTEMS.PW && Array.isArray(base.sourceRecords) ? base.sourceRecords : base.records;
+    const prepared = prepareRecords(system, sourceRows, universe, { preRejected: previousRejected });
     const contentFingerprint = sourceFingerprint(system, prepared.accepted);
     const snapshot = {
       id: text(options && options.snapshotId) || `${system}:${CALCULATION_VERSION}:${contentFingerprint}`,
