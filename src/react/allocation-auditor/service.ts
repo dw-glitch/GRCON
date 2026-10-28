@@ -21,6 +21,7 @@ const save=(bytes:Uint8Array,name:string)=>{const u=URL.createObjectURL(new Blob
 export const service={
  subscribe(f:()=>void){listeners.add(f);return ()=>{listeners.delete(f);};},snapshot:()=>state,
  core:()=>g.GrconAllocationAuditorCore,
+ prepareImport(){if(state.busy)return;clearResults();emit({records:[],context:{...state.context,inputFile:'',inputSheet:'',inputModel:''},message:'Inspecionando as abas do arquivo selecionado.'});},
  async activate(){requireSession();try{const data=await rpc('history');emit({runs:data.runs});}catch(e){emit({message:'Histórico compartilhado indisponível: '+(e as Error).message});}},
  async open(seed:Data){return task(async()=>{const t=epoch;current(t);clearResults();emit({records:seed.rows.map((r:Data)=>({...r.record,document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow,databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,allocation:seed.allocation||'',sourceFile:seed.allocation?'Histórico do Gerador':'Gerador GRCON',sourceVersions:seed.sourceVersions||{},contract:cloud().membership.contract_id})),context:{...seed,contract:cloud().membership.contract_id},message:'Documentos recebidos do Gerador. Inicie a auditoria.'});});},
  inspect:(file:File)=>task(async()=>compute('inspect',{file})),
