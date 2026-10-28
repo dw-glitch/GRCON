@@ -30,7 +30,7 @@ self.addEventListener("message", (event) => {
     }
     if (payload.type === "model") {
       const Dashboard = self.GrconSigemPwDashboard;
-      const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || [], { requireN1710Ld: true, ldAvailable: Boolean(payload.ldAvailable) });
+      const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || [], { requireN1710Ld: true, ldAvailable: Boolean(payload.ldAvailable), sigemAvailable: Boolean(payload.sigemAvailable), pwAvailable: Boolean(payload.pwAvailable) });
       const allScope = {
         all: Dashboard.aggregateModel(model, {}, { revisionScope: "all" }),
         ET: Dashboard.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
