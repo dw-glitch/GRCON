@@ -3,6 +3,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const BUILDS = {
+  "allocation-auditor": {
+    entry: "src/react/allocation-auditor/index.tsx",
+    fileName: "allocation-auditor-app.js",
+    bundleName: "GrconAllocationAuditorBundle",
+    emptyOutDir: false,
+  },
   "title-corrector": {
     entry: "src/react/title-corrector/index.tsx",
     fileName: "title-corrector-app.js",

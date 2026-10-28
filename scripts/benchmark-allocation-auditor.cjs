@@ -1,0 +1,17 @@
+'use strict';
+// Optional private corpus. No contractual document contents are committed.
+const fs=require('node:fs'),path=require('node:path'),{performance}=require('node:perf_hooks');
+const C=require('../allocation_auditor_core.js'),XLSX=require('../xlsx.full.min.js');global.XLSX=XLSX;
+const LD=require('../vendor/recon/core.js'),N=require('../vendor/recon/allocation_normative_rules.js');
+const sources=process.env.GRCON_AUDIT_SOURCES;if(!sources)throw Error('Defina GRCON_AUDIT_SOURCES para uma pasta de cópias de análise.');
+const files=fs.readdirSync(sources),read=name=>XLSX.read(fs.readFileSync(path.join(sources,name)),{type:'buffer',cellDates:true});
+const central=read('CENTRAL DE ALOCAÇÃO.xlsx'),history=C.parseRows(XLSX.utils.sheet_to_json(central.Sheets['Central de alocação'],{header:1,defval:'',raw:true}),{contract:'UHDT-D',sourceFile:'CENTRAL DE ALOCAÇÃO.xlsx',sourceSheet:'Central de alocação'}).records;
+const ldRecords=files.filter(f=>f.startsWith('LD-')&&f.endsWith('.xlsx')).flatMap(f=>LD.parseWorkbook(read(f),f,0).records);
+const db=read('Caminho Data book_Rev.E(1).xlsx'),dbRows=XLSX.utils.sheet_to_json(db.Sheets['CAMINHO DB_SIGEM_REV.E'],{header:1,defval:'',raw:false}),paths=dbRows.filter(r=>typeof r[6]==='string'&&r[6].includes('|DATA BOOK')).map((r,i)=>({databook:r[6],description:r[7],sourceSheet:'CAMINHO DB_SIGEM_REV.E',rowNumber:i+1}));
+const catalog=C.catalogComments(history),split={development:0,validation:0,holdout:0};const grouped=new Map();for(const h of history){const s=C.splitGroup(h);split[s]++;if(grouped.has(h.document)&&grouped.get(h.document)!==s)throw Error('Split leakage');grouped.set(h.document,s);}
+// Do not feed the fiscal target/comment into preventive detection.
+const records=history.map(({fiscalComment,commentFindings,fiscalDecision,status,...r})=>r);
+const ctx={contract:'UHDT-D',records,ldRecords,bases:{databook:paths},versions:{databook:'Rev.E arquivo analisado'},validateDocument:N.validateDocument};
+const start=performance.now(),index=C.prepare(ctx),rows=records.map(r=>C.auditRecord(r,ctx,index)),ms=performance.now()-start;
+const output={corpus:{events:history.length,documents:new Set(history.map(r=>r.document)).size,textResponses:history.filter(r=>r.fiscalComment).length,rawCommentVariants:catalog.reduce((n,c)=>n+c.originals.length,0),normalizedGroups:catalog.length,nonTextFiscalCells:history.filter(r=>r.commentDataIssue).length,ldRecords:ldRecords.length,databookPaths:paths.length},splits:split,splitPolicy:'exact code + contract; all revisions/submissions in one group; unproven aliases require manual lineage review',technical:{records:rows.length,milliseconds:Math.round(ms),recordsPerSecond:Math.round(rows.length/(ms/1000)),failureCount:0,summary:C.summary(rows)},quality:{precision:null,recall:null,falsePositiveCount:null,falseNegativeCount:null,criticalMisses:null,reason:'No independently annotated and frozen homologation corpus. Descriptive split and performance benchmark only; no reliability percentage claimed.'},limitations:['ET applicability to contract not independently confirmed','Official contractual EAP Annex III Appendix A unavailable','TAG references not supplied to this performance benchmark','Data Book routing/homologation and workflow applicability require live contract context']};
+const out=process.env.GRCON_AUDIT_BENCHMARK_OUT||'artifacts/allocation-auditor-benchmark.json';fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,JSON.stringify(output,null,2));console.log(JSON.stringify(output));

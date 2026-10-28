@@ -47,6 +47,7 @@
 <link rel="stylesheet" href="grdt-support-panel.css" />
 <link rel="stylesheet" href="allocation-generator.css">
 <link rel="stylesheet" href="title-corrector.css">
+<link rel="stylesheet" href="allocation-auditor.css">
 </head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
@@ -486,6 +487,7 @@
 <div><span>FERRAMENTAS ADICIONAIS</span><h2>Utilitários documentais</h2><p>Combine PDFs, converta documentos e consulte as ferramentas de alocação em um único espaço.</p></div>
 </header>
 <div class="additional-tools-grid" role="list">
+<button class="additional-tool-card" data-grcon-view="allocation-auditor" type="button" role="listitem"><span class="additional-tool-icon" aria-hidden="true">✓</span><span><strong>Auditor de Alocações</strong><small>Confira alocações, consulte apontamentos fiscais e prepare correções na origem.</small></span><span class="additional-tool-open" aria-hidden="true">Abrir →</span></button>
 <button class="additional-tool-card" data-grcon-view="title-corrector" type="button" role="listitem"><span class="additional-tool-icon" aria-hidden="true">T</span><span><strong>Corretor Inteligente de Títulos</strong><small>Audite e detalhe títulos da LD com evidências, revisão e exportação segura.</small></span><span class="additional-tool-open" aria-hidden="true">Abrir →</span></button>
 <button class="additional-tool-card" data-grcon-view="allocation-generator" type="button" role="listitem"><span class="additional-tool-icon" aria-hidden="true">↳</span><span><strong>Gerador de Alocação</strong><small>Analise caminhos, revise títulos e gere o pacote oficial de alocação.</small></span><span class="additional-tool-open" aria-hidden="true">Abrir →</span></button>
 <button class="additional-tool-card" data-grcon-view="pdf-tools" type="button" role="listitem">
@@ -507,6 +509,7 @@
 </section>
 <section id="title-corrector-module" hidden="" role="tabpanel" aria-label="Corretor Inteligente de Títulos"><div id="grcon-title-corrector-root"></div></section>
 <section id="allocation-generator-module" hidden="" role="tabpanel" aria-label="Gerador de Alocação"><div id="grcon-allocation-root"></div></section>
+<section id="allocation-auditor-module" hidden="" role="tabpanel" aria-label="Auditor de Alocações"><div id="grcon-allocation-auditor-root"></div></section>
 <section id="allocation-dashboard-module" class="allocation-dashboard-module" hidden="" role="tabpanel" aria-label="Dashboard de Alocação">
 <div id="allocation-dashboard-root"></div>
 </section>
@@ -773,3 +776,4 @@
 <script defer src="grcon_service_worker.js"></script>
 </body>
 </html>
+

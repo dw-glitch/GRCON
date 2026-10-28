@@ -16,7 +16,7 @@ export function AllocationApp(){
  const row=detail===null?null:state.rows[detail];
  const history=state.history.filter(run=>JSON.stringify([run.allocation_code,run.documents]).toUpperCase().includes(historyQuery.toUpperCase()));
  return <div className="ag-app">
-  <header className="ag-heading"><div><span className="ag-kicker">FERRAMENTAS ADICIONAIS</span><h2>Gerador de Alocação</h2><p>Cole os códigos e gere os arquivos. Ajuste os dados quando precisar.</p></div><button className="secondary-button" disabled={state.busy} onClick={()=>act(service.refresh())}>Atualizar</button></header>
+  <header className="ag-heading"><div><span className="ag-kicker">FERRAMENTAS ADICIONAIS</span><h2>Gerador de Alocação</h2><button className="secondary-button" disabled={state.busy||!state.rows.some(r=>r.selected)} onClick={()=>act(service.auditCurrent())}>Auditar Alocação</button><p>Cole os códigos e gere os arquivos. Ajuste os dados quando precisar.</p></div><button className="secondary-button" disabled={state.busy} onClick={()=>act(service.refresh())}>Atualizar</button></header>
   <nav className="ag-tabs" aria-label="Seções de alocação">{[['generate','Gerar alocação'],['bases','Bases de referência'],['history','Histórico'],['learning','Aprendizado da IA']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}>{label}</button>)}</nav>
   {state.error&&<div className="ag-notice ag-error" role="alert">{state.error}</div>}{message&&<div className="ag-notice" role="status">{message}</div>}
   {state.busy&&state.progress&&<div className="ag-notice" role="status">{state.progress}</div>}
@@ -75,7 +75,7 @@ export function AllocationApp(){
   </div>
   <small>Somente alocações reconhecidas na Central de Alocação publicada. Os status acompanham a base oficial.</small>
   {history.map(run=><article className="ag-history-row" key={run.id}><header>
-   <strong>{run.allocation_code}</strong><span>{run.control_status||'Não informado'}</span>
+   <strong>{run.allocation_code}</strong><button className="text-button" disabled={state.busy} onClick={()=>act(service.auditSavedRun(run))}>Auditar Alocação</button><span>{run.control_status||'Não informado'}</span>
    <time>{run.control_published_at?new Date(run.control_published_at).toLocaleString('pt-BR'):'Sem data de publicação'}</time>
    </header>
    <p>{(run.documents||[]).map((d:Data)=>d.document+' Rev. '+d.revision).join(' · ')}{run.document_count>20?' · …':''}</p>
@@ -122,3 +122,4 @@ function ReviewDrawer({row,index,busy,onClose,onAction}:{row:Row;index:number;bu
  <div className="ag-toolbar"><button className="primary-button" disabled={busy} onClick={()=>onAction(apply().then(onClose))}>Salvar ajustes</button><button className="text-button" onClick={onClose}>Fechar</button></div>
  </aside></div>;
 }
+

@@ -44,6 +44,7 @@
     // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
     "additional-tools": [],
     "allocation-generator": ["react-dist/allocation-app.js"],
+    "allocation-auditor": ["allocation_auditor_core.js", "react-dist/allocation-auditor-app.js"],
     "title-corrector": ["react-dist/title-corrector-app.js"],
     "allocation-dashboard": ["allocation_dashboard_core.js", "allocation_dashboard_app.js"],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core
@@ -64,6 +65,7 @@
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
     "docx-to-pdf": ["GrconDocxPdfCore", "GrconDocxPdfUi"],
     "allocation-generator": ["GrconAllocationGeneratorUi"],
+    "allocation-auditor": ["GrconAllocationAuditorUi"],
     "title-corrector": ["GrconTitleCorrectorUi"],
     "allocation-dashboard": ["GrconAllocationDashboardCore", "GrconAllocationDashboardUi"],
   };
@@ -238,6 +240,7 @@
       "pdf-tools": "pdf-tools-module",
       "docx-to-pdf": "docx-to-pdf-module",
       "allocation-generator": "allocation-generator-module",
+      "allocation-auditor": "allocation-auditor-module",
       "title-corrector": "title-corrector-module",
       "allocation-dashboard": "allocation-dashboard-module",
     };
@@ -251,7 +254,7 @@
     if (scrollingElement) scrollingElement.scrollTop = 0;
     if (root.scrollY) root.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      const nestedToolView = view === "allocation-generator" || view === "title-corrector" || view === "grdt-reissue" || view === "pdf-tools" || view === "docx-to-pdf" || view === "allocation-dashboard";
+      const nestedToolView = view === "allocation-auditor" || view === "allocation-generator" || view === "title-corrector" || view === "grdt-reissue" || view === "pdf-tools" || view === "docx-to-pdf" || view === "allocation-dashboard";
       const additionalToolsNav = button.dataset.grconView === "additional-tools"
         && (button.classList.contains("ops-nav-button") || button.id === "tab-additional-tools");
       const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav);
@@ -275,6 +278,7 @@
     "pdf-tools": "Combinar PDFs",
     "docx-to-pdf": "Converter PDF em DOCX",
     "allocation-generator": "Gerador de Alocação",
+    "allocation-auditor": "Auditor de Alocações",
     "title-corrector": "Corretor Inteligente de Títulos",
     "allocation-dashboard": "Dashboard de Alocação",
   };
@@ -296,6 +300,10 @@
   }
 
   function activateReadyModule(module) {
+    if (module === "allocation-auditor") {
+      root.GrconAllocationAuditorUi?.activate?.();
+      return;
+    }
     if (module === "additional-tools") return;
     if (module === "dashboard") {
       root.GrconHistoryDashboard?.activate?.();
@@ -405,3 +413,4 @@
     scriptBasename,
   });
 })(window);
+
