@@ -38,22 +38,24 @@
  }
  function headerMap(row){
   const h=row.map(norm),find=(...names)=>h.findIndex(v=>names.includes(v));
-  return {document:find('NOMEDOCUMENTO','DOCUMENTO','CODIGO','NUMERO DO DOCUMENTO'),revision:find('REVISAO','REV.','REV'),title:find('TITULO','TITULO DO DOCUMENTO'),allocation:find('ALOCACAO','NUMERO DA ALOCACAO'),ld:find('LD','LD DE ORIGEM'),ldSheet:find('ABA'),ldVersion:find('VERSAO DA LD'),sentAt:find('DATA DO ENVIO DA ALOC','DATA DO ENVIO'),returnedAt:h.findIndex(v=>/^RETORNO DA FISCAL 01/.test(v)),fiscalComment:h.findIndex(v=>/^RESPOSTA DA FISCAL 01/.test(v)),fiscal02:h.findIndex(v=>/^RETORNO DA FISCAL 02/.test(v)),status:find('STATUS DA ALOCACAO','STATUS/ OBSERVACAO','STATUS'),databook:find('CAMINHO DATA BOOK','CAMINHO DATABOOK'),workflow:find('WORKFLOW'),discipline:find('DISCIPLINA'),eap:find('EAP'),tag:find('TAG'),levels:Array.from({length:10},(_,i)=>find('N'+(i+1)))};
+  return {document:find('NOMEDOCUMENTO','NOME DOCUMENTO','DOCUMENTO','CODIGO','NUMERO DO DOCUMENTO'),revision:find('REVISAO','REV.','REV'),title:find('TITULO','TITULO DO DOCUMENTO'),allocation:find('ALOCACAO','NUMERO DA ALOCACAO'),ld:find('LD','LD DE ORIGEM'),ldSheet:find('ABA'),ldVersion:find('VERSAO DA LD'),sentAt:find('DATA DO ENVIO DA ALOC','DATA DO ENVIO'),returnedAt:h.findIndex(v=>/^RETORNO DA FISCAL 01/.test(v)),fiscalComment:h.findIndex(v=>/^RESPOSTA DA FISCAL 01/.test(v)),fiscal02:h.findIndex(v=>/^RETORNO DA FISCAL 02/.test(v)),status:find('STATUS DA ALOCACAO','STATUS/ OBSERVACAO','STATUS'),databook:find('CAMINHO DATA BOOK','CAMINHO DATABOOK'),workflow:find('WORKFLOW'),discipline:find('DISCIPLINA'),eap:find('EAP'),tag:find('TAG'),plannedDate:find('DATA PREVISTA'),activeDocument:find('DOCUMENTO ATIVO'),action:find('ACAO'),baselineDate:find('DATA DA LINHA BASE'),purpose:find('PROPOSITO DE EMISSAO ORIGINAL'),criticalDocument:find('DOCUMENTO CRITICO'),observation:find('OBSERVACAO'),levels:Array.from({length:10},(_,i)=>find('N'+(i+1)))};
  }
  function parseRows(rows,meta={}){
   let header=-1,map;
   for(let i=0;i<Math.min(80,rows.length);i++){const m=headerMap(rows[i]||[]);if(m.document>=0){header=i;map=m;break;}}
   if(header<0)throw Error('Cabeçalho documental não reconhecido. Nenhuma coluna foi presumida.');
-  const records=[];for(let i=header+1;i<rows.length;i++){
+  const official=['NOMEDOCUMENTO','DATA PREVISTA','WORKFLOW','DOCUMENTO ATIVO','ACAO','DATA DA LINHA BASE','PROPOSITO DE EMISSAO ORIGINAL','DOCUMENTO CRITICO','OBSERVACAO','CAMINHO DATA BOOK','N1','N2','N3','N4','N5','N6'].every((h,i)=>norm(rows[header][i])===h);
+   const records=[];for(let i=header+1;i<rows.length;i++){
    const row=rows[i]||[],get=n=>map[n]>=0?text(row[map[n]]):'';if(!get('document'))continue;
-   const r={...meta,document:get('document'),rawDocument:row[map.document]==null?'':String(row[map.document]),revision:get('revision'),title:get('title'),allocation:get('allocation')||text(meta.allocation),ld:get('ld'),ldSheet:get('ldSheet'),ldVersion:get('ldVersion'),sentAt:get('sentAt'),returnedAt:get('returnedAt'),fiscalComment:get('fiscalComment'),fiscal02:get('fiscal02'),status:get('status'),databook:get('databook'),workflow:get('workflow'),discipline:get('discipline'),eap:get('eap'),tag:get('tag'),levels:map.levels.map(j=>j>=0?text(row[j]):''),sourceRow:i+1,columns:Object.fromEntries(Object.entries(map).filter(([_,v])=>typeof v==='number'&&v>=0).map(([k,v])=>[k,v+1]))};
+   const r={...meta,document:get('document'),rawDocument:row[map.document]==null?'':String(row[map.document]),officialAllocation:official,plannedDate:get('plannedDate'),activeDocument:get('activeDocument'),action:get('action'),baselineDate:get('baselineDate'),purpose:get('purpose'),criticalDocument:get('criticalDocument'),observation:get('observation'),revision:get('revision'),title:get('title'),allocation:get('allocation')||text(meta.allocation),ld:get('ld'),ldSheet:get('ldSheet'),ldVersion:get('ldVersion'),sentAt:get('sentAt'),returnedAt:get('returnedAt'),fiscalComment:get('fiscalComment'),fiscal02:get('fiscal02'),status:get('status'),databook:get('databook'),workflow:get('workflow'),discipline:get('discipline'),eap:get('eap'),tag:get('tag'),levels:map.levels.map(j=>j>=0?text(row[j]):''),sourceRow:i+1,columns:Object.fromEntries(Object.entries(map).filter(([_,v])=>typeof v==='number'&&v>=0).map(([k,v])=>[k,v+1]))};
    // Fiscal text is preserved verbatim, including spacing and line breaks.
    if(map.fiscalComment>=0){const raw=row[map.fiscalComment];r.fiscalComment=typeof raw==='string'?raw:'';if(raw!=null&&raw!==''&&typeof raw!=='string'){r.fiscalCommentRaw=raw;r.commentDataIssue='Resposta fiscal contém valor não textual.';}}
    // Status/observação in returned allocation workbooks is evidence; sheet names are not decisions.
    if(!r.fiscalComment&&map.fiscalComment<0&&map.status>=0&&norm(rows[header][map.status])==='STATUS/ OBSERVACAO')r.fiscalComment=row[map.status]==null?'':String(row[map.status]);
    r.fiscalDecision=decision(r.fiscalComment,r.status);r.commentFindings=classifyComment(r.fiscalComment);records.push(r);
   }
-  return {records,headerRow:header+1,columns:map};
+  if(!records.length)throw Error('A aba selecionada não contém documentos reconhecíveis. Verifique a aba GERAL e a coluna NomeDocumento.');
+   return {records,headerRow:header+1,columns:map,model:official?'official-16':'mapped',documentCount:records.length};
  }
  function parts(document){const p=text(document).split('_');return p.length>=7?{supplier:p[0],project:p[1],unit:p[2],eap:p[3],discipline:p[4],report:p[5],tag:p.slice(6).join('_')}:null;}
  function ldIdentity(r){const file=text(r.ld||r.origin?.file),sheet=norm(r.ldSheet||r.origin?.sheet);const id=file.match(/LD-[\d.]+-[\dA-Z]+-[\dA-Z]+-[\dA-Z]+-(\d{3})/i)?.[1]||sheet.match(/LD[_\s-]*(\d{3})/)?.[1]||'';return {id,sheet:sheet.replace(/[_\s-]*LD[_\s-]*\d{3}.*$/,'').trim()};}
@@ -81,7 +83,12 @@
   if(source){for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k]))r[k]=text(source[k]);r.ld=r.ld||text(source.source);r.ldSheet=r.ldSheet||text(source.sheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
   if(compatible.length>1)add('LD-AMBIGUOUS','history','ld','Mais de uma linha da LD corresponde ao documento. Confirme a origem.',compatible.map(x=>({file:x.source,sheet:x.sheet,row:x.row})));
   if(!text(r.revision))add('REVISION-UNKNOWN','history','revision','Revisão não informada; não foi presumida revisão 0.',[{file:r.sourceFile,row:r.sourceRow}]);
-  if(!text(r.title))add('TITLE-MISSING','title','title','Título não disponível. Importe a LD para verificar.',[{file:r.sourceFile,row:r.sourceRow}]);
+  if(!text(r.title))add('TITLE-MISSING','title','title',r.officialAllocation?'O modelo oficial não contém título. Consulte a LD correspondente para validar o conteúdo.':'Título não disponível. Importe a LD para verificar.',[{file:r.sourceFile,row:r.sourceRow}]);
+   if(r.officialAllocation){
+    if(!text(r.plannedDate))add('ALLOCATION-DATE-MISSING','history','plannedDate','A Data Prevista está vazia no modelo oficial.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
+    if(!text(r.action))add('ALLOCATION-ACTION-MISSING','history','action','A ação da alocação está vazia.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
+    if(!text(r.purpose))add('ALLOCATION-PURPOSE-MISSING','history','purpose','O Propósito de Emissão Original está vazio.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
+   }
   if(!enforced)add('ET-APPLICABILITY','code','document','Aplicabilidade e revisão da ET ainda não comprovadas para este contrato.',[],{origin:'Base normativa'});
   if(context.validateDocument){
    const validation=context.validateDocument(r.document);
