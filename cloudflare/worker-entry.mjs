@@ -5,7 +5,7 @@ import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
 import {generateExplanation,INTENTS,SOURCE_LABELS,evidenceFor,modelInput} from './document-ai.mjs';
 import {validateDecision,allocationPrompt,recommendAllocation,automaticContextKeys,validateAutomaticBatch} from './allocation-ai.mjs';
 import {prepareTitlePrompt,suggestTitle} from './title-ai.mjs';
-import {prepareAuditPrompt,analyzeAudit} from './allocation-audit-ai.mjs';
+import {prepareAuditPrompt,analyzeAudit,auditAiFailure} from './allocation-audit-ai.mjs';
 import AllocationCore from '../allocation_generator_core.js';
 
 const PREFIX = "/api/document-vault/";
@@ -163,7 +163,7 @@ async function handleAllocationAuditAi(request,env){
  const slot=await rpc(env,'grcon_document_ai_budget',{operation:'reserve',target_workspace:workspace,actor_id:user.id});
  if(!slot.allowed)return apiError('Limite individual da IA atingido.',429,'AI_LIMIT');
  try{return json({ok:true,analysis:await analyzeAudit(env.AI,prepared)});}
- catch{return apiError('Resposta da IA não verificável. Use as evidências e a revisão manual.',503,'AI_UNAVAILABLE');}
+ catch(error){const failure=auditAiFailure(error);return apiError(failure.message,503,failure.code);}
 }
 async function handleDocumentAi(request,env,probe=false){
  if(probe){
