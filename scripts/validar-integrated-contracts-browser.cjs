@@ -6,6 +6,12 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  const browser=await chromium.launch({headless:true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? {executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH} : {})});
  try{
  const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block',acceptDownloads:true});
+ await context.addInitScript(() => {
+  window.GrconStorageFeatures = Object.freeze({
+   showStorageUI:true, enableAutomaticUpload:true,
+   enableManualUpload:true, enableAutomaticLookup:true,
+  });
+ });
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  // Explicit isolated-fixture opt-in for legacy document recovery tests; real GRCON
  // keeps the Vault UI and automatic lookup disabled pending corporate approval.
