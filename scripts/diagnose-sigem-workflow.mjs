@@ -33,10 +33,20 @@ export async function diagnoseWorkflow(config,fetcher=fetch){
  const root='sigem-migration-jobs/v1/'+config.workspace+'/'+latest.id;
  const grant=await object(root+'/grant.json');
  if(grant.workspace!==config.workspace||grant.id!==latest.id||!Array.isArray(grant.lanes)||grant.lanes.length>3)throw Error('DIAG_JOB_INVALID');
- const result=[];
+ const result=[],safeCount=value=>Number.isSafeInteger(value)&&value>=0?value:0;
+ const progress={recordsExpected:safeCount(grant.records),completedSnapshots:Array.isArray(grant.completed)?grant.completed.length:0,
+  reusedAuditedRecords:Array.isArray(grant.completed)?grant.completed.reduce((n,s)=>n+safeCount(s.validatedRecords),0):0,
+  copiedRecords:0,auditedRecords:0,deferredSnapshots:Array.isArray(grant.deferred)?grant.deferred.length:0,
+  wave:safeCount(grant.wave),allLanesComplete:true};
  for(let lane=0;lane<grant.lanes.length;lane++){
-  const report=await object(root+'/lane-'+lane+'.json');
+  let report;
+  try{report=await object(root+'/lane-'+lane+'.json');}
+  catch(error){if(error.message!=='DIAG_NOT_FOUND')throw error;}
+  if(!report){result.push({lane,status:'not-started',error:null,lastSteps:[]});progress.allLanesComplete=false;continue;}
   if(!Number.isSafeInteger(report.segment)||report.segment<0||report.segment>10000)throw Error('DIAG_SEGMENT_INVALID');
+  progress.copiedRecords+=safeCount(report.copied);
+  progress.auditedRecords+=safeCount(report.validated);
+  if(report.status!=='complete')progress.allLanesComplete=false;
   const instance='sigem-'+latest.id.slice(0,40)+'-'+lane+(report.segment?'-s'+report.segment:'');
   let state;
   try{state=await get('/workflows/grcon-tasks/instances/'+instance);}
@@ -47,7 +57,11 @@ export async function diagnoseWorkflow(config,fetcher=fetch){
     finished:s.finished===true,error:s.error?classifyWorkflowError(s.error):null,
     attempts:Array.isArray(s.attempts)?s.attempts.map(a=>({success:a.success===true,error:a.error?classifyWorkflowError(a.error):null})):[]}))});
  }
- return {ok:true,readOnly:true,id:latest.id,instances:result};
+ progress.copiedRecords+=progress.reusedAuditedRecords;
+ progress.auditedRecords+=progress.reusedAuditedRecords;
+ // These are R2 checkpoint counters only; they cannot prove full migration,
+ // which also requires live Supabase/Turso inventory and row/hash validation.
+ return {ok:true,readOnly:true,started:true,progress,sourceOfProgress:'r2-checkpoints-only',instances:result};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
  try{console.log(JSON.stringify(await diagnoseWorkflow({account:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN,workspace:process.env.GRCON_RECOVERY_WORKSPACE})));}

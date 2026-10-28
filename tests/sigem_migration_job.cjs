@@ -136,6 +136,17 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   assert.equal(reused.complete,true);assert.equal(reused.reusedAuditRecords,10001);
   assert.equal(reused.completedSnapshots[0].reusedAudit,true);
   env.GRCON_TASKS={create:async entry=>({id:entry.id})};
+  // Growth scenario: reuse yesterday's archived and audited snapshot, and
+  // schedule only the newly published active version for incremental copy.
+  const fresh={...source,id:uuid(31),status:'active',record_count:2501};
+  inventory.snapshots.push(fresh);
+  const expanded=await M.startMigration(env,uuid(1),uuid(9),inventory);
+  const incremental=await M.migrationStatus(env,uuid(1),inventory);
+  assert.equal(expanded.records,12502);
+  assert.equal(incremental.reusedAuditRecords,10001,'audited archive must not be copied again');
+  assert.equal(incremental.pendingSnapshots,1,'only the new version must be copied');
+  assert.equal(incremental.complete,false,'incomplete incremental import cannot permit cutover');
+  inventory.snapshots.pop();
   source.metadata={teste:'changed'};
   const changed=await M.startMigration(env,uuid(1),uuid(9),inventory);
   const rejectedReuse=await M.migrationStatus(env,uuid(1),inventory);
