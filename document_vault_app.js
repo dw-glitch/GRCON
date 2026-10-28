@@ -8,6 +8,8 @@
   }
 
   const API = "/api/document-vault";
+  const storageFeatures = root.GrconStorageFeatures || Object.freeze({ showStorageUI: false, enableAutomaticUpload: false, enableManualUpload: false, enableAutomaticLookup: false });
+  const canUpload = () => storageFeatures.enableManualUpload === true || storageFeatures.enableAutomaticUpload === true;
   const PAGE_SIZE = 50;
   const UPLOAD_CONCURRENCY = 6;
   const DOWNLOAD_CONCURRENCY = 4;
@@ -259,6 +261,7 @@
   }
 
   async function enqueueFiles(fileList) {
+    if (storageFeatures.enableManualUpload !== true) return;
     const files = Array.from(fileList || []).filter(file => file && file.name);
     if (!files.length) return;
     let accepted = 0;
@@ -1475,6 +1478,7 @@
   }
 
   async function openVault() {
+    if (storageFeatures.showStorageUI !== true) return;
     activateShell();
     renderQueue(true);
     await Promise.all([checkHealth(), refreshList(true), refreshStorage()]);
@@ -1561,6 +1565,8 @@
   }
 
   function init() {
+    // Do not create navigation, module DOM, queues, progress bars or usage widgets.
+    if (storageFeatures.showStorageUI !== true) return;
     ensureCss();
     installNavigation();
     installModule();
@@ -1605,6 +1611,7 @@
   // Validate identities before generation. Storage only starts after delivery;
   // neither hashing nor the R2/network queue can invalidate an emitted package.
   function prepareEmissionFiles(plan) {
+    if (storageFeatures.enableAutomaticUpload !== true) return null;
     const target = workspaceId(), epoch = contextEpoch;
     const tasks = new Map();
     for (const entry of plan?.entries || []) {
@@ -1650,6 +1657,7 @@
   }
 
   async function persistEmissionFiles(plan, onProgress, options = {}) {
+    if (storageFeatures.enableAutomaticUpload !== true) return;
     const epoch = contextEpoch, target = workspaceId();
     const entries = (plan?.entries || []).filter(entry => entry.file);
     const entryByFile = new Map(entries.map(entry => [entry.file, entry]));
