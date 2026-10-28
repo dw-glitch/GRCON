@@ -509,6 +509,11 @@ async function waitEvolutionReady(page) {
     const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
     fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-FORA-ESCOPO;0;ABC');
     await importFile(page,'#spw-pw-file',codeOnlyPath);
+    // O reset das bases não reseta filtros pessoais: validar o universo sem filtro de classe remanescente.
+    await page.locator('#spw-clear').click();
+    await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.filters.documentClass===''
+      && GrconSigemPwDashboardUi.state.pw.meta?.fileName==='PW_only_document.csv'
+      && !GrconSigemPwDashboardUi.state.busy);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),1,'perfil anterior não exige campos opcionais ausentes');
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),1,'siglas de outras empresas ficam separadas e não entram na comparação');
     await page.evaluate(()=>GrconImportReview.selectProfile(''));
