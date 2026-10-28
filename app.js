@@ -6064,30 +6064,58 @@
   });
   els.exportEgrdt.addEventListener("click", exportEgrdt);
   function lockDownloadControls(locked) {
+    const tableControls = els.tbody?.querySelectorAll?.("input,button[data-action=toggle-details],button[data-action=restore-revision]") || [];
     const controls = [els.selectAllReady, els.exportEgrdt, els.exportFinalPackage, els.batchEgrdt,
       els.egrdtBatchLimit, els.egrdtBatchMode, els.egrdtBatchSave, els.saveGrdtToVault,
-      ...els.tbody.querySelectorAll("input,button[data-action=toggle-details],button[data-action=restore-revision]")];
+      ...tableControls];
     controls.forEach(control => {
-      if (locked) { control.dataset.downloadWasDisabled = String(control.disabled); control.disabled = true; }
-      else if (control.dataset.downloadWasDisabled !== undefined) { control.disabled = control.dataset.downloadWasDisabled === "true"; delete control.dataset.downloadWasDisabled; }
+      // O checkbox do Cofre é opcional: a interface de armazenamento permanece oculta.
+      if (!control?.dataset || !("disabled" in control)) return;
+      if (locked) {
+        // Bloqueios repetidos não devem sobrescrever o estado anterior.
+        if (!Object.prototype.hasOwnProperty.call(control.dataset, "downloadWasDisabled")) {
+          control.dataset.downloadWasDisabled = String(control.disabled);
+        }
+        control.disabled = true;
+      } else if (Object.prototype.hasOwnProperty.call(control.dataset, "downloadWasDisabled")) {
+        control.disabled = control.dataset.downloadWasDisabled === "true";
+        delete control.dataset.downloadWasDisabled;
+      }
     });
   }
   let centralDownloadInProgress = false;
   els.exportZip.addEventListener("click", async () => {
     if (centralDownloadInProgress || state.busy) return;
     centralDownloadInProgress = true;
-    state.downloadPreparing = true; state.cancelled = false; lockDownloadControls(true);
-    els.exportZip.disabled = true;
-    els.exportZip.setAttribute("aria-busy", "true");
-    els.exportZip.textContent = "Preparando arquivos…";
-    document.getElementById("grdt-download-status").textContent = "Conferindo dados e preparando o pacote…";
-    window.GrconGrdtDownloadProgress?.start("Conferindo bases atuais…");
-    try { await exportZip(); }
-    catch (error) { window.GrconGrdtDownloadProgress?.finish(error.name === "AbortError" ? "Preparação cancelada." : "Não foi possível preparar o download. Tente novamente.", true); handleWorkerTaskError(error, "Não foi possível preparar o download. Tente novamente."); }
-    finally {
-      centralDownloadInProgress = false; state.downloadPreparing = false; lockDownloadControls(false);
-      els.exportZip.textContent = "↓ Baixar PDFs + eGRDT";
-      document.getElementById("grdt-download-status").textContent = "PDFs dos documentos e eGRDT para envio";
+    const buttonText = els.exportZip.textContent;
+    const buttonWasDisabled = els.exportZip.disabled;
+    const statusElement = document.getElementById("grdt-download-status");
+    const statusText = statusElement?.textContent;
+    try {
+      state.downloadPreparing = true;
+      state.cancelled = false;
+      lockDownloadControls(true);
+      els.exportZip.disabled = true;
+      els.exportZip.setAttribute("aria-busy", "true");
+      els.exportZip.textContent = "Preparando arquivos…";
+      if (statusElement) statusElement.textContent = "Conferindo dados e preparando o pacote…";
+      window.GrconGrdtDownloadProgress?.start("Conferindo bases atuais…");
+      await exportZip();
+    } catch (error) {
+      try {
+        window.GrconGrdtDownloadProgress?.finish(error?.name === "AbortError" ? "Preparação cancelada." : "Não foi possível preparar o download. Tente novamente.", true);
+      } catch (progressError) {
+        console.warn("[GRCON] Falha ao atualizar o progresso do download.", progressError);
+      }
+      handleWorkerTaskError(error, "Não foi possível preparar o download. Tente novamente.");
+    } finally {
+      centralDownloadInProgress = false;
+      state.downloadPreparing = false;
+      lockDownloadControls(false);
+      els.exportZip.disabled = buttonWasDisabled;
+      els.exportZip.removeAttribute("aria-busy");
+      els.exportZip.textContent = buttonText;
+      if (statusElement) statusElement.textContent = statusText;
       renderAll();
     }
   });
