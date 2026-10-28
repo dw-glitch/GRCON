@@ -1,0 +1,46 @@
+name: Auditor de Alocações — validação e R2
+
+on:
+  push:
+    branches: [feat/allocation-auditor-20261027]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: allocation-auditor-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Testes do Auditor e pacote Cloudflare
+    if: github.repository == 'dw-glitch/GRCON' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm run test:allocation-auditor
+      - run: node --test tests/cloudflare_r2_provisioning.mjs
+      - run: npm run build:cloudflare
+      - run: npm run verify:cloudflare
+  r2:
+    name: Verificar ou criar bucket R2 privado
+    if: github.repository == 'dw-glitch/GRCON' && github.event.repository.private == false && github.ref == 'refs/heads/feat/allocation-auditor-20261027'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Reutilizar bucket existente ou criar somente se ausente
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/ensure-cloudflare-r2.mjs
