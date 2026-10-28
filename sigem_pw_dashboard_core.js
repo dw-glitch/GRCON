@@ -852,9 +852,9 @@
     return {
       ldUniverse, ldAvailable, requireN1710Ld,
       excludedSigemN1710, excludedPwN1710, n1710Candidates: candidates,
-      sourceSigemEntries: buildEntryMap(sourceSigem, "sigem"),
-      sourcePwEntries: buildEntryMap(sourcePw, "pw"),
-      sourcePwDocuments: buildDocumentMap(sourcePw, "pw"),
+      sourceSigemEntries: excludedSigemN1710.length || excludedPwN1710.length ? buildEntryMap(sourceSigem, "sigem") : undefined,
+      sourcePwEntries: excludedSigemN1710.length || excludedPwN1710.length ? buildEntryMap(sourcePw, "pw") : undefined,
+      sourcePwDocuments: excludedSigemN1710.length || excludedPwN1710.length ? buildDocumentMap(sourcePw, "pw") : undefined,
       comparisonScope: {
         rule: "PW: CSG/QTM na coluna C; N-1710 oficial: código presente na LD", version: PW_SCOPE_VERSION,
         sigemAccepted: normalizedSigem.length, pwAccepted: normalizedPw.length,
