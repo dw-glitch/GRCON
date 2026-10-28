@@ -2,7 +2,7 @@
 
 Referência: 28/10/2026. Base inspecionada: `dw-glitch/GRCON`, commit `b13640ec79b43d36574850bb0a1bddd2eebc2999`.
 
-**Estado: implementação funcional integrada à main pelo PR #322 (commit db1867950f14faa9fe47f8ffeba4633978debbec); publicação ainda não comprovada nem homologação técnica concluída.** A estrutura de persistência foi aplicada ao Supabase. Não houve inserção automática do acervo operacional, alteração de LD oficial ou alteração dos comentários da Central.
+**Estado: implementação funcional integrada à main pelo PR #322 (commit db1867950f14faa9fe47f8ffeba4633978debbec) e publicação comprovada em 28/10/2026 no commit 7fd267d554febb804afe73f3021574d4bd09c110. A homologação técnica e o fluxo autenticado de produção permanecem pendentes.** A estrutura de persistência foi aplicada ao Supabase. Não houve inserção automática do acervo operacional, alteração de LD oficial ou alteração dos comentários da Central.
 
 ## Integração entregue
 
@@ -21,7 +21,7 @@ Referência: 28/10/2026. Base inspecionada: `dw-glitch/GRCON`, commit `b13640ec7
 - Apontamentos podem ser propostos, aprovados, rejeitados ou justificados. Uma rejeição posterior revoga uma aprovação anterior do mesmo campo. Encerramento e classificação crítica exigem evidência.
 - ZIP com relatório Excel, correções da LD, decisões, histórico fiscal, catálogo fiscal JSON e rastreabilidade. O pacote oficial usa os exportadores existentes do Gerador, com seu modelo de 16 colunas e linhas da Central.
 - Cópia revisada da LD somente para títulos explicitamente aprovados. O escritor existente verifica preservação de partes OOXML, fórmulas e demais células. Também se confere o código exato na linha antes da escrita. Outros campos constam do pacote de correções.
-- IA opcional, acionada por documento, no Workers AI e orçamento existente. A resposta só pode citar achados fornecidos; não cria títulos, TAGs, caminhos ou prova normativa. Respostas inválidas mantêm o fluxo manual disponível. Não foram feitas inferências reais durante os testes.
+- IA opcional, acionada por documento, no Workers AI e orçamento existente. A resposta só pode citar achados fornecidos; não cria títulos, TAGs, caminhos ou prova normativa. Respostas inválidas mantêm o fluxo manual disponível. A liberação passou por uma inferência real com dados sintéticos no teste geral de Workers AI; isso não homologa a análise semântica do Auditor sobre documentos contratuais.
 
 ## Arquitetura e arquivos
 
@@ -75,14 +75,14 @@ A partição candidata contém 9.189 registros de desenvolvimento, 3.069 de vali
 | 2 — inteligência fiscal | Extração integral da Central e catálogo implementados; interpretação e rotulagem humanas ainda necessárias. |
 | 3 — normas | Motor e reaproveitamento de catálogos testados; aplicabilidade e revisão integral dos anexos não homologadas. |
 | 4 — TAG/EAP/Data Book | Comparações implementadas; comprovação técnica da EAP e adequação de destinos pendentes. |
-| 5 — IA | Rota, limites e esquema testados com binding controlado; inferência real e avaliação semântica não homologadas. |
+| 5 — IA | Rota, limites e esquema testados com binding controlado; teste geral de Workers AI com inferência real sintética aprovado. Análise semântica autenticada do Auditor e sua qualidade permanecem não homologadas. |
 | 6 — reapresentações | Associação e estados auditáveis implementados; aliases entre códigos alterados dependem de confirmação. |
 | 7 — correções | Revisão, pacote e títulos em cópia da LD implementados; edição preservada de outros campos não liberada. |
 | 8 — Gerador | Integração e exportadores reutilizados; fluxo completo em produção pendente. |
 | 9 — React | Integração e teste DOM funcionais; fluxo sintético em Chromium real validado; fluxo autenticado em produção pendente. |
 | 10 — estabilidade/segurança | Lotes, escopo, validação, cache e idempotência testados; retomada após fechar o navegador pendente. |
 | 11 — homologação | Testes técnicos e benchmark concluídos; conjunto rotulado independente e métricas de qualidade pendentes. |
-| 12 — publicação | Banco aplicado; tentativa de publicação pelo GitHub autorizada após tornar o repositório público. Publicação e acesso efetivo ao R2 ainda dependem da execução do runner e da credencial existente. |
+| 12 — publicação | Banco aplicado; pacote, verificação de bucket privado, publicação e conferência de commit/assets aprovados no workflow 40698617954. Produção confirmou o mesmo commit. Fluxo autenticado completo e homologação técnica permanecem pendentes. |
 
 ## Publicação e custos
 
@@ -94,7 +94,11 @@ A API precisa da credencial `CLOUDFLARE_API_TOKEN` já existente no GitHub e de 
 
 A verificação completa `npm run verify` terminou com código 0. O pacote Cloudflare completo passou: 334 arquivos, referências locais íntegras. O Chromium existente no ambiente executou o React e Worker reais com contrato/RPC sintéticos: dois documentos, distinção exata 121/122, seleção, revisão, download ZIP, limpeza ao trocar contrato e zero erros de página. A imagem desktop foi inspecionada. Os testes Chromium existentes do Gerador e de publicação também passaram: geração oficial, permissões, reinicialização por contrato, importação de 503 linhas e árvore Rev. E de 312 caminhos no cenário sintético. Isso não comprova autenticação real, permissões reais em produção, inferência real nem homologação normativa.
 
-A reexecução do último deploy bem-sucedido (`40534508430`) foi aceita pela API em 28/10/2026, mas permaneceu na fila sem jobs no momento desta atualização. Os commits de infraestrutura foram enviados à mesma branch do Auditor. Após a integração, o Workers Builds nativo falhou novamente, sem mensagem técnica ou anotações fornecidas pelo GitHub (build b9611f94-ed30-4177-83e0-36f59988b5e4). Não há comprovação de criação de bucket ou nova publicação enquanto as etapas autenticadas não terminarem com sucesso. O workflow de produção exige verificação completa, testes do Auditor e R2, pacote íntegro, bucket privado, deploy e comparação do commit/arquivos publicados. A verificação pós-deploy inclui os quatro assets do Auditor e recusa HTTP 401 da rota sem sessão.
+A pendência de infraestrutura foi encerrada em 28/10/2026. As permissões do Actions observadas permitem somente ações do usuário e as oficiais do GitHub; Marketplace verificado e lista adicional permanecem desabilitados/vazios. O workflow [Deploy Cloudflare #177](https://github.com/dw-glitch/GRCON/actions/runs/40698617954), disparado por push da main no commit `7fd267d554febb804afe73f3021574d4bd09c110`, terminou com sucesso. Todas as etapas foram aprovadas: verificação completa, testes do Auditor e R2, geração/validação de 334 arquivos, verificação de bucket privado, deploy, comparação de commit/assets e teste real de Workers AI com dados sintéticos (duas citações).
+
+Os logs de publicação identificam a versão Worker `5503d2df-e360-4001-9044-3cd98fb2a8ab`, às 13:42:44 UTC (10:42:44 de Brasília). A conferência pós-deploy confirmou o commit exato, os quatro assets do Auditor, configuração do Cofre e HTTP 401 no catálogo sem sessão; o script também verifica que a rota semântica do Auditor recusa acesso anônimo.
+
+A inspeção direta de `/deployment-meta.json` confirmou o mesmo commit, provider `cloudflare`, build `74e1eaed-8c24-411d-bc35-1317a5418f2d` e geração às 13:44:32 UTC. Esse identificador pertence aos metadados servidos; não é apresentado como ID do workflow ou versão Worker. A página inicial está acessível e exige e-mail/senha. Sem sessão do GRCON neste navegador, importação, revisão, persistência e exportação autenticadas em produção não foram exercitadas. Os testes sintéticos e de CI não substituem essa validação nem a homologação normativa.
 
 Rollback: o código pode ser revertido pelo commit de integração ou uma versão anterior do Worker; os registros históricos e originais do R2 não são alterados por esta entrega. As migrations devem permanecer quando houver análises salvas; o SQL de rollback recusa apagá-las nesse caso.
 
