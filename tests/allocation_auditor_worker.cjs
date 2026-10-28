@@ -19,7 +19,7 @@ const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes
  await request('context',context);const rows=await request('batch',{first:0,count:100});assert.equal(rows.length,1);assert.equal(rows[0].document,doc);assert.ok(rows[0].findings.length);
  const zipBytes=await request('export',{...context,rows,events:[],history:[],files:[{name:'Official.xlsx',base64:btoa('verified existing generator output')} ]});
  sandbox.__zip=zipBytes;const zip=await vm.runInContext('JSZip.loadAsync(__zip)',ctx);assert.ok(zip.file('Official.xlsx'));assert.ok(zip.file('Auditoria_e_Correcoes.xlsx'));
- const wb=sandbox.XLSX.read(await zip.file('Auditoria_e_Correcoes.xlsx').async('uint8array'),{type:'array',cellFormula:true});assert.equal(wb.SheetNames.length,5);assert.equal(wb.Sheets.Auditoria.C2.t,'s');assert.equal(wb.Sheets.Auditoria.C2.f,undefined);assert.ok(wb.Sheets.Auditoria.C2.v.startsWith("'="));
+ const wb=sandbox.XLSX.read(await zip.file('Auditoria_e_Correcoes.xlsx').async('uint8array'),{type:'array',cellFormula:true});assert.equal(wb.SheetNames.length,6);assert.equal(wb.Sheets.Auditoria.C2.t,'s');assert.equal(wb.Sheets.Auditoria.C2.f,undefined);assert.ok(wb.Sheets.Auditoria.C2.v.startsWith("'="));
  const trace=JSON.parse(await zip.file('Rastreabilidade.json').async('string'));assert.equal(trace.rows[0].title,'=HYPERLINK("bad")','raw evidence must remain intact in JSON');
  const officialHeaders=['NomeDocumento','Data Prevista','Workflow','Documento Ativo','Ação','Data da Linha Base','Propósito de Emissão Original','Documento Crítico','Observação','Caminho Data Book','N1','N2','N3','N4','N5','N6'];
  const officialRows=[officialHeaders,[doc,46322,'RNEST UHDTD U-32 C&M/ELETRICA','','INCLUSÃO','','PARA CONSTRUÇÃO','','','UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR','UHDTD U-32','10.SUPRIMENTO','10.02.BENS','','',''],[doc.replace('121','122'),46322,'RNEST UHDTD U-32 C&M/ELETRICA','','INCLUSÃO','','PARA CONSTRUÇÃO','','','UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR','UHDTD U-32','10.SUPRIMENTO','10.02.BENS','','','']];
@@ -29,6 +29,17 @@ const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes
  assert.equal(official.records[0].action,'INCLUSÃO');assert.equal(official.records[0].purpose,'PARA CONSTRUÇÃO');assert.equal(official.records[0].plannedDate,'46322');
  assert.equal(official.records[0].levels[0],'UHDTD U-32');assert.equal(official.records[0].columns.document,1);assert.equal(official.records[0].allocation,'C1O-ALOC-CM-0375-2026');
  await request('context',{...context,records:official.records});const officialAudit=await request('batch',{first:0,count:100});assert.equal(officialAudit.length,2);assert.ok(officialAudit.every(r=>r.officialAllocation));
+ const approved=sandbox.GrconAllocationAuditorCore.reviewEvent(officialAudit[0],{state:'Correção proposta',field:'workflow',value:'RNEST UHDTD U-32 C&M/ELETRICA-CORRIGIDO',decision:'accepted',justification:'Conferido com a origem autorizada e validado pelo operador.',evidence:['Registro técnico de revisão 2026']},'actor');
+ const result=await request('revise-allocation',{file:file('C1O-ALOC-CM-0375-2026.xlsx',new Uint8Array(officialFixture)),rows:officialAudit,events:[approved],sourceHash:official.sha256,contract:'contract-a'});
+ assert.equal(result.changed,1);
+ const edited=sandbox.XLSX.read(result.bytes,{type:'array',cellFormula:true});const unedited=sandbox.XLSX.read(officialFixture,{type:'array',cellFormula:true});
+ assert.equal(edited.Sheets.GERAL.C2.v,'RNEST UHDTD U-32 C&M/ELETRICA-CORRIGIDO');
+ assert.equal(edited.Sheets.GERAL.A2.v,unedited.Sheets.GERAL.A2.v);
+ assert.equal(edited.Sheets.GERAL.B2.v,unedited.Sheets.GERAL.B2.v);
+ assert.equal(edited.Sheets.GERAL.J2.v,unedited.Sheets.GERAL.J2.v);
+ assert.equal(edited.Sheets.GERAL.C3.v,unedited.Sheets.GERAL.C3.v);
+ await assert.rejects(request('revise-allocation',{file:file('C1O-ALOC-CM-0375-2026.xlsx',new Uint8Array(officialFixture)),rows:officialAudit,events:[approved],sourceHash:'0'.repeat(64),contract:'contract-a'}),/integridade/);
+ await assert.rejects(request('revise-allocation',{file:file('C1O-ALOC-CM-0375-2026.xlsx',new Uint8Array(officialFixture)),rows:officialAudit,events:[{...approved,evidence:[]}],sourceHash:official.sha256,contract:'contract-a'}),/evidência/);
  const historical=process.env.GRCON_AUDIT_SOURCES;
  if(historical){const p=path.join(historical,'CENTRAL DE ALOCAÇÃO.xlsx'),b=fs.readFileSync(p);const data=await request('parse',{file:file(path.basename(p),b),sheet:'Central de alocação',contract:'contract-a'});assert.equal(data.records.length,15441);assert.equal(data.columns.returnedAt,3);assert.equal(data.columns.fiscalComment,4);assert.equal(new Set(data.records.filter(r=>r.fiscalComment).map(r=>r.fiscalComment)).size,436);console.log(JSON.stringify({historicalRecords:data.records.length,distinctFiscalResponses:436}));}
  console.log('allocation_auditor_worker: real parsing, column mapping, evidence hash, file validation, batched audit, ZIP export and formula injection checks passed');

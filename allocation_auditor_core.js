@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.0.1';
+ const VERSION='1.1.0';
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
  const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet]);
@@ -69,9 +69,27 @@
   for(const r of context.records||[]){const k=JSON.stringify([r.document,r.revision||'',r.allocation||r.sourceFile||'']);batches.set(k,(batches.get(k)||0)+1);}
   for(const kind of ['appendix','li','scon'])for(const t of context.bases?.[kind]||[]) {const tag=text(t.tag||t.TAG);if(tag)tags.set(tag,{...t,kind});}
   for(const p of context.bases?.databook||[])paths.set(text(p.databook),p);
-  for(const e of context.bases?.eap||[])eaps.set(text(e.code),e);
+  for(const e of context.bases?.eap||[]){const code=text(e.code);if(!code)continue;const list=eaps.get(code)||[];list.push(e);eaps.set(code,list);}
   for(const r of context.ldRecords||[]){const list=ld.get(text(r.document))||[];list.push(r);ld.set(text(r.document),list);}
   return {byDocument,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
+ }
+
+ // Compatibiliza um código documental longo com seu último ancestral cadastrado.
+ // Opções múltiplas no mesmo ancestral são selecionadas pela disciplina do Workflow.
+ function workflowDiscipline(workflow){
+  const w=norm(workflow),label=w.match(/C\s*&\s*M\s*\/\s*([^/]+)$/)?.[1]||w.split('/').pop()||'';
+  const hints=[['ELETRICA',/ELETRIC/],['TUBULACAO',/TUBULAC/],['INSTRUMENTACAO',/INSTRUMENT/],['ESTRUTURA METALICA',/ESTRUTURA METAL/],['CIVIL',/\bCIVIL\b/],['DINAMICOS',/DINAMIC/],['ESTATICOS',/ESTATIC/],['HVAC',/\bHVAC\b/],['TELECOM',/TELECOM/],['SEGURANCA',/SEGURANCA/],['FORNOS',/FORNOS/]];
+  return hints.find(([,regex])=>regex.test(label))?.[0]||'';
+ }
+ function chooseEap(code,workflow,index){
+  const parts=text(code).split('.');let matchedCode='',candidates=[];
+  for(let len=parts.length;len>0;len--){const p=parts.slice(0,len).join('.');if(index.eaps.has(p)){matchedCode=p;candidates=index.eaps.get(p);break;}}
+  if(!candidates.length)return {matchedCode:'',entry:null,candidates:[],ambiguous:false,discipline:''};
+  const discipline=workflowDiscipline(workflow);
+  if(candidates.length===1)return {matchedCode,entry:candidates[0],candidates,ambiguous:false,discipline};
+  if(!discipline)return {matchedCode,entry:null,candidates,ambiguous:true,discipline};
+  const selected=candidates.filter(item=>(item.levels||[]).some(level=>{const val=norm(level);return val.endsWith(discipline)||val.includes('.'+discipline);}));
+  return selected.length===1?{matchedCode,entry:selected[0],candidates,ambiguous:false,discipline}:{matchedCode,entry:null,candidates,ambiguous:true,discipline};
  }
  function auditRecord(input,context,index=prepare(context)){
   if(!text(context.contract))throw Error('Contrato obrigatório.');
@@ -79,8 +97,13 @@
   const r={...input,contract:context.contract},f=[],p=parts(r.document),add=(...a)=>f.push(finding(...a)),enforced=applicable(context);
   if(r.rawDocument&&r.rawDocument!==r.document)add('SOURCE-CODE-WHITESPACE','code','document','O código de origem contém espaços externos. Confira a fonte; o valor original foi preservado.',[{original:r.rawDocument,matchingKey:r.document}]);
   const originals=index.ld.get(r.document)||[],compatible=originals.filter(x=>!r.revision||!x.revision||String(x.revision)===r.revision);
-  const source=compatible.length===1?compatible[0]:null;
-  if(source){for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k]))r[k]=text(source[k]);r.ld=r.ld||text(source.source);r.ldSheet=r.ldSheet||text(source.sheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
+  const source=compatible.length===1?compatible[0]:null,recommendations=[];
+  if(source){for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k])&&!(r.officialAllocation&&k==='workflow'))r[k]=text(source[k]);r.ld=r.ld||text(source.source);r.ldSheet=r.ldSheet||text(source.sheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
+  if(source&&r.officialAllocation){
+   const reference={origin:'LD exata',file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,version:source.ldVersion||''};
+   if(text(source.workflow)&&text(source.workflow)!==text(r.workflow))recommendations.push({field:'workflow',before:text(r.workflow),after:text(source.workflow),justification:'Diferença de Workflow frente à linha exata da LD. Verifique a versão e a disciplina antes de aprovar.',evidence:[JSON.stringify(reference)],confidence:'fonte documental exata',humanReview:true});
+   if(text(source.databook)&&text(source.databook)!==text(r.databook)&&index.paths.has(text(source.databook)))recommendations.push({field:'databook',before:text(r.databook),after:text(source.databook),justification:'Caminho da LD encontrado na base Data Book ativa. Confirme a adequação ao serviço antes de aprovar.',evidence:[JSON.stringify({...reference,databookVersion:context.versions?.databook})],confidence:'fonte documental exata',humanReview:true});
+  }
   if(compatible.length>1)add('LD-AMBIGUOUS','history','ld','Mais de uma linha da LD corresponde ao documento. Confirme a origem.',compatible.map(x=>({file:x.source,sheet:x.sheet,row:x.row})));
   if(!text(r.revision))add('REVISION-UNKNOWN','history','revision','Revisão não informada; não foi presumida revisão 0.',[{file:r.sourceFile,row:r.sourceRow}]);
   if(!text(r.title))add('TITLE-MISSING','title','title',r.officialAllocation?'O modelo oficial não contém título. Consulte a LD correspondente para validar o conteúdo.':'Título não disponível. Importe a LD para verificar.',[{file:r.sourceFile,row:r.sourceRow}]);
@@ -123,7 +146,20 @@
   else if(!index.paths.has(r.databook))add('DATABOOK-NOT-FOUND','databook','databook','Caminho completo não encontrado na versão carregada.',[{path:r.databook,version:context.versions?.databook}],{severity:context.homologated?.databook?'error':'pending'});
   else {const entry=index.paths.get(r.databook);if(entry.discipline&&norm(entry.discipline)!==norm(r.discipline))add('PATH-DISCIPLINE','databook','databook','Disciplina incompatível com a classificação explícita do caminho.',[{path:r.databook,discipline:r.discipline,expected:entry.discipline}],{severity:'error'});}
   if(!index.eaps.size)add('EAP-BASE-MISSING','hierarchy','eap','EAP contratual não disponível. Hierarquia oficial não foi inferida do histórico.',[],{origin:'EAP'});
-  else {const e=index.eaps.get(r.eap);if(!context.homologated?.eap)add('EAP-APPLICABILITY','hierarchy','eap','A hierarquia carregada não comprova a EAP contratual. Confirme o Anexo III — Apêndice A aplicável.',[{version:context.versions?.eap}],{origin:'EAP'});if(!e)add('EAP-NOT-FOUND','hierarchy','eap','Item não comprovado na EAP carregada.',[{eap:r.eap,version:context.versions?.eap}],{severity:context.homologated?.eap?'error':'pending'});else if(Array.isArray(e.levels)&&Array.isArray(r.levels)&&r.levels.some((v,i)=>text(v)&&text(v)!==text(e.levels[i])))add('EAP-LEVEL-MISMATCH','hierarchy','levels','Níveis informados divergem da hierarquia da EAP.',[{actual:r.levels,expected:e.levels,source:e.source}],{severity:context.homologated?.eap?'error':'pending'});}
+  else {
+    const selection=chooseEap(r.eap,r.workflow,index),e=selection.entry;
+    r.eapMatch={requested:r.eap,matchedCode:selection.matchedCode,discipline:selection.discipline,candidates:selection.candidates.length,ambiguous:selection.ambiguous};
+    if(!context.homologated?.eap)add('EAP-APPLICABILITY','hierarchy','eap','A hierarquia carregada não comprova a EAP contratual. Confirme o Anexo III — Apêndice A aplicável.',[{version:context.versions?.eap}],{origin:'EAP'});
+    if(!selection.matchedCode)add('EAP-NOT-FOUND','hierarchy','eap','Nenhum prefixo do código EAP consta na base carregada.',[{eap:r.eap,version:context.versions?.eap}],{severity:'pending'});
+    else if(selection.ambiguous)add('EAP-DISCIPLINE-AMBIGUOUS','hierarchy','eap','Há mais de uma hierarquia para o código EAP; o Workflow não selecionou uma disciplina única. Confira o Workflow e a fonte.',[{eap:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,discipline:selection.discipline,options:selection.candidates.map(c=>(c.levels||[]).filter(Boolean).slice(-1)[0])}],{severity:'pending'});
+    else if(e&&Array.isArray(e.levels)&&Array.isArray(r.levels)){
+      const differences=e.levels.map((expected,i)=>({index:i,expected:text(expected),actual:text(r.levels[i])})).filter(x=>x.expected&&x.actual!==x.expected);
+      if(differences.length){
+       add('EAP-LEVEL-MISMATCH','hierarchy','levels','Os níveis disponíveis na EAP não coincidem com a alocação. Níveis adicionais sem referência na base não foram considerados erro.',[{requested:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,differences,source:e.source,version:context.versions?.eap}],{severity:context.homologated?.eap?'error':'pending'});
+       if(r.officialAllocation)for(const x of differences)if(x.index<6)recommendations.push({field:'N'+(x.index+1),before:x.actual,after:x.expected,justification:'Nível existente na EAP aplicável à disciplina do Workflow. Confirmar a evidência antes de aprovar.',evidence:[JSON.stringify({code:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,version:context.versions?.eap,source:e.source})],confidence:context.homologated?.eap?'EAP homologada':'Base EAP ativa; homologação pendente',humanReview:true});
+      }
+    }
+   }
   const workflows=context.bases?.workflows||[];
   if(!text(r.workflow))add('WORKFLOW-MISSING','workflow','workflow','Workflow não informado. Verifique a necessidade de definição.',[]);
   else if(workflows.length&&!workflows.some(w=>text(w.workflow)===r.workflow))add('WORKFLOW-UNKNOWN','workflow','workflow','Workflow não localizado na referência carregada.',[{workflow:r.workflow}]);
@@ -134,16 +170,17 @@
   if(r.commentDataIssue)add('FISCAL-NON-TEXT','history','fiscalComment',r.commentDataIssue,[{value:r.fiscalCommentRaw,row:r.sourceRow}],{source:'Qualidade da fonte fiscal'});
   for(const h of history){if(classifyComment(h.fiscalComment).length)add('FISCAL-PRECEDENT','history','fiscalComment','Apontamento fiscal anterior requer avaliação de atendimento.',[{comment:h.fiscalComment,decision:h.fiscalDecision,allocation:h.allocation,file:h.sourceFile,sheet:h.sourceSheet,row:h.sourceRow,date:h.returnedAt,revisionKnown:Boolean(h.revision)}],{source:'Precedente específico',origin:'Consultar apontamento original'});}
   const status=f.some(x=>x.severity==='error')?'Correções pendentes':f.some(x=>x.severity==='pending')?'Verificações inconclusivas':f.some(x=>x.severity==='suggestion')?'Sugestões de melhoria':'Sem não conformidades detectadas';
-  return {...r,findings:f,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto'};
+  return {...r,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto'};
  }
  function compare(a,b){const changes=[],unknown=[];for(const k of ['document','revision','title','tag','discipline','eap','databook','levels','workflow']){if(a[k]==null||b[k]==null||a[k]===''||b[k]===''){unknown.push(k);continue;}if(JSON.stringify(a[k])!==JSON.stringify(b[k]))changes.push({field:k,before:a[k],after:b[k]});}return {changes,unknown,resolved:false};}
  function reviewEvent(row,{state,field,value,justification,evidence=[],decision='proposed'},actor){
   if(!STATES.includes(state)||!text(actor)||text(justification).length<5)throw Error('Estado, responsável e justificativa são obrigatórios.');
   if(['Resolvido com evidência','Corrigido na origem','Exceção justificada'].includes(state)&&!evidence.length)throw Error('Este estado exige evidência.');
-  if(field&&!['title','databook','eap','tag','discipline'].includes(field))throw Error('Campo de correção inválido.');
+  if(field&&!['title','databook','eap','tag','discipline','workflow','N1','N2','N3','N4','N5','N6'].includes(field))throw Error('Campo de correção inválido.');
+  if(/^N[1-6]$/.test(field)&&!row.officialAllocation)throw Error('Edição direta de hierarquia requer o modelo oficial de alocação.');
   if(!['proposed','accepted','rejected','exception'].includes(decision))throw Error('Decisão inválida.');
-  if(decision==='accepted'&&['databook','eap','tag','discipline'].includes(field)&&!evidence.length)throw Error('Alteração de classificação exige evidência.');
-  return {document:row.document,revision:row.revision,lineage:row.lineage,state,decision,field:field||'',before:field?row[field]:'',after:value??'',justification,evidence,actor,at:new Date().toISOString(),humanReview:true};
+  if(decision==='accepted'&&['databook','eap','tag','discipline','workflow','N1','N2','N3','N4','N5','N6'].includes(field)&&!evidence.some(x=>text(x)))throw Error('Alteração de classificação exige evidência.');
+  return {document:row.document,revision:row.revision,lineage:row.lineage,state,decision,field:field||'',before:field?( /^N[1-6]$/.test(field)?text(row.levels?.[Number(field.slice(1))-1]):row[field]):'',after:value??'',justification,evidence,actor,at:new Date().toISOString(),humanReview:true};
  }
  function summary(rows){return {total:rows.length,errors:rows.filter(r=>r.findings.some(f=>f.severity==='error')).length,pending:rows.filter(r=>r.findings.some(f=>f.severity==='pending')).length,suggestions:rows.filter(r=>r.findings.some(f=>f.severity==='suggestion')).length,clear:rows.filter(r=>r.findings.length===0).length};}
  function approvedChanges(events){const latest=new Map();for(const e of events||[])if(e.field)latest.set(JSON.stringify([e.lineage,e.field]),e);return [...latest.values()].filter(e=>e.decision==='accepted');}
@@ -154,5 +191,5 @@
   return [...groups.values()].map(g=>({...g,learning:g.findings.length&&new Set(g.occurrences.map(o=>o.document)).size>=3?'criterio-fiscal-recorrente':g.findings.length?'precedente-especifico':'avaliacao-sem-apontamento',normativeProof:false,humanReview:true}));
  }
  function splitGroup(r){let h=2166136261;for(const c of text(r.contract)+'|'+text(r.document))h=Math.imul(h^c.charCodeAt(0),16777619);const n=(h>>>0)%10;return n<6?'development':n<8?'validation':'holdout';}
- return {VERSION,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,applicable,buildTree,prepare,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
+ return {VERSION,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,applicable,buildTree,prepare,chooseEap,workflowDiscipline,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
 });
