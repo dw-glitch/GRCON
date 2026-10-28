@@ -23,10 +23,10 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
       <UiPageHeader
         eyebrow="Controle documental integrado"
         title="Dashboard SIGEM × ProjectWise"
-        description="Compare somente documentos C1O entre SIGEM e ProjectWise, por revisão e evidência de emissão. Demais códigos são mantidos em lista separada."
+        description="Compare somente o PW com sigla CSG ou QTM na coluna C, preservando os critérios de cadastro, emissão e revisão."
         meta={(
           <>
-            <UiMetaPill><strong>Comparação C1O</strong></UiMetaPill>
+            <UiMetaPill><strong>PW: CSG + QTM · coluna C</strong></UiMetaPill>
             <UiMetaPill>Chave <strong>documento + revisão</strong></UiMetaPill>
             <UiMetaPill className={ready ? "spw-meta-ready" : "spw-meta-pending"}>
               <strong>{ready ? "Bases prontas" : "Aguardando bases"}</strong>
