@@ -15,6 +15,16 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  try {
  const context=await browser.newContext({viewport:{width:1366,height:768},serviceWorkers:'block',acceptDownloads:true});
  await context.grantPermissions(['clipboard-read','clipboard-write']);
+ // Isolated QA opt-in: exercise legacy Vault workflows without exposing the
+ // Vault in production. The public Cloudflare smoke test verifies the hidden UI.
+ await context.addInitScript(() => {
+   window.GrconStorageFeatures = Object.freeze({
+     showStorageUI: true,
+     enableAutomaticUpload: true,
+     enableManualUpload: true,
+     enableAutomaticLookup: true,
+   });
+ });
  const page=await context.newPage();const errors=[],calls=[],metrics=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://kvyrttccwzdhasplfxnr.supabase.co/**',r=>r.fulfill({status:401,contentType:'application/json',body:'{"message":"QA session"}'}));
