@@ -1091,7 +1091,11 @@
     const lists = buildComparisonLists(sigem, pw, { revisionScope, pwDocuments: source.pwAll });
     if (source.requireN1710Ld && source.pwAvailable === false) {
       for (const row of lists.all) {
-        if (!row.inPw) row.pwRegistrationStatus = "BASE PW NÃO CARREGADA — INCONCLUSIVO";
+        if (!row.inPw) {
+          row.pwRegistrationStatus = "BASE PW NÃO CARREGADA — INCONCLUSIVO";
+          row.pwEmission = "Não avaliável";
+          row.situation = "Base ProjectWise não carregada: conciliação inconclusiva";
+        }
       }
     }
 
