@@ -770,7 +770,8 @@ async function exportCurrentList(): Promise<void> {
       "Revisão": row.revision,
       "Status SIGEM": row.sigemStatus,
       "Data SIGEM": row.sigemDate || "",
-      "Existe no PW": row.inPw ? "SIM" : row.situationKey === "ldWithoutSigem" ? "NÃO VERIFICADO" : "NÃO",
+      "Existe no PW": row.inPw ? "SIM"
+        : row.pwRegistrationStatus?.startsWith("BASE PW NÃO CARREGADA") || row.situationKey === "ldWithoutSigem" ? "INCONCLUSIVO" : "NÃO",
       "Revisão localizada no PW": row.pwRevision || "",
       "Mesma revisão confirmada": row.pwRevisionMatched ? "SIM" : "NÃO",
       "Status PW": row.pwStatus,
