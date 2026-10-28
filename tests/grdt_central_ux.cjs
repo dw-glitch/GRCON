@@ -18,7 +18,12 @@ const downloadArea = html.slice(html.indexOf('<details class="secondary-download
 assert.ok(downloadArea.indexOf('id="export-zip"') > downloadArea.indexOf('</details>'), "O download principal não deve estar escondido no menu secundário.");
 assert.ok(downloadArea.indexOf('id="export-egrdt"') < downloadArea.indexOf('</details>'), "A eGRDT isolada deve ficar no menu secundário.");
 assert.match(app, /els\.exportZip\.addEventListener\("click", async/);
-assert.match(app, /try \{ await exportZip\(\); \}/);
+const downloadHandler = app.slice(
+  app.indexOf('els.exportZip.addEventListener("click", async'),
+  app.indexOf('els.exportFinalPackage.addEventListener("click", exportFinalPackage);')
+);
+assert.match(downloadHandler, /try\\s*\\{[\\s\\S]*?lockDownloadControls\\(true\\);[\\s\\S]*?await exportZip\\(\\);/, "Download deve executar sob tratamento de erros desde o bloqueio dos controles.");
+assert.match(downloadHandler, /finally\\s*\\{[\\s\\S]*?lockDownloadControls\\(false\\);/, "Controles devem ser liberados no finally.");
 assert.match(app, /centralDownloadInProgress/);
 assert.match(app, /els\.exportEgrdt\.addEventListener\("click", exportEgrdt\)/);
 
