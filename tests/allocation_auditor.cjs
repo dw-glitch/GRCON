@@ -34,3 +34,30 @@ test('model output can only reference supplied evidence and never establish norm
 
 test('later rejection supersedes earlier approval for the same field',()=>{const a={lineage:'L',field:'title',decision:'accepted'};assert.equal(C.approvedChanges([a,{...a,decision:'rejected'}]).length,0);assert.equal(C.approvedChanges([{...a,decision:'rejected'},a]).length,1);});
 test('Central ET_LD_004 matches sheet ET in the correct LD and excludes LD003',()=>{const a={ld:'LD-5290.00-22313-91A-C1O-004_0001_A.xlsx',ldSheet:'ET'};assert.equal(C.ldIdentity(a).id,'004');assert.equal(C.sameLd(a,{ldSheet:'ET_LD_004'}),true);assert.equal(C.sameLd(a,{ldSheet:'ET_LD_003'}),false);});
+
+test('EAP aceita ancestral mais específico disponível sem exigir níveis futuros',()=>{
+ const r=row({officialAllocation:true,document:doc.replace('10.2.1.2','3.9.2.1'),workflow:'RNEST UHDTD U-32 C&M/CIVIL',levels:['UHDTD U-32','03.REPARO','03.09.ESTRUTURA METÁLICA','SUBLEVEL NÃO CADASTRADO','','','','','','']});
+ const out=audit(r,{bases:{...base.bases,eap:[{code:'3',levels:['UHDTD U-32','03.REPARO']},{code:'3.9',levels:['UHDTD U-32','03.REPARO','03.09.ESTRUTURA METÁLICA']}]}});
+ assert.equal(out.eapMatch.matchedCode,'3.9');
+ assert.ok(!out.findings.some(f=>f.id==='EAP-NOT-FOUND'||f.id==='EAP-LEVEL-MISMATCH'));
+ assert.ok(!out.recommendations.some(x=>x.field==='N4'));
+});
+test('EAP 10.2.1 escolhe a única folha pela disciplina do Workflow',()=>{
+ const rows=[
+ {code:'10.2.1',levels:['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.B.ELÉTRICA']},
+ {code:'10.2.1',levels:['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.H.TUBULAÇÃO']},
+ {code:'10.2.1',levels:['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.J.HVAC']}
+ ];
+ const row1=row({officialAllocation:true,workflow:'RNEST UHDTD U-32 C&M/ELETRICA',levels:['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.B.ELÉTRICA','','','','','','']});
+ const out=audit(row1,{bases:{...base.bases,eap:rows}});
+ assert.equal(out.eapMatch.matchedCode,'10.2.1');
+ assert.equal(out.eapMatch.discipline,'ELETRICA');
+ assert.equal(out.eapMatch.candidates,3);
+ assert.equal(out.eapMatch.ambiguous,false);
+ assert.ok(!out.findings.some(f=>f.id==='EAP-DISCIPLINE-AMBIGUOUS'||f.id==='EAP-LEVEL-MISMATCH'||f.id==='EAP-NOT-FOUND'));
+ const wrong=audit({...row1,levels:['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.H.TUBULAÇÃO']},{bases:{...base.bases,eap:rows}});
+ assert.ok(wrong.findings.some(f=>f.id==='EAP-LEVEL-MISMATCH'));
+ const unknown=audit({...row1,workflow:'WF'},{bases:{...base.bases,eap:rows}});
+ assert.ok(unknown.findings.some(f=>f.id==='EAP-DISCIPLINE-AMBIGUOUS'));
+ assert.ok(!unknown.findings.some(f=>f.id==='EAP-LEVEL-MISMATCH'));
+});
