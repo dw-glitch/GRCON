@@ -859,7 +859,7 @@
       sourcePwEntries: excludedSigemN1710.length || excludedPwN1710.length ? buildEntryMap(sourcePw, "pw") : undefined,
       sourcePwDocuments: excludedSigemN1710.length || excludedPwN1710.length ? buildDocumentMap(sourcePw, "pw") : undefined,
       comparisonScope: {
-        rule: "PW: CSG/QTM na coluna C; N-1710 oficial: código presente na LD", version: PW_SCOPE_VERSION,
+        rule: "PW: CSG/QTM", n1710LdRule: "N-1710 oficial: código presente na LD; sigla PW na coluna C", version: PW_SCOPE_VERSION,
         sigemAccepted: normalizedSigem.length, pwAccepted: normalizedPw.length,
         sigemN1710Excluded: excludedSigemN1710.length,
         pwN1710Excluded: excludedPwN1710.length,
