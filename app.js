@@ -1431,7 +1431,7 @@
       ? `Processando ${state.packageCandidates.length} arquivo(s)...`
       : state.listSummary
       ? state.listSummary.files
-        ? `${state.listSummary.files} arquivo(s) da relação localizado(s)${state.listSummary.vaultFiles ? ` · ${state.listSummary.vaultFiles} recuperado(s) do Cofre` : ""}${state.listSummary.missing ? ` · ${state.listSummary.missing} ausente(s)` : ""}`
+        ? `${state.listSummary.files} arquivo(s) da relação localizado(s)${state.listSummary.vaultFiles ? ` · ${state.listSummary.vaultFiles} recuperado(s) de outra fonte` : ""}${state.listSummary.missing ? ` · ${state.listSummary.missing} ausente(s)` : ""}`
         : state.listSummary.missing
           ? `Nenhum arquivo solicitado localizado · ${state.listSummary.missing} ausente(s)`
           : "Nenhum arquivo solicitado localizado"
@@ -1447,7 +1447,7 @@
       els.missingCount.textContent = missing.length.toLocaleString("pt-BR") + " documento(s)";
       els.missingList.innerHTML = missing.slice(0, 250).map((item) => {
         const code = item.document || item.fileName || item.raw || item.name || "Documento solicitado";
-        return `<li><code>${escapeHtml(code)}</code><span>${escapeHtml(item.reason || "Não localizado na pasta nem no Cofre.")}</span></li>`;
+        return `<li><code>${escapeHtml(code)}</code><span>${escapeHtml(item.reason || "Não localizado na pasta documental selecionada.")}</span></li>`;
       }).join("");
     }
     const ldFile = state.ldFiles[0];
@@ -2563,8 +2563,8 @@
         documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
 
         let vaultFiles = [];
-        if (missingFromList.length && window.GrconDocumentVault?.resolveMissingEntries) {
-          setProgress(33, `Buscando no Cofre os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
+        if (missingFromList.length && window.GrconStorageFeatures?.enableAutomaticLookup === true && window.GrconDocumentVault?.resolveMissingEntries) {
+          setProgress(33, `Buscando na fonte adicional os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
           try {
             const fallback = await window.GrconDocumentVault.resolveMissingEntries(missingFromList);
             vaultFiles = fallback.files || [];
@@ -2573,14 +2573,14 @@
             (fallback.recovered || []).forEach(({ entry, files }) => {
               (files || []).forEach((file) => {
                 const physicalKey = listPhysicalKey(file);
-                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Cofre`]);
+                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Fonte adicional`]);
                 if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
               });
             });
           } catch (error) {
             missingFromList = missingFromList.map((entry) => ({
               ...entry,
-              reason: `${entry.reason} Busca automática no Cofre indisponível: ${error.message || "falha de consulta"}.`,
+              reason: `${entry.reason} Busca adicional indisponível: ${error.message || "falha de consulta"}.`,
             }));
           }
         }
@@ -2589,7 +2589,7 @@
         state.missingRequestedFiles = missingFromList.map((entry) => ({
           ...entry,
           name: entry.document || entry.fileName || entry.raw || "Documento solicitado",
-          reason: entry.reason || "Não localizado na pasta nem no Cofre.",
+          reason: entry.reason || "Não localizado na pasta documental selecionada.",
         }));
         state.listIgnoredFiles = unrelatedLocal;
         state.listSummary = {
@@ -2620,7 +2620,7 @@
           vaultAllocationSource: vaultSource?.allocationSource || "",
         };
       });
-      if (!inputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta ou no Cofre.");
+      if (!inputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na origem documental selecionada.");
 
       const settings = triageSettings();
       const totalTriageItems = inputs.length;
@@ -2891,8 +2891,8 @@
 
         // A relação é o filtro absoluto. Pasta local é apenas a primeira fonte;
         // todo item solicitado que faltar nela é resolvido automaticamente no Cofre.
-        if (missingFromList.length && window.GrconDocumentVault?.resolveMissingEntries) {
-          setProgress(33, `Buscando no Cofre os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
+        if (missingFromList.length && window.GrconStorageFeatures?.enableAutomaticLookup === true && window.GrconDocumentVault?.resolveMissingEntries) {
+          setProgress(33, `Buscando na fonte adicional os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
           try {
             const fallback = await window.GrconDocumentVault.resolveMissingEntries(missingFromList);
             vaultFiles = fallback.files || [];
@@ -2901,7 +2901,7 @@
             (fallback.recovered || []).forEach(({ entry, files }) => {
               (files || []).forEach((file) => {
                 const physicalKey = listPhysicalKey(file);
-                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Cofre`]);
+                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Fonte adicional`]);
                 if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
               });
             });
@@ -2909,7 +2909,7 @@
             vaultLookupError = error;
             missingFromList = missingFromList.map((entry) => ({
               ...entry,
-              reason: `Não foi possível consultar o Cofre: ${error.message || "falha de consulta"}. O documento não foi classificado como inexistente.`,
+              reason: `Não foi possível consultar a fonte adicional: ${error.message || "falha de consulta"}. O documento não foi classificado como inexistente.`,
               lookupFailed: true,
             }));
           }
@@ -2919,7 +2919,7 @@
         state.missingRequestedFiles = missingFromList.map((entry) => ({
           ...entry,
           name: entry.document || entry.fileName || entry.raw || "Documento solicitado",
-          reason: entry.reason || (state.packageFiles.length ? "Não localizado na pasta nem no Cofre." : "Não localizado no Cofre."),
+          reason: entry.reason || (state.packageFiles.length ? "Não localizado na pasta documental selecionada." : "Nenhuma pasta documental selecionada."),
         }));
         state.listIgnoredFiles = unrelatedLocal;
         state.listSummary = {
@@ -2959,7 +2959,7 @@
       });
       // Ausentes nunca viram linhas virtuais. Eles permanecem apenas no painel
       // "Documentos não encontrados" e não entram na triagem, GRDT ou histórico.
-      if (!workerInputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta ou no Cofre.");
+      if (!workerInputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na origem documental selecionada.");
 
       const settings = triageSettings();
       let rawResults = [];
@@ -5238,7 +5238,7 @@
   }
 
   function prepareVaultForEmission(plan) {
-    if (!els.saveGrdtToVault?.checked) return null;
+    if (window.GrconStorageFeatures?.enableAutomaticUpload !== true || !els.saveGrdtToVault?.checked) return null;
     return window.GrconDocumentVault?.prepareEmissionFiles?.(plan);
   }
 
