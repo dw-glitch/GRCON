@@ -453,7 +453,8 @@ check("Em Análise adota GRDT e data efetiva da revisão realmente analisada, n�
   assert.ok(result.analysisEvidence, "analysisEvidence precisa ser preenchida quando o documento cai em Em análise");
   assert.equal(result.analysisEvidence.sourceKind, "history");
   assert.ok(result.analysisEvidence.statusSource, "precisa apontar a origem do status na Colar SIGEM");
-  assert.equal(result.analysisEvidence.statusSource.row, 4);
+  assert.equal(result.sigemStatusSource, "shared-general-query", "status confirmado exclusivamente na Consulta Geral");
+  assert.equal(result.analysisEvidence.emissionSource.row, 4, "GRDT/data extraídas da revisão A da LD");
 });
 
 check("status Não Postado mantém a própria revisão 0 para postagem", () => {
