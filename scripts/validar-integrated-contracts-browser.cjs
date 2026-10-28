@@ -7,6 +7,14 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  try{
  const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block',acceptDownloads:true});
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ // Explicit isolated-fixture opt-in for legacy document recovery tests; real GRCON
+ // keeps the Vault UI and automatic lookup disabled pending corporate approval.
+ await page.route('**/document_vault_app.js',route=>{
+  const original=fs.readFileSync(path.join(__dirname,'..','document_vault_app.js'),'utf8');
+  const flag='const storageFeatures = root.GrconStorageFeatures || Object.freeze({ showStorageUI: false, enableAutomaticUpload: false, enableManualUpload: false, enableAutomaticLookup: false });';
+  assert.ok(original.includes(flag),'Legacy Vault QA fixture requires the hidden-feature guard.');
+  return route.fulfill({status:200,contentType:'application/javascript',body:original.replace(flag,'const storageFeatures = Object.freeze({ showStorageUI: true, enableAutomaticUpload: true, enableManualUpload: true, enableAutomaticLookup: true });')});
+ });
  await page.route('https://kvyrttccwzdhasplfxnr.supabase.co/**',r=>r.fulfill({status:401,contentType:'application/json',body:'{"message":"QA no session"}'}));
  const code='RL-5290.00-22313-856-C1O-017';
  const vaultFile={id:'qa-file',sequence:77,document_code:code,revision:'0',file_name:code+'.docx',format:'docx',size_bytes:16,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',created_at:'2026-10-07T12:00:00Z',verified_at:'2026-10-07T12:01:00Z',allocated:true,status:'ready'};
