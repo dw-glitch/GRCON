@@ -71,7 +71,7 @@
     },
     "authenticatedAuditorProductionFlow": {
       "role": "owner",
-      "contractsExercised": 1,
+      "contractsExercised": 2,
       "documents": 4,
       "results": {
         "clear": 0,
@@ -88,7 +88,7 @@
       "zipDownload": "triggered; bytes unavailable for inspection",
       "semanticConsultation": "verified structured response after PR 329; humanReview=true, normativeProof=false; quality not independently homologated",
       "otherRoles": "not exercised in production",
-      "crossContractSwitch": "not exercised in production",
+      "crossContractSwitch": "owner UI switch UHDT-D to UGH cleared documents/results; UGH audit history empty; returned through contract selector; not an adversarial authorization test",
       "additionalImportedSample": {
         "allocationDocuments": 4,
         "sourceLdFiles": 5,
