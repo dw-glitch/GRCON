@@ -22,8 +22,8 @@ const downloadHandler = app.slice(
   app.indexOf('els.exportZip.addEventListener("click", async'),
   app.indexOf('els.exportFinalPackage.addEventListener("click", exportFinalPackage);')
 );
-assert.match(downloadHandler, /try\\s*\\{[\\s\\S]*?lockDownloadControls\\(true\\);[\\s\\S]*?await exportZip\\(\\);/, "Download deve executar sob tratamento de erros desde o bloqueio dos controles.");
-assert.match(downloadHandler, /finally\\s*\\{[\\s\\S]*?lockDownloadControls\\(false\\);/, "Controles devem ser liberados no finally.");
+assert.match(downloadHandler, /try\s*\{[\s\S]*?lockDownloadControls\(true\);[\s\S]*?await exportZip\(\);/, "Download deve executar sob tratamento de erros desde o bloqueio dos controles.");
+assert.match(downloadHandler, /finally\s*\{[\s\S]*?lockDownloadControls\(false\);/, "Controles devem ser liberados no finally.");
 assert.match(app, /centralDownloadInProgress/);
 assert.match(app, /els\.exportEgrdt\.addEventListener\("click", exportEgrdt\)/);
 
