@@ -9,15 +9,15 @@ function FileProvenance({ file }: { file: EgrdtHistoryFile }) {
   const source = file.fileProvenance;
   if (!source) return <small>Origem não registrada nesta emissão</small>;
   return <details className="history-file-provenance">
-    <summary>Origem: {source.source === "cofre" ? "Cofre" : "pasta local"}</summary>
+    <summary>Origem: {source.source === "cofre" ? "arquivo histórico" : "pasta local"}</summary>
     <p>Arquivo utilizado: {source.fileName}</p>
     <p>Revisão do arquivo: {source.revision || "Não registrada"} · Formato: {source.format || "Não registrado"} · {numberBr(source.sizeBytes)} bytes</p>
     {source.source === "cofre" || source.vaultFileId || source.sha256 ? <>
       <p>ID do arquivo: {source.vaultFileId || "Não registrado"} · Sequência: {source.catalogSequence || "Não registrada"}</p>
       <p>Incluído em: {source.createdAt ? Adapter.formatDate(source.createdAt, true) : "Não registrado"}</p>
       <p>Verificado em: {source.verifiedAt ? Adapter.formatDate(source.verifiedAt, true) : "Não registrado"}</p>
-      <p>Versão no Cofre: {source.fileVersion || "Não registrada"}</p>
-      {source.vaultFileId ? <button type="button" className="text-button" onClick={() => window.GrconDocumentMaster?.openFile(source.vaultFileId!)}>Recuperar arquivo utilizado</button> : null}
+      <p>Versão registrada: {source.fileVersion || "Não registrada"}</p>
+      
       <p>SHA-256: <code style={{ overflowWrap: "anywhere" }}>{source.sha256 || "Não registrado"}</code></p>
     </> : <p>Modificado em: {source.lastModified ? Adapter.formatDate(new Date(source.lastModified), true) : "Não registrado"}</p>}
   </details>;
