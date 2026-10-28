@@ -217,6 +217,8 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
       pwRecords: state.pw.records,
       ldRecords: state.ld.records,
       ldAvailable: Boolean(state.ld.meta && state.ld.records.length),
+      sigemAvailable: Boolean(state.sigem.meta),
+      pwAvailable: Boolean(state.pw.meta),
     });
   });
 }
@@ -237,7 +239,7 @@ async function rebuildModelAsync(): Promise<boolean> {
     console.warn("[SIGEM×PW] Worker de comparação indisponível; usando modo compatível:", error);
     await yieldFrame();
     const core = Core();
-    const model = core.createModel(state.sigem.records, state.pw.records, state.ld.records, { requireN1710Ld: true, ldAvailable: Boolean(state.ld.meta && state.ld.records.length) });
+    const model = core.createModel(state.sigem.records, state.pw.records, state.ld.records, { requireN1710Ld: true, ldAvailable: Boolean(state.ld.meta && state.ld.records.length), sigemAvailable: Boolean(state.sigem.meta), pwAvailable: Boolean(state.pw.meta) });
     built = {
       ok: true,
       type: "model",
