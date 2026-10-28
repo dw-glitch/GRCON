@@ -27,9 +27,9 @@ assert.equal(Dashboard.documentClass(n1710Bad), Dashboard.UNCLASSIFIED,
   "O N-1710 não admite substituição global de hífens por underscores");
 
 const csv = [
-  '"NumeroDocumentoCliente";"RevisaoCompleta";"Revisao";"TipoDocumento";"o_statename";"Última emissão";"o_filename"',
-  '"C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-123456";"";"";"RIR";"";" Previsto ";""',
-  '"CE-5290.00-22313-856-C1O-001";"";"";"CEQ";"";"PREVISTO";""',
+  '"NumeroDocumentoCliente";"RevisaoCompleta";"Revisao";"Sigla da Empresa";"TipoDocumento";"o_statename";"Última emissão";"o_filename"',
+  '"C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-123456";"";"";"CSG";"RIR";"";" Previsto ";""',
+  '"CE-5290.00-22313-856-C1O-001";"";"";"QTM";"CEQ";"";"PREVISTO";""',
 ].join("\r\n");
 const parsed = Dashboard.parsePwCsv(csv, { fileName: "RHDD-teste.csv" });
 assert.equal(parsed.meta.recordCount, 2);
@@ -59,18 +59,18 @@ assert.ok(rev0.lists.all.every((row) => row.revision === "0"),
 
 const missingPwRevisionWithPriorEmission = Dashboard.aggregate(
   [{ document: etSigem, revision: "0" }, { document: etSigem, revision: "A" }],
-  [{ document: etPw, revision: "0", lastEmission: "Sim" }, { document: etPw, revision: "", lastEmission: "Previsto" }],
+  [{ document: etPw, company: "CSG", revision: "0", lastEmission: "Sim" }, { document: etPw, company: "CSG", revision: "", lastEmission: "Previsto" }],
 );
 const combined = Dashboard.aggregateModel(Dashboard.createModel(
   [{ document: etSigem, revision: "0" }, { document: etSigem, revision: "A" }],
-  [{ document: etPw, revision: "0", lastEmission: "Sim" }, { document: etPw, revision: "", lastEmission: "Previsto" }],
+  [{ document: etPw, company: "CSG", revision: "0", lastEmission: "Sim" }, { document: etPw, company: "CSG", revision: "", lastEmission: "Previsto" }],
 ), {}, { revisionScope: "revision0" });
 assert.equal(combined.summary.pwRegistered, 1, "Previsto sem revisão não duplica cadastro explícito revisão 0");
 assert.equal(combined.summary.pwEmitted, 1, "Previsto de revisão indeterminada não apaga emissão 0");
 assert.equal(missingPwRevisionWithPriorEmission.summary.pwRegistered, 2);
 assert.equal(missingPwRevisionWithPriorEmission.summary.pwEmitted, 1);
 
-const pwUnmatched = { document: n1710Another, lastEmission: "Previsto", revision: "" };
+const pwUnmatched = { document: n1710Another, company: "CSG", lastEmission: "Previsto", revision: "" };
 const onlyRev0 = Dashboard.aggregateModel(Dashboard.createModel(sigem, [...parsed.records, pwUnmatched], ld), {}, { revisionScope: "revision0" });
 const onlyAll = Dashboard.aggregateModel(Dashboard.createModel(sigem, [...parsed.records, pwUnmatched], ld), {}, { revisionScope: "all" });
 assert.equal(onlyRev0.summary.pwOnlyNotEmitted, 1, "Previsto sem revisão deve contar como cadastro PW até na visão inicial");
@@ -120,8 +120,8 @@ assert.equal(Revision.historyForRows(model.pwAll.get(Dashboard.documentIdentity(
 
 const modelWithHistoricalPw = Dashboard.createModel(
   [{ document: etSigem, revision: "A", status: "Postado" }],
-  [{ document: etPw, revision: "0", state: "Liberado", lastEmission: "Sim" },
-   { document: etPw, revision: "", lastEmission: "Previsto" }],
+  [{ document: etPw, company: "CSG", revision: "0", state: "Liberado", lastEmission: "Sim" },
+   { document: etPw, company: "CSG", revision: "", lastEmission: "Previsto" }],
 );
 const historical = Revision.analyze(modelWithHistoricalPw).rows[0];
 assert.equal(historical.situation, Revision.SITUATIONS.REVIEW,
@@ -134,7 +134,7 @@ assert.match(historical.reason, /cadastrado|cadastro/i);
 // documentos previstos sem revisão, sem inventar qual revisão foi cadastrada.
 const evolutionMatch = Evolution.currentRelations(
   [{ document: etSigem, revision: "0" }],
-  [{ document: etPw, revision: "", emissionKind: "planned", emissionState: "not-emitted", emitted: false }],
+  [{ document: etPw, company: "CSG", revision: "", emissionKind: "planned", emissionState: "not-emitted", emitted: false }],
 );
 assert.equal(evolutionMatch.bothNotEmitted.length, 1);
 assert.equal(evolutionMatch.onlySigem.length, 0);
@@ -143,8 +143,8 @@ assert.equal(evolutionMatch.both[0].matchMode, "document-fallback");
 
 const evolutionHistorical = Evolution.currentRelations(
   [{ document: etSigem, revision: "0" }, { document: etSigem, revision: "A" }],
-  [{ document: etPw, revision: "0", emissionKind: "current", emissionState: "emitted", emitted: true },
-   { document: etPw, revision: "", emissionKind: "planned", emissionState: "not-emitted", emitted: false }],
+  [{ document: etPw, company: "CSG", revision: "0", emissionKind: "current", emissionState: "emitted", emitted: true },
+   { document: etPw, company: "CSG", revision: "", emissionKind: "planned", emissionState: "not-emitted", emitted: false }],
 );
 assert.equal(evolutionHistorical.bothEmitted.length, 1);
 assert.equal(evolutionHistorical.bothNotEmitted.length, 1);
