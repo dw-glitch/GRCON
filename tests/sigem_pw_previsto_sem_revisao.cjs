@@ -27,9 +27,9 @@ assert.equal(Dashboard.documentClass(n1710Bad), Dashboard.UNCLASSIFIED,
   "O N-1710 não admite substituição global de hífens por underscores");
 
 const csv = [
-  '"NumeroDocumentoCliente";"RevisaoCompleta";"Revisao";"Sigla da Empresa";"TipoDocumento";"o_statename";"Última emissão";"o_filename"',
-  '"C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-123456";"";"";"CSG";"RIR";"";" Previsto ";""',
-  '"CE-5290.00-22313-856-C1O-001";"";"";"QTM";"CEQ";"";"PREVISTO";""',
+  '"NumeroDocumentoCliente";"RevisaoCompleta";"Sigla da Empresa";"Revisao";"TipoDocumento";"o_statename";"Última emissão";"o_filename"',
+  '"C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-123456";"";"CSG";"";"RIR";"";" Previsto ";""',
+  '"CE-5290.00-22313-856-C1O-001";"";"QTM";"";"CEQ";"";"PREVISTO";""',
 ].join("\r\n");
 const parsed = Dashboard.parsePwCsv(csv, { fileName: "RHDD-teste.csv" });
 assert.equal(parsed.meta.recordCount, 2);
