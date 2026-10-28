@@ -376,7 +376,7 @@ check("status concluídos preservam a revisão 0 do arquivo; Em Workflow segue a
   const workflowResult = Core.triageOne(
     { id: "workflow-equivalente-analise", name: `${ntDocument}.pdf` },
     Core.buildIndex([technical], [workflowHistory]),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [{ document: ntDocument, revision: "0", status: "Em Workflow" }] }) },
   );
   assert.equal(workflowResult.decision, Core.DISCARD, "Em Workflow");
   assert.equal(workflowResult.revision, "0", "Em Workflow");
@@ -400,7 +400,7 @@ check("Em Análise nunca avança sozinho: para na própria revisão e cai no bal
   const result = Core.triageOne(
     { id: "em-analise-nao-avanca", name: `${ntDocument}.pdf` },
     Core.buildIndex([technical], [history]),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [{ document: ntDocument, revision: "0", status: "Em Análise" }] }) },
   );
   assert.equal(result.decision, Core.DISCARD);
   assert.equal(result.revision, "0", "não pode avançar para a revisão A sozinho");
@@ -419,7 +419,10 @@ check("Em Análise nunca avança sozinho: para na própria revisão e cai no bal
   const resultadoEncadeado = Core.triageOne(
     { id: "em-analise-apos-avanco", name: `${ntDocument}_A.pdf` },
     Core.buildIndex([technical], encadeado),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [
+      { document: ntDocument, revision: "0", status: "Recusado" },
+      { document: ntDocument, revision: "A", status: "Em Análise" },
+    ] }) },
   );
   assert.equal(resultadoEncadeado.decision, Core.DISCARD);
   assert.equal(resultadoEncadeado.revision, "A");
@@ -438,7 +441,10 @@ check("Em Análise adota GRDT e data efetiva da revisão realmente analisada, n�
   const result = Core.triageOne(
     { id: "em-analise-evidencia", name: `${ntDocument}_A.pdf` },
     Core.buildIndex([technical], encadeado),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [
+      { document: ntDocument, revision: "0", status: "Recusado" },
+      { document: ntDocument, revision: "A", status: "Em Análise" },
+    ] }) },
   );
   assert.equal(result.decision, Core.DISCARD);
   assert.equal(result.revision, "A");
@@ -3664,7 +3670,9 @@ await (async () => {
 
   // A mesma LD passando pela triagem: Em Análise para na própria revisão e
   // leva a GRDT e a data da revisão analisada, não a da linha técnica.
-  const emAnalise = Core.triageOne({ id: "ld-em-analise", name: `${P}nt-SPE-AST-320021_A.pdf` }, index, {});
+  const emAnalise = Core.triageOne({ id: "ld-em-analise", name: `${P}nt-SPE-AST-320021_A.pdf` }, index, {
+    sigemQueryContext: SharedQuery.context({ records: [{ document: `${P}nt-SPE-AST-320021`, revision: "A", status: "Em Análise" }] }),
+  });
   assert.equal(emAnalise.decision, Core.DISCARD);
   assert.equal(emAnalise.revision, "A");
   assert.equal(emAnalise.status, "Em Análise");
