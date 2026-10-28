@@ -19,7 +19,24 @@ const XLSX = require('../xlsx.full.min.js');
   });
   try {
     const context = await browser.newContext({ viewport: { width: 1366, height: 768 }, serviceWorkers: 'block', acceptDownloads: true });
+    // Legacy Vault UI is explicitly enabled only in this isolated QA fixture.
+    // The production app and Cloudflare browser smoke test keep it hidden.
+    await context.addInitScript(() => {
+      window.GrconStorageFeatures = Object.freeze({
+        showStorageUI: true, enableAutomaticUpload: true,
+        enableManualUpload: true, enableAutomaticLookup: true,
+      });
+    });
     const page = await context.newPage();
+    await page.route('**/document_vault_app.js', route => {
+      const original = fs.readFileSync(path.join(__dirname, '..', 'document_vault_app.js'), 'utf8');
+      const hidden = 'const storageFeatures = root.GrconStorageFeatures || Object.freeze({ showStorageUI: false, enableAutomaticUpload: false, enableManualUpload: false, enableAutomaticLookup: false });';
+      assert.ok(original.includes(hidden), 'Legacy QA fixture requires the hidden-storage guard.');
+      return route.fulfill({
+        status: 200, contentType: 'application/javascript',
+        body: original.replace(hidden, 'const storageFeatures = Object.freeze({ showStorageUI: true, enableAutomaticUpload: true, enableManualUpload: true, enableAutomaticLookup: true });'),
+      });
+    });
     const errors = [];
     const calls = [];
     page.on('pageerror', error => errors.push(error.message));

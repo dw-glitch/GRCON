@@ -3,7 +3,15 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES?path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES,'playwright'):'playwright');
 const root=path.resolve(__dirname,'..');
 (async()=>{
- const server=http.createServer((req,res)=>{const file=path.join(root,new URL(req.url,'http://localhost').pathname==='/'?'index.html':decodeURIComponent(new URL(req.url,'http://localhost').pathname).slice(1));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}try{const type={'.js':'application/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json'}[path.extname(file)]||'application/octet-stream';const bytes=fs.readFileSync(file);res.writeHead(200,{'content-type':type});res.end(bytes);}catch(_){res.writeHead(404).end();}});
+ const server=http.createServer((req,res)=>{const file=path.join(root,new URL(req.url,'http://localhost').pathname==='/'?'index.html':decodeURIComponent(new URL(req.url,'http://localhost').pathname).slice(1));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}try{const type={'.js':'application/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json'}[path.extname(file)]||'application/octet-stream';let bytes=fs.readFileSync(file);
+ if(path.basename(file)==='document_vault_app.js'){
+  // QA-only legacy upload fixture; production keeps storage controls disabled.
+  const source=bytes.toString('utf8');
+  const flag='const storageFeatures = root.GrconStorageFeatures || Object.freeze({ showStorageUI: false, enableAutomaticUpload: false, enableManualUpload: false, enableAutomaticLookup: false });';
+  assert.ok(source.includes(flag),'Vault master QA fixture requires the storage feature guard.');
+  bytes=Buffer.from(source.replace(flag,'const storageFeatures = Object.freeze({ showStorageUI: true, enableAutomaticUpload: true, enableManualUpload: true, enableAutomaticLookup: true });'));
+ }
+ res.writeHead(200,{'content-type':type});res.end(bytes);}catch(_){res.writeHead(404).end();}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));server.unref();
  const browser=await chromium.launch({headless:true,args:['--no-sandbox'],executablePath:process.env.GRCON_CHROMIUM_PATH||process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH});
  try{
@@ -34,7 +42,7 @@ const root=path.resolve(__dirname,'..');
  await page.evaluate(() => window.GrconDocumentVault.open());
  assert.equal(await page.locator('#vault-queue-body [data-vault-detail="qa-local"]').count(), 1, 'opening Cofre renders completed upload and confirmed server file id');
  await page.locator('#document-master-open').click();await page.locator('#master-query').fill('RL-5290');await page.locator('[data-master-code]').first().waitFor();await page.locator('[data-master-code]').first().click();await page.waitForFunction(()=>document.getElementById('master-content').textContent.includes('QA-001'));
- for(const label of ['SIGEM','ProjectWise','GRDT / eGRDT','Arquivos no Cofre','Controle de Solicitações','Meu monitoramento','Auditoria'])assert.ok((await page.locator('#master-content').textContent()).includes(label));
+ for(const label of ['SIGEM','ProjectWise','GRDT / eGRDT','Controle de Solicitações','Meu monitoramento','Auditoria'])assert.ok((await page.locator('#master-content').textContent()).includes(label));
  assert.match(await page.locator('#master-content').textContent(),/Base PW não carregada/,'missing PW source must not be presented as absent document');
  await page.locator('#master-explanation > summary').click();const beforeExplanation=calls.length;await page.locator('[data-master-explain]').click();assert.match(await page.locator('#master-explanation-answer').textContent(),/Consulta-QA.xlsx/);assert.match(await page.locator('#master-explanation-answer').textContent(),/não é o total/);assert.equal(calls.length,beforeExplanation,'explanation does not write or requery');
  await page.locator('#master-explanation-intent').selectOption('conference');await page.locator('[data-master-explain]').click();assert.match(await page.locator('#master-explanation-answer').textContent(),/Não há resultado de conferência/);assert.equal(await page.locator('#master-explanation-answer img').count(),0);assert.ok(await page.locator('[data-master-source-link="sigem"]').count());
@@ -49,9 +57,12 @@ const root=path.resolve(__dirname,'..');
  assert.ok(calls.some(c=>c.action==='master-page'&&c.query.after==='100'&&c.query.revision==='fixture-v1'));
  await page.locator('#master-explanation-intent').selectOption('sources');await page.locator('[data-master-explain]').click();assert.doesNotMatch(await page.locator('#master-explanation-answer').textContent(),/INCORRECT-NEW-BASE/,'a page from one source must not relabel other sources');
  await page.locator('[data-master-page="history"][data-master-offset="0"]').click();await page.waitForFunction(()=>document.querySelector('[data-master-source="history"]').textContent.includes('QA-001'));
- assert.equal(await page.locator('[data-master-detail]').count(),1);
- const download=page.waitForEvent('download');await page.locator('[data-master-download]').click();const d=await download;assert.equal(d.suggestedFilename(),code+'.pdf');
- await page.evaluate(id=>window.GrconDocumentMaster.openFile(id),f.id);await page.locator('#master-metadata').waitFor();assert.equal(await page.locator('[data-master-download]').count(),2);await page.locator('#master-metadata [name="purpose"]').fill('Para Construção');await page.locator('#master-metadata button').click();await page.waitForFunction(()=>document.getElementById('master-status').textContent==='Metadados atualizados.');assert.ok(calls.some(c=>c.action==='metadata'));
+ assert.equal(await page.locator('[data-master-detail]').count(),0,'Cofre não aparece como fonte de navegação no Master.');
+ // The direct API remains testable through the isolated fixture without exposing the Vault.
+ await page.evaluate(id=>window.GrconDocumentMaster.openFile(id),f.id);
+ await page.locator('#master-metadata').waitFor();
+ const download=page.waitForEvent('download');await page.locator('[data-master-download]').first().click();const d=await download;assert.equal(d.suggestedFilename(),code+'.pdf');
+ assert.equal(await page.locator('[data-master-download]').count(),2);await page.locator('#master-metadata [name="purpose"]').fill('Para Construção');await page.locator('#master-metadata button').click();await page.waitForFunction(()=>document.getElementById('master-status').textContent==='Metadados atualizados.');assert.ok(calls.some(c=>c.action==='metadata'));
  const bounds=await page.locator('#document-master-dialog').boundingBox();assert.ok(bounds.width<=1280&&bounds.height<=720,'notebook modal fits viewport');
  await page.evaluate(code=>window.GrconDocumentMaster.open(code),code);await page.locator('#master-explanation > summary').click();await page.locator('[data-master-ai]').waitFor({state:'visible'});holdAi=true;await page.locator('[data-master-ai]').click();
  while(!releaseAi)await new Promise(resolve=>setTimeout(resolve,10));

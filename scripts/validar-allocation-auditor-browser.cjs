@@ -74,6 +74,21 @@ const server = http.createServer((req,res) => {
     await page.locator('input[type=file][accept=".xlsx"]').first().setInputFiles({name:'C1O-ALOC-CM-0375-2026.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(officialBytes)});
     await page.waitForFunction(()=>document.querySelector('.aa-import-details')?.textContent?.includes('Modelo oficial de 16 colunas reconhecido')&&document.querySelector('.aa-import-details')?.textContent?.includes('2 documentos ·')&&document.querySelectorAll('.aa-table tbody tr').length===2,{},{timeout:30000});
     assert.match(await page.locator('.aa-import-details').innerText(),/modelo oficial de 16 colunas reconhecido/i);
+    // GERAL may exist with only a header, while the actual official allocation is in another sheet.
+    // The auditor must inspect data, not blindly select the sheet name.
+    const alternate=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(alternate,XLSX.utils.aoa_to_sheet([columns]),'GERAL');
+    XLSX.utils.book_append_sheet(alternate,XLSX.utils.aoa_to_sheet([['Documento'],[],columns,...officialRows]),'DADOS');
+    const alternateBytes=XLSX.write(alternate,{type:'buffer',bookType:'xlsx'});
+    await page.locator('input[type=file][accept=".xlsx"]').first().setInputFiles({
+      name:'C1O-ALOC-CM-0374-2026.xlsx',
+      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer:Buffer.from(alternateBytes),
+    });
+    await page.waitForFunction(()=>document.querySelector('.aa-import-details')?.textContent?.includes('0374-2026.xlsx')
+      &&document.querySelector('.aa-import-details')?.textContent?.includes('2 documentos ·')
+      &&document.querySelectorAll('.aa-table tbody tr').length===2,{},{timeout:30000});
+    assert.match(await page.locator('body').innerText(),/Aba: DADOS/);
     await page.evaluate(()=>window.dispatchEvent(new Event('grcon:contract-context-changed')));
     await page.waitForFunction(()=>document.querySelectorAll('tbody tr').length===0);
     assert.deepEqual(errors,[]);
