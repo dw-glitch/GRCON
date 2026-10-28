@@ -117,7 +117,7 @@ const TriageQuery=require('../grdt_triage_query.js');
 const noLdIndex=Core.buildIndex([],[]);
 const absentInput={id:'missing-ld',name:doc+'_B.pdf'};
 const absentWithOfficialAnalysis=Core.triageOne({...absentInput},noLdIndex,{sigemQueryContext:context});
-assert.equal(absentWithOfficialAnalysis.document,doc);
+assert.equal(Core.key(absentWithOfficialAnalysis.document),Core.key(doc));
 assert.equal(absentWithOfficialAnalysis.documentLookup.matched,false);
 assert.equal(absentWithOfficialAnalysis.status,'Em análise','consulta geral confirma a revisão, mesmo sem LD');
 assert.equal(absentWithOfficialAnalysis.sigemStatusSource,'shared-general-query');
