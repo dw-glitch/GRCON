@@ -223,7 +223,7 @@ console.log("GRDT selecionar tudo: manuais, lote misto, filtros, índices, virtu
 const visualRows = [
   selectionRow("Não Postado"),
   selectionRow("Não Postado", { allocationStatus: "NÃO ALOCADO" }),
-  selectionRow("Em Workflow", { blockingRevision: "A" }),
+  selectionRow("Não Postado", { blockingRevision: "A", decision: Core.DISCARD }),
   selectionRow("Não Postado", { decision: Core.REVIEW }),
   selectionRow("Sem status"),
   selectionRow("Não Postado", { blockCode: "not_allocated_conflict" }),
@@ -247,13 +247,13 @@ vm.runInContext(appSource.slice(appSource.indexOf("  function rowIncludedForGene
   appSource.indexOf("  function guardedSelectedIndices(")), visualCtx);
 vm.runInContext(appSource.slice(appSource.indexOf("  function compactDecisionLabel("),
   appSource.indexOf("  function decisionGroupKey(")), visualCtx);
-const expectedVisualClasses = ["ready", "allocation-blocked", "in-analysis", "review", "unresolved", "allocation-conflict", "technical-blocked", "excluded"];
+const expectedVisualClasses = ["ready", "allocation-blocked", "review", "review", "unresolved", "allocation-conflict", "technical-blocked", "excluded"];
 for (let index = 0; index < visualRows.length; index += 1) {
   assert.equal(vm.runInContext(`selectionSituationClass(state.results[${index}], ${index})`, visualCtx), expectedVisualClasses[index]);
 }
 assert.equal(vm.runInContext("selectionSituationLabel(state.results[0], 0)", visualCtx), "Pronto");
 assert.match(vm.runInContext("selectionSituationLabel(state.results[1], 1)", visualCtx), /Não incluir · inclusão manual/);
-assert.match(vm.runInContext("selectionSituationLabel(state.results[2], 2)", visualCtx), /Em análise \(rev\. A\) · incluído manualmente/);
+assert.match(vm.runInContext("selectionSituationLabel(state.results[2], 2)", visualCtx), /Revisão A em análise — não incluir automaticamente · incluído manualmente/);
 assert.equal(vm.runInContext("selectionSituationLabel(state.results[6], 6)", visualCtx), "Não incluir");
 const statusCss = fs.readFileSync(require.resolve("../grdt-central-ux.css"), "utf8");
 const palettes = ["ready", "blocked", "analysis", "unresolved", "review"].map(name => {
