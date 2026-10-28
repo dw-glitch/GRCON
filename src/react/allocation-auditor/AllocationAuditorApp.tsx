@@ -1,4 +1,4 @@
-import {useMemo,useState,useSyncExternalStore} from 'react';
+import {useEffect,useMemo,useState,useSyncExternalStore} from 'react';
 import {service,type Data} from './service';
 export function AllocationAuditorApp(){
  const s=useSyncExternalStore(service.subscribe,service.snapshot),[query,setQuery]=useState(''),[catalogQuery,setCatalogQuery]=useState(''),[exact,setExact]=useState(false),[severity,setSeverity]=useState(''),[category,setCategory]=useState(''),[page,setPage]=useState(0),[detail,setDetail]=useState<number|null>(null),[file,setFile]=useState<File|null>(null),[sheets,setSheets]=useState<string[]>([]),[sheet,setSheet]=useState(''),[kind,setKind]=useState<'allocation'|'history'>('allocation'),[allocation,setAllocation]=useState(''),[savedAllocation,setSavedAllocation]=useState(''),[revision,setRevision]=useState('R'),[appEvidence,setAppEvidence]=useState(''),[value,setValue]=useState(''),[field,setField]=useState('title'),[decision,setDecision]=useState('proposed'),[reviewState,setReviewState]=useState('Correção proposta'),[justification,setJustification]=useState(''),[evidence,setEvidence]=useState(''),[error,setError]=useState('');
@@ -7,6 +7,7 @@ export function AllocationAuditorApp(){
  const core=service.core(),catalog=useMemo(()=>service.core().catalogComments(s.context.history||s.history),[s.context.history,s.history]),summary=core.summary(s.rows),row=detail===null?null:s.rows[detail];
  const filtered=useMemo(()=>s.rows.map((r,i)=>({r,i})).filter(({r})=>(!query||(exact?r.document===query:[r.document,r.title].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())))&&(!severity||r.findings.some((f:Data)=>f.severity===severity))&&(!category||r.findings.some((f:Data)=>f.category===category))),[s.rows,query,exact,severity,category]);
  const shown=filtered.slice(page*50,page*50+50),all=filtered.length>0&&filtered.every(({i})=>selectedSet.has(i));
+ useEffect(()=>{if(detail!==null&&typeof window.requestAnimationFrame==='function')window.requestAnimationFrame(()=>{document.querySelector('.aa-detail')?.scrollIntoView?.({behavior:'smooth',block:'start'});});},[detail]);
  const rowValue=(r:Data,f:string)=>/^N[1-6]$/.test(f)?String(r.levels?.[Number(f.slice(1))-1]||''):String(r[f]||'');
  const choose=(i:number)=>{setDetail(i);setField('title');setValue(s.rows[i].title||'');setJustification('');setEvidence('');setReviewState('Correção proposta');setDecision('proposed');};
  return <div className="aa-app ag-app">
