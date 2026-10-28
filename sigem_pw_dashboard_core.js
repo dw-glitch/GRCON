@@ -23,9 +23,9 @@
   const PW_BASE_KEY = "sigem-pw-current-pw-v3";
   const LD_BASE_KEY = "sigem-pw-current-quality-ld-v1";
   const HISTORY_KEY = "sigem-pw-base-history-v3";
-  const PW_BASE_VERSION = 6;
+  const PW_BASE_VERSION = 7;
   const HISTORY_VERSION = 3;
-  const PW_SCOPE_VERSION = 7;
+  const PW_SCOPE_VERSION = 8;
   const UNCLASSIFIED = "Não classificado";
   const SCOPE_CLASSES = Object.freeze(["ET", "N-1710", "CV", UNCLASSIFIED]);
   const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
@@ -39,11 +39,12 @@
     PW_ONLY_EMITTED: "Revisão emitida no PW sem correspondência no SIGEM",
     CV_NOT_APPLICABLE: "CV — Currículo; sem exigência de cadastro no PW",
   });
-  const REQUIRED_PW_FIELDS = Object.freeze(["document"]);
+  const REQUIRED_PW_FIELDS = Object.freeze(["document", "company"]);
   const REVISION_SCOPES = Object.freeze({ REVISION0: "revision0", ALL: "all" });
 
   const PW_HEADER_ALIASES = Object.freeze({
     document: ["NumeroDocumentoCliente", "NúmeroDocumentoCliente", "Numero Documento Cliente", "Número Documento Cliente"],
+    company: ["Sigla da Empresa", "Sigla Empresa", "SiglaEmpresa", "Empresa Sigla", "EmpresaSigla", "Sigla da Contratada", "Sigla Contratada", "Empresa", "Company", "Company Code", "CompanyCode"],
     revisionComplete: ["RevisaoCompleta", "RevisãoCompleta", "Revisao Completa", "Revisão Completa"],
     revision: ["Revisao", "Revisão", "Rev"],
     documentType: ["TipoDocumento", "Tipo Documento"],
@@ -107,6 +108,28 @@
   // A letra O jamais é confundida com o algarismo zero (C10).
   function isC1OCode(value) {
     return canonicalDocumentCode(value).includes("C1O");
+  }
+
+  // A responsabilidade contratual pertence à coluna da exportação PW,
+  // nunca ao texto C1O encontrado no código ou no título.
+  const PW_COMPANIES = Object.freeze(["CSG", "QTM"]);
+  function companyCodes(value) {
+    return [...new Set(norm(value).split(/[,;\/|+&\n]+|\s+E\s+/).map((part) => part.trim()).filter(Boolean))];
+  }
+  function recordCompany(record) {
+    return record && typeof record === "object"
+      ? text(record.company ?? record.companyCode ?? record.companySigla)
+      : text(record);
+  }
+  function isPwCompanyInScope(record) {
+    return companyCodes(recordCompany(record)).some((code) => PW_COMPANIES.includes(code));
+  }
+  function partitionPwCompanyRecords(records) {
+    const eligible = [], outOfScope = [];
+    for (const row of Array.isArray(records) ? records : []) {
+      (isPwCompanyInScope(row) ? eligible : outOfScope).push(row);
+    }
+    return { eligible, outOfScope };
   }
 
   function partitionC1ORecords(records) {
@@ -338,9 +361,13 @@
       const index = field === "revision" ? Math.max(columns.revisionComplete, columns.revision) : columns[field];
       if (index < 0) missing.push(field);
     });
+    const companyAliases = NORMALIZED_PW_ALIASES.company || new Set();
+    const companyCandidates = (headers || []).filter((name) => companyAliases.has(normalizeHeader(name)));
+    if (companyCandidates.length > 1) return ["Base ProjectWise com mais de uma coluna de empresa. Selecione a coluna correta no perfil de importação."];
     if (!missing.length) return [];
     const labels = {
       document: "NumeroDocumentoCliente",
+      company: "Sigla da Empresa (CSG/QTM)",
       revision: "RevisaoCompleta/Revisao",
       documentType: "TipoDocumento",
       state: "o_statename",
@@ -403,6 +430,7 @@
 
       records.push({
         document,
+        company: rowValue(row, columns.company),
         documentKey: identity.key,
         canonicalDocument: identity.canonical,
         documentClass: documentClass(document),
@@ -444,6 +472,7 @@
         lastModified: Number(fileMeta && fileMeta.lastModified) || 0,
         importedAt: text(fileMeta && fileMeta.importedAt) || new Date().toISOString(),
         delimiter,
+        companyHeader: headers[columns.company],
         headerCount: headers.length,
         sourceRowCount,
         recordCount: records.length,
@@ -575,11 +604,25 @@
   function sanitizePwRecords(records, ldRecords) {
     const sourceRecords = Array.isArray(records) ? records : [];
     const ldUniverse = buildLdUniverse(ldRecords || []);
-    const accepted = normalizeRecords(sourceRecords, "pw", ldUniverse, true);
+    const companyScope = partitionPwCompanyRecords(sourceRecords);
+    const accepted = normalizeRecords(companyScope.eligible, "pw", ldUniverse, true);
+    const excludedReasons = { empresa_divergente: 0, sigla_ausente: 0 };
+    const companyCounts = { CSG: 0, QTM: 0 };
+    for (const record of sourceRecords) {
+      const codes = companyCodes(recordCompany(record));
+      if (!codes.length) excludedReasons.sigla_ausente += 1;
+      else if (!isPwCompanyInScope(record)) excludedReasons.empresa_divergente += 1;
+      else for (const code of PW_COMPANIES) if (codes.includes(code)) companyCounts[code] += 1;
+    }
+    const companyColumnMissing = sourceRecords.length > 0
+      && !sourceRecords.some((record) => record && Object.prototype.hasOwnProperty.call(record, "company"));
     return {
       records: accepted,
       acceptedCount: accepted.length,
       excludedCount: Math.max(0, sourceRecords.length - accepted.length),
+      excludedReasons,
+      companyCounts,
+      companyColumnMissing,
       ldUniverse,
     };
   }
@@ -603,7 +646,7 @@
         ...previousMeta,
         version: Math.max(Number(previousMeta.version) || 0, PW_BASE_VERSION),
         scopeVersion: PW_SCOPE_VERSION,
-        scopeRule: "Todo código presente no PW comprova cadastro; CV é classe Currículo e sem presença no PW não constitui pendência",
+        scopeRule: "Somente linhas com Sigla da Empresa CSG/QTM comprovam cadastro no PW do contrato; PREVISTO é cadastrado, não emitido",
         scopeLdSnapshotId: text(ldMeta && ldMeta.snapshotId) || (ldMeta ? snapshotId("ld", ldMeta) : ""),
         sourceRecordCount: Number(previousMeta.sourceRecordCount) || sourceRecords.length,
         recordCount: audit.records.length,
@@ -613,6 +656,9 @@
         duplicateRevisionCount: Math.max(0, audit.records.length - entries.size),
         scopeAcceptedRecordCount: audit.acceptedCount,
         scopeExcludedCount: audit.excludedCount,
+        scopeExcludedReasons: audit.excludedReasons,
+        scopeCompanyCounts: audit.companyCounts,
+        scopeCompanyColumnMissing: audit.companyColumnMissing,
         scopeClassCounts: classCounts,
         registeredWithoutQualityLdCount: audit.records.filter((row) => row.documentClass === "N-1710" && !row.inQualityLd).length,
         plannedRegisteredCount: new Set(audit.records.filter((row) => norm(row.lastEmission) === EMISSION_FLAGS.PLANNED).map((row) => row.documentKey)).size,
@@ -751,8 +797,10 @@
     const ldUniverse = buildLdUniverse(ldRecords || []);
     // Filtrar ANTES da construção de mapas, indicadores, duplicidades e revisões.
     // As bases originais são mantidas intactas para auditoria e exportação separada.
-    const sigemScope = partitionC1ORecords(sigemRecords);
-    const pwScope = partitionC1ORecords(pwRecords);
+    // A Consulta Geral/SIGEM mantém seu universo próprio; a sigla de
+    // responsabilidade pertence especificamente às linhas exportadas do PW.
+    const sigemScope = { eligible: Array.isArray(sigemRecords) ? sigemRecords : [], outOfScope: [] };
+    const pwScope = partitionPwCompanyRecords(pwRecords);
     const normalizedSigem = normalizeRecords(sigemScope.eligible, "sigem", ldUniverse, enforceLd);
     const normalizedPw = normalizeRecords(pwScope.eligible, "pw", ldUniverse, enforceLd);
     const sigemEntries = buildEntryMap(normalizedSigem, "sigem");
@@ -760,7 +808,7 @@
     return {
       ldUniverse,
       comparisonScope: {
-        rule: "C1O", version: 7,
+        rule: "PW: CSG/QTM", version: PW_SCOPE_VERSION,
         sigemAccepted: normalizedSigem.length, pwAccepted: normalizedPw.length,
         sigemOutOfScope: sigemScope.outOfScope.length,
         pwOutOfScope: pwScope.outOfScope.length,
@@ -1356,13 +1404,14 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "A comparação SIGEM × PW utiliza somente códigos contendo C1O; registros fora desse escopo ficam separados. Documentos CV (Currículo) sem cadastro no PW permanecem no SIGEM, mas não representam pendência de emissão. Todo código presente na base PW está CADASTRADO, independentemente de status, classe, revisão, emissão ou LD. A presença é conferida na base completa mesmo na visão Rev. 0. Cadastro não comprova a mesma revisão nem emissão: esses dados são apresentados separadamente. Cada código + revisão conta uma vez; todas as ocorrências repetidas estão na lista Duplicados PW, com as linhas de origem. Revisões diferentes são registros distintos. Sim identifica emissão atual e Não uma emissão histórica; outros valores ou campos vazios não comprovam emissão.";
+  const EMISSION_RULE = "A comparação SIGEM × PW considera somente registros PW com sigla da empresa CSG ou QTM, independentemente da presença de C1O no código; registros de outras empresas ficam separados. Documentos CV (Currículo) sem cadastro no PW permanecem no SIGEM, mas não representam pendência de emissão. Todo código presente na base PW está CADASTRADO, independentemente de status, classe, revisão, emissão ou LD. A presença é conferida na base completa mesmo na visão Rev. 0. Cadastro não comprova a mesma revisão nem emissão: esses dados são apresentados separadamente. Cada código + revisão conta uma vez; todas as ocorrências repetidas estão na lista Duplicados PW, com as linhas de origem. Revisões diferentes são registros distintos. Sim identifica emissão atual e Não uma emissão histórica; outros valores ou campos vazios não comprovam emissão.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
     PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
     EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS, REVISION_SCOPES,
-    text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords, documentIdentity, documentClass,
+    text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords,
+    PW_COMPANIES, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
