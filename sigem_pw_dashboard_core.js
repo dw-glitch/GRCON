@@ -26,6 +26,7 @@
   const PW_BASE_VERSION = 7;
   const HISTORY_VERSION = 3;
   const PW_SCOPE_VERSION = 8;
+  const PW_COMPANY_COLUMN_INDEX = 2; // Coluna C (índice zero-based), obrigatória.
   const UNCLASSIFIED = "Não classificado";
   const SCOPE_CLASSES = Object.freeze(["ET", "N-1710", "CV", UNCLASSIFIED]);
   const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
@@ -345,6 +346,8 @@
   function mapPwColumns(headers) {
     const columns = {};
     Object.keys(PW_HEADER_ALIASES).forEach((field) => { columns[field] = findColumn(headers, field); });
+    // A empresa vem SEMPRE da coluna C, mesmo se outro cabeçalho parecido existir.
+    columns.company = PW_COMPANY_COLUMN_INDEX;
     // A revisão completa é preferencial para rastreabilidade; Revisao continua
     // separada para ordenação quando disponível.
     if (columns.revisionComplete < 0 && columns.revision >= 0) columns.revisionComplete = columns.revision;
@@ -361,9 +364,14 @@
       const index = field === "revision" ? Math.max(columns.revisionComplete, columns.revision) : columns[field];
       if (index < 0) missing.push(field);
     });
+    const companyHeader = normalizeHeader((headers || [])[PW_COMPANY_COLUMN_INDEX]);
     const companyAliases = NORMALIZED_PW_ALIASES.company || new Set();
-    const companyCandidates = (headers || []).filter((name) => companyAliases.has(normalizeHeader(name)));
-    if (companyCandidates.length > 1) return ["Base ProjectWise com mais de uma coluna de empresa. Selecione a coluna correta no perfil de importação."];
+    if (!companyHeader || (headers || []).length <= PW_COMPANY_COLUMN_INDEX) {
+      return ["Base PW inválida: coluna C (sigla da empresa) ausente. Atualize a consulta ProjectWise antes de importar."];
+    }
+    if (!companyAliases.has(companyHeader) && !/\\b(SIGLA|EMPRESA|CONTRATADA|COMPANY)\\b/.test(companyHeader)) {
+      return ["Base PW inválida: o cabeçalho da coluna C não identifica a sigla da empresa. Confira o layout da consulta antes de importar."];
+    }
     if (!missing.length) return [];
     const labels = {
       document: "NumeroDocumentoCliente",
@@ -394,6 +402,7 @@
         headers = row.map(text);
         columns = mapPwColumns(headers);
         if (mappingProfile?.columns) for (const field of Object.keys(PW_HEADER_ALIASES)) {
+          if (field === "company") continue; // Perfil nunca muda o filtro da coluna C.
           const header = mappingProfile.columns[field];
           if (!header) continue;
           const matches = headers.map((value,index)=>normalizeHeader(value)===normalizeHeader(header)?index:-1).filter(index=>index>=0);
@@ -401,6 +410,7 @@
           if (matches.length!==1) throw new Error('Perfil PW: coluna ausente ou ambígua para '+field+'. A base vigente foi preservada.');
           columns[field]=matches[0];
         }
+        columns.company = PW_COMPANY_COLUMN_INDEX;
         if (columns.revisionComplete<0 && columns.revision>=0) columns.revisionComplete=columns.revision;
         const errors = validatePwColumns(columns, headers);
         if (errors.length) throw new Error(errors.join(" "));
@@ -473,6 +483,7 @@
         importedAt: text(fileMeta && fileMeta.importedAt) || new Date().toISOString(),
         delimiter,
         companyHeader: headers[columns.company],
+        companyColumn: "C",
         headerCount: headers.length,
         sourceRowCount,
         recordCount: records.length,
@@ -1411,7 +1422,7 @@
     PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
     EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS, REVISION_SCOPES,
     text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords,
-    PW_COMPANIES, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass,
+    PW_COMPANIES, PW_COMPANY_COLUMN_INDEX, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
