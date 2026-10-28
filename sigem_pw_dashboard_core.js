@@ -618,12 +618,16 @@
     const companyScope = partitionPwCompanyRecords(sourceRecords);
     const accepted = normalizeRecords(companyScope.eligible, "pw", ldUniverse, true);
     const excludedReasons = { empresa_divergente: 0, sigla_ausente: 0 };
-    const companyCounts = { CSG: 0, QTM: 0 };
+    const companyCounts = { CSG: 0, QTM: 0, MULTIPLAS: 0 };
     for (const record of sourceRecords) {
       const codes = companyCodes(recordCompany(record));
       if (!codes.length) excludedReasons.sigla_ausente += 1;
       else if (!isPwCompanyInScope(record)) excludedReasons.empresa_divergente += 1;
-      else for (const code of PW_COMPANIES) if (codes.includes(code)) companyCounts[code] += 1;
+      else {
+        const acceptedCodes = PW_COMPANIES.filter((code) => codes.includes(code));
+        if (acceptedCodes.length === 1) companyCounts[acceptedCodes[0]] += 1;
+        else companyCounts.MULTIPLAS += 1;
+      }
     }
     const companyColumnMissing = sourceRecords.length > 0
       && !sourceRecords.some((record) => record && Object.prototype.hasOwnProperty.call(record, "company"));
