@@ -8,8 +8,8 @@ type Origin = "sigem" | "pw";
 function str(value: unknown): string { return value == null ? "" : String(value).trim(); }
 function fmt(value: number): string { return value.toLocaleString("pt-BR"); }
 function scopeRows(records: SigemPwRecord[]): SigemPwRecord[] {
-  const inScope = window.GrconSigemPwDashboard?.isC1OCode;
-  return records.filter((record) => !(inScope ? inScope(record.document) : /C1O/i.test(str(record.document))));
+  const inScope = window.GrconSigemPwDashboard?.isPwCompanyInScope;
+  return records.filter((record) => !(inScope ? inScope(record) : /^(CSG|QTM)$/i.test(str(record.company))));
 }
 function rev(row: SigemPwRecord): string { return str(row.revisionComplete || row.revision); }
 function status(row: SigemPwRecord): string { return str(row.state || row.status); }
@@ -20,7 +20,7 @@ function uniqueCount(records: SigemPwRecord[]): number {
 
 export function SigemPwOutOfScope({ state }: { state: SigemPwState }) {
   const [expanded, setExpanded] = useState(false);
-  const [origin, setOrigin] = useState<Origin>("sigem");
+  const [origin, setOrigin] = useState<Origin>("pw");
   const [query, setQuery] = useState("");
   const [revision, setRevision] = useState("");
   const [disciplineValue, setDiscipline] = useState("");
@@ -29,7 +29,7 @@ export function SigemPwOutOfScope({ state }: { state: SigemPwState }) {
   // sourceRecords existe em PW porque a base saneada mantém o arquivo importado
   // integralmente. Nunca usar os mapas do modelo comparativo para esta lista.
   const separated = useMemo(() => ({
-    sigem: scopeRows(state.sigem.records || []),
+    sigem: [] as SigemPwRecord[],
     pw: scopeRows(state.pw.sourceRecords || state.pw.records || []),
   }), [state.sigem.records, state.pw.sourceRecords, state.pw.records]);
   const originals = separated[origin];
@@ -64,6 +64,7 @@ export function SigemPwOutOfScope({ state }: { state: SigemPwState }) {
       const rows = filtered.map((row) => ({
         Origem: origin.toUpperCase(),
         "Código documental": str(row.document),
+        "Sigla da empresa (coluna C)": str(row.company),
         "Título": str(row.title),
         "Revisão": rev(row),
         Disciplina: discipline(row),
@@ -71,13 +72,13 @@ export function SigemPwOutOfScope({ state }: { state: SigemPwState }) {
         "Situação original": status(row),
         "Última emissão": str(row.lastEmission),
         "Linha na origem": Number(row.sourceRow) || "",
-        "Motivo": str(row.document) ? "Código fora do escopo C1O" : "Código não informado",
+        "Motivo": !str(row.document) ? "Código não informado" : !str(row.company) ? "Sigla ausente na coluna C" : "Empresa diferente de CSG/QTM",
       }));
       const book = xlsx.utils.book_new();
       const sheet = xlsx.utils.json_to_sheet(rows);
-      sheet["!cols"] = [{ wch: 11 }, { wch: 56 }, { wch: 48 }, { wch: 11 }, { wch: 25 }, { wch: 25 }, { wch: 26 }, { wch: 20 }, { wch: 19 }, { wch: 31 }];
-      xlsx.utils.book_append_sheet(book, sheet, "Fora do escopo C1O");
-      xlsx.writeFile(book, `GRCON_Fora_do_escopo_C1O_${origin.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      sheet["!cols"] = [{ wch: 11 }, { wch: 56 }, { wch: 20 }, { wch: 48 }, { wch: 11 }, { wch: 25 }, { wch: 25 }, { wch: 26 }, { wch: 20 }, { wch: 19 }, { wch: 31 }];
+      xlsx.utils.book_append_sheet(book, sheet, "Outras empresas PW");
+      xlsx.writeFile(book, `GRCON_PW_empresas_excluidas_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível exportar a lista.";
       if (window.GrconNotify) window.GrconNotify(message, "error");
@@ -85,22 +86,22 @@ export function SigemPwOutOfScope({ state }: { state: SigemPwState }) {
     } finally { setExportBusy(false); }
   }
 
-  const outsideCount = separated.sigem.length + separated.pw.length;
+  const outsideCount = separated.pw.length;
   return (
     <UiPanel className="spw-section-panel spw-out-of-scope-panel" labelledBy="spw-out-of-scope-title">
       <div className="spw-section-heading">
         <div>
           <span className="spw-kicker">REGISTROS PRESERVADOS · SEM IMPACTO NOS INDICADORES</span>
-          <h3 id="spw-out-of-scope-title">Fora do escopo C1O</h3>
-          <p>Somente códigos contendo C1O participam do comparativo. Os demais permanecem disponíveis para auditoria, sem serem classificados como pendências.</p>
+          <h3 id="spw-out-of-scope-title">Registros PW de outras empresas</h3>
+          <p>Somente siglas CSG e QTM na coluna C do ProjectWise entram no comparativo. Outras siglas e campos vazios ficam aqui para conferência.</p>
         </div>
         <button className="secondary-button" type="button" aria-controls="spw-out-of-scope-content" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
           {fmt(outsideCount)} registro(s) · {expanded ? "Ocultar lista" : "Consultar lista"}
         </button>
       </div>
       <div id="spw-out-of-scope-content" hidden={!expanded}>
-        <div className="spw-list-tabs" role="tablist" aria-label="Origem dos documentos fora do escopo">
-          {(["sigem", "pw"] as const).map((value) => (
+        <div className="spw-list-tabs" role="tablist" aria-label="Origem dos registros excluídos do comparativo PW">
+          {(["pw"] as const).map((value) => (
             <button type="button" role="tab" key={value} aria-selected={origin === value} className={origin === value ? "active" : ""}
               onClick={() => changeOrigin(value)}>
               <span>{value.toUpperCase()}</span><strong>{fmt(separated[value].length)}</strong>
@@ -125,13 +126,14 @@ export function SigemPwOutOfScope({ state }: { state: SigemPwState }) {
           <button type="button" className="secondary-button" onClick={() => { setQuery(""); setRevision(""); setDiscipline(""); setPage(1); }}>Limpar filtros</button>
         </div>
         <div className="ui-v3-table-shell">
-          <div className="spw-table-wrap" tabIndex={0} aria-label={`Registros ${origin.toUpperCase()} fora do escopo C1O`}>
+          <div className="spw-table-wrap" tabIndex={0} aria-label={`Registros ${origin.toUpperCase()} desconsiderados pela sigla na coluna C`}>
             <table className="spw-comparison-table">
-              <caption>Documentos fora do escopo C1O — {origin.toUpperCase()}</caption>
-              <thead><tr><th>Código documental</th><th>Título</th><th>Revisão</th><th>Disciplina</th><th>Situação original</th><th>Última emissão</th><th>Linha</th></tr></thead>
+              <caption>Registros PW fora do filtro CSG/QTM — coluna C</caption>
+              <thead><tr><th>Código documental</th><th>Sigla da empresa (C)</th><th>Título</th><th>Revisão</th><th>Disciplina</th><th>Situação original</th><th>Última emissão</th><th>Linha</th></tr></thead>
               <tbody>{visible.map((row, index) => (
                 <tr key={`${origin}-${row.sourceRow || index}-${row.document || ""}-${rev(row)}`}>
                   <td className="spw-code">{str(row.document) || "—"}</td>
+                  <td>{str(row.company) || "—"}</td>
                   <td>{str(row.title) || "—"}</td>
                   <td>{rev(row) || "—"}</td>
                   <td>{discipline(row) || "—"}</td>
