@@ -29,7 +29,7 @@
       '<button id="docx-pdf-cancel" type="button" class="secondary-button" hidden>Cancelar conversão</button>'+
       '<div class="docx-pdf-progress" id="docx-pdf-progress" hidden role="status" aria-live="polite"><div><strong id="docx-pdf-progress-title">Preparando conversão</strong><span id="docx-pdf-percent">0%</span></div><progress id="docx-pdf-progress-bar" max="100" value="0"></progress><small id="docx-pdf-stage"></small></div>'+
       '<p id="docx-pdf-feedback" class="docx-pdf-feedback" role="status" aria-live="polite">Selecione ao menos um documento para começar.</p>'+
-      '<p class="docx-pdf-privacy">Os documentos não são armazenados no Cofre, no histórico ou no servidor. Cada conversão é iniciada por você.</p></aside></div></div>';
+      '<p class="docx-pdf-privacy">Esta ferramenta não envia os documentos para armazenamento ou histórico. Cada conversão é iniciada por você.</p></aside></div></div>';
     const input=$("docx-pdf-input"),drop=$("docx-pdf-drop");
     drop.addEventListener("click",()=>{if(!state.busy)input.click();});
     drop.addEventListener("keydown",e=>{if(["Enter"," "].includes(e.key)){e.preventDefault();if(!state.busy)input.click();}});
