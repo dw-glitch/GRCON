@@ -45,26 +45,64 @@ export function planLanes(snapshots){
  if(lanes.some(l=>l.steps>1000)||lanes.reduce((n,l)=>n+l.steps,0)>2700)throw fail('SIGEM_JOB_STEP_LIMIT');
  return lanes.filter(l=>l.snapshots.length);
 }
+// Keep each launch under the conservative Free Workflow step budget. A growing
+// SIGEM history is processed in successive durable waves, never by increasing
+// paid limits or skipping the integrity audit.
+export function planWave(snapshots){
+ const selected=[],deferred=[];
+ for(const source of [...snapshots].sort((a,b)=>b.record_count-a.record_count)){
+  try{planLanes([...selected,source]);selected.push(source);}
+  catch(error){if(error?.code!=='SIGEM_JOB_STEP_LIMIT')throw error;deferred.push(source.id);}
+ }
+ if(snapshots.length&&!selected.length)throw fail('SIGEM_JOB_STEP_LIMIT');
+ return {lanes:planLanes(selected),deferred};
+}
 export async function startMigration(env,workspace,actor,inventory){
  ready(env);
  if(!uuid(workspace)||!uuid(actor)||!Array.isArray(inventory.snapshots)||!inventory.snapshots.length||inventory.pendingSnapshots!==0)throw fail('SIGEM_INVENTORY_NOT_READY');
- const inventoryHash=await sha256(canonical(inventory)),id=await sha256(canonical({workspace,actor,inventoryHash,runner:3}));
- // Revalidate the delegated Master before reading prior corporate proofs.
+ const inventoryHash=await sha256(canonical(inventory));
+ // Master authorization and the live source are rechecked before any job is
+ // created, resumed or advanced to a new wave.
  if(await sha256(canonical(await rpc(env,{workspace,actor},'inventory')))!==inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');
- const key=path(workspace,id),prior=await env.GRCON_DOCUMENTS.get(key+'/grant.json');
- let grant;
- if(prior){grant=await prior.json();if(grant.inventoryHash!==inventoryHash||grant.actor!==actor)throw fail('SIGEM_JOB_CONFLICT');}
- else{
-  const completed=await reusableAudits(env,workspace,inventory);
-  grant={format:'grcon-sigem-migration-job-v1',id,workspace,actor,inventoryHash,records:inventory.snapshots.reduce((n,s)=>n+s.record_count,0),completed,
-   createdAt:new Date().toISOString(),lanes:planLanes(inventory.snapshots.filter(s=>!completed.some(c=>c.id===s.id)))};
-  await env.GRCON_DOCUMENTS.put(key+'/grant.json',canonical(grant));
+ const latestObject=await env.GRCON_DOCUMENTS.get(ROOT+workspace+'/latest.json');
+ const previous=latestObject?await readGrant(env,workspace,(await latestObject.json()).id):null;
+ const sameInventory=previous?.inventoryHash===inventoryHash&&previous.actor===actor;
+ let grant,id;
+ if(sameInventory){
+  const states=await Promise.all(previous.lanes.map(async(_,lane)=>{
+   const saved=await env.GRCON_DOCUMENTS.get(path(workspace,previous.id)+'/lane-'+lane+'.json');
+   return saved?(await saved.json()).status:null;
+  }));
+  // Restart an unfinished wave; a new click must not create parallel copies.
+  if(states.some(state=>state!=='complete')){grant=previous;id=previous.id;}
  }
- // ACL is also checked here by the service RPC, before dispatching any work.
+ if(!grant){
+  // Verify all reusable receipts against the current Turso rows and R2
+  // manifest. Never trust the previous progress counters alone.
+  const completed=await reusableAudits(env,workspace,inventory);
+  const remaining=inventory.snapshots.filter(s=>!completed.some(c=>c.id===s.id));
+  if(!remaining.length&&sameInventory){grant=previous;id=previous.id;}
+  else{
+   const {lanes,deferred}=planWave(remaining);
+   const wave=sameInventory?(Number.isSafeInteger(previous.wave)?previous.wave+1:1):0;
+   id=await sha256(canonical({workspace,actor,inventoryHash,runner:4,wave}));
+   grant={format:'grcon-sigem-migration-job-v2',id,workspace,actor,inventoryHash,wave,
+    records:inventory.snapshots.reduce((n,s)=>n+s.record_count,0),completed,deferred,
+    createdAt:new Date().toISOString(),lanes};
+   const key=path(workspace,id),existing=await env.GRCON_DOCUMENTS.get(key+'/grant.json');
+   if(existing){
+    const stored=await existing.json();
+    if(stored.inventoryHash!==inventoryHash||stored.actor!==actor||stored.wave!==wave)throw fail('SIGEM_JOB_CONFLICT');
+    grant=stored;
+   }else await env.GRCON_DOCUMENTS.put(key+'/grant.json',canonical(grant));
+  }
+ }
  if(await sha256(canonical(await rpc(env,grant,'inventory')))!==inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');
+ const key=path(workspace,id);
  for(let lane=0;lane<grant.lanes.length;lane++){
   const last=await env.GRCON_DOCUMENTS.get(key+'/lane-'+lane+'.json');
   const report=last?await last.json():null,segment=Number.isSafeInteger(report?.segment)?report.segment:0;
+  if(report?.status==='complete')continue;
   const currentId=instanceId(id,lane,segment);
   try{await env.GRCON_TASKS.create({id:currentId,params:{kind:'sigem-migration',workspace,id,lane,segment}});}
   catch{
@@ -75,7 +113,8 @@ export async function startMigration(env,workspace,actor,inventory){
  }
  await env.GRCON_DOCUMENTS.put(ROOT+workspace+'/latest.json',canonical({id}));
  await env.GRCON_DOCUMENTS.put(WATCH+workspace+'.json',canonical({workspace,id}));
- return {id,lanes:grant.lanes.length,records:inventory.snapshots.reduce((n,s)=>n+s.record_count,0)};
+ return {id,wave:grant.wave||0,lanes:grant.lanes.length,deferredSnapshots:grant.deferred?.length||0,
+  records:inventory.snapshots.reduce((n,s)=>n+s.record_count,0)};
 }
 async function reusableAudits(env,workspace,inventory){
  const latest=await env.GRCON_DOCUMENTS.get(ROOT+workspace+'/latest.json');
@@ -165,9 +204,17 @@ export async function migrationStatus(env,workspace,inventory){
  }));
  const stable=await sha256(canonical(inventory))===grant.inventoryHash;
  const reused=(grant.completed||[]).reduce((n,s)=>n+s.validatedRecords,0);
- return {started:true,id,createdAt:grant.createdAt,records:grant.records||grant.lanes.flatMap(l=>l.snapshots).reduce((n,s)=>n+s.record_count,0),reusedAuditRecords:reused,completedSnapshots:grant.completed||[],
+ const receipts=[...(grant.completed||[]),...reports.flatMap(r=>r.snapshots||[])];
+ const expected=new Map(inventory.snapshots.map(s=>[s.id,s.record_count])),verified=new Set();
+ for(const proof of receipts){
+  if(expected.has(proof.id)&&!verified.has(proof.id)&&proof.fullAudit===true&&proof.validatedRecords===expected.get(proof.id)&&proof.count===expected.get(proof.id)&&hex(proof.checksum)&&hex(proof.manifestHash))verified.add(proof.id);
+ }
+ const pendingSnapshots=inventory.snapshots.filter(s=>!verified.has(s.id)).length;
+ const waveFinished=reports.every(r=>r.status==='complete');
+ return {started:true,id,wave:grant.wave||0,createdAt:grant.createdAt,records:grant.records||grant.lanes.flatMap(l=>l.snapshots).reduce((n,s)=>n+s.record_count,0),reusedAuditRecords:reused,completedSnapshots:grant.completed||[],
   copied:reused+reports.reduce((n,r)=>n+(r.copied||0),0),validated:reused+reports.reduce((n,r)=>n+(r.validated||0),0),
-  inventoryStable:stable,complete:stable&&reports.every(r=>r.status==='complete'),reports};
+  pendingSnapshots,plannedNextWave:grant.deferred?.length||0,nextWaveReady:stable&&waveFinished&&pendingSnapshots>0,
+  inventoryStable:stable,complete:stable&&waveFinished&&pendingSnapshots===0,reports};
 }
 async function hmacKey(env){return crypto.subtle.importKey('raw',new TextEncoder().encode('grcon-sigem-job-v1\n'+env.SUPABASE_SECRET_KEY),{name:'HMAC',hash:'SHA-256'},false,['sign','verify']);}
 export async function signedJobRequest(env,input,at=Date.now()){

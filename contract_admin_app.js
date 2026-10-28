@@ -221,13 +221,16 @@
           const job=await api("background-status");if(!job.started)return;
           state.migrationReport={...job,workspace,cutoverReady:false,cleanupAllowed:false,officialSource:"supabase"};
           const failed=(job.reports||[]).find(lane=>lane.status==="failed");
-          backgroundProgress.textContent=job.complete?`Cópia e auditoria integral concluídas: ${job.validated.toLocaleString("pt-BR")} registros. A fonte oficial permanece no Supabase; restauração e homologação ainda são necessárias.`:
+          const next=job.nextWaveReady===true;
+          backgroundProgress.textContent=job.complete?`Cópia e auditoria integral concluídas: ${Number(job.validated||0).toLocaleString("pt-BR")} registros. A fonte oficial permanece no Supabase; restauração e homologação ainda são necessárias.`:
+            next?`Etapa ${Number(job.wave||0)+1} auditada. Ainda faltam ${Number(job.pendingSnapshots||0).toLocaleString("pt-BR")} versões no Turso. Clique em Iniciar próxima etapa após conferir a franquia gratuita de Workflows.`:
             `Cópia em segundo plano: ${Number(job.copied||0).toLocaleString("pt-BR")} de ${Number(job.records||0).toLocaleString("pt-BR")} registros; auditoria integral: ${Number(job.validated||0).toLocaleString("pt-BR")}. `+
             (!job.inventoryStable?"O inventário mudou; reconcilie as versões antes da homologação. ":"")+
             (failed?"Execução interrompida: "+failed.error+". Os lotes foram preservados.":"Pode sair desta tela; o servidor continua o processamento.");
-          backgroundButton.disabled=job.complete||!failed;
+          backgroundButton.textContent=next?"Iniciar próxima etapa":"Copiar em segundo plano";
+          backgroundButton.disabled=job.complete||(!failed&&!next);
           host.querySelector("[data-storage-copy]").disabled=!failed;
-          if(!job.complete&&!failed)root.setTimeout(()=>void monitor(),10000);
+          if(!job.complete&&!failed&&!next)root.setTimeout(()=>void monitor(),10000);
         }catch(error){if(valid())backgroundProgress.textContent="Não foi possível atualizar o progresso. A execução do servidor independe desta tela.";}
       };
       backgroundButton.addEventListener("click",async()=>{

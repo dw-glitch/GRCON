@@ -33,6 +33,17 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   const denied=await M.handleJobPage(new Request(request.url,{method:'POST',body:'{}'}),env);assert.equal(denied.status,401);
   const plan=M.planLanes(Array.from({length:36},(_,i)=>({...source,id:uuid(20+i),record_count:23408})));
   assert.equal(plan.length,3);assert.ok(plan.every(l=>l.steps<=1000));assert.ok(plan.reduce((n,l)=>n+l.steps,0)<=2700);
+  // Regression: 39 snapshots exceed the Free Workflow 2700-step safety cap.
+  const grown=Array.from({length:39},(_,i)=>({...source,id:uuid(100+i),record_count:25000}));
+  assert.throws(()=>M.planLanes(grown),/SIGEM_JOB_STEP_LIMIT/);
+  const firstWave=M.planWave(grown);
+  assert.ok(firstWave.lanes.length>0&&firstWave.deferred.length>0,'oversized history must be split');
+  assert.ok(firstWave.lanes.every(l=>l.steps<=1000));
+  assert.ok(firstWave.lanes.reduce((n,l)=>n+l.steps,0)<=2700);
+  const nextWave=M.planWave(grown.filter(s=>firstWave.deferred.includes(s.id)));
+  assert.equal(nextWave.deferred.length,0,'deferred versions must fit a later wave');
+  assert.equal(firstWave.lanes.flatMap(l=>l.snapshots).length+nextWave.lanes.flatMap(l=>l.snapshots).length,grown.length);
+
   await assert.rejects(M.startMigration(env,uuid(1),uuid(9),{...inventory,pendingSnapshots:1}),/INVENTORY_NOT_READY/);
   await assert.rejects(M.startMigration({...env,GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'false'},uuid(1),uuid(9),inventory),/AUTHORIZATION_REQUIRED/);
   const started=await M.startMigration(env,uuid(1),uuid(9),inventory);
@@ -50,6 +61,16 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   let state=await M.migrationStatus(env,uuid(1),inventory);assert.equal(state.complete,false);assert.equal(state.reports[0].status,'failed');
   corrupt=false;assert.equal((await M.runMigration(env,params,step,invoke)).complete,true);
   state=await M.migrationStatus(env,uuid(1),inventory);assert.equal(state.complete,true);assert.equal(state.validated,2501);assert.equal(state.copied,2501);
+  // A complete Workflow without source receipts is NOT a complete migration.
+  const completedKey='sigem-migration-jobs/v1/'+uuid(1)+'/'+started.id+'/lane-0.json';
+  const trustedReport=objects.get(completedKey);
+  objects.set(completedKey,JSON.stringify({...JSON.parse(trustedReport),snapshots:[]}));
+  const incomplete=await M.migrationStatus(env,uuid(1),inventory);
+  assert.equal(incomplete.complete,false);
+  assert.equal(incomplete.nextWaveReady,true);
+  assert.equal(incomplete.pendingSnapshots,1);
+  objects.set(completedKey,trustedReport);
+
   assert.equal(engine.prepare('select count(*) n from sigem_rows').get().n,2501,'replay cannot duplicate source rows');
   assert.equal(JSON.stringify(outputs).includes('SENTINEL_CORPORATE_ROW'),false,'workflow state must not contain corporate row payloads');
   assert.equal(JSON.stringify(outputs).includes('file_name'),false,'full snapshot metadata stays outside Workflow state');
