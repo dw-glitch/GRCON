@@ -9,8 +9,8 @@
 
   if (!Base) throw new Error("Core do Dashboard SIGEM × PW indisponível para aplicar o filtro de escopo.");
 
-  const SCOPE_VERSION = 6;
-  const SCOPE_LABEL = "GRCON N-1710 · 5290.00 / 22313 / C1O";
+  const SCOPE_VERSION = 8;
+  const SCOPE_LABEL = "ProjectWise · empresa CSG/QTM · coluna C";
   const N1710_SCOPE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const VALID_CLASSES = new Set(Base.SCOPE_CLASSES || Base.DOCUMENT_CLASSES || ["ET", "N-1710"]);
 
@@ -92,6 +92,7 @@
       stateChangedAt: text(item.stateChangedAt),
       emissionSequence: text(item.emissionSequence),
       sourceRow: Number(item.sourceRow) || 0,
+      company: text(item.company),
       reason: text(reason) || "fora_do_escopo_grcon",
     };
   }
@@ -102,11 +103,11 @@
     const reasons = {};
     (records || []).forEach((record) => {
       const normalized = normalizeRecord(record, "pw");
-      if (Base.isC1OCode(record && record.document) && normalized.documentKey) {
+      if (Base.isPwCompanyInScope(record) && normalized.documentKey) {
         accepted.push(normalized);
         return;
       }
-      const reason = normalized.documentKey ? "fora_do_escopo_c1o" : "codigo_vazio_ou_invalido";
+      const reason = normalized.documentKey ? "empresa_pw_fora_de_csg_qtm" : "codigo_vazio_ou_invalido";
       reasons[reason] = (reasons[reason] || 0) + 1;
       rejected.push(rejectedRecord(record, reason));
     });
@@ -129,7 +130,7 @@
       version: Math.max(Number(previous.version) || 0, SCOPE_VERSION),
       scopeVersion: SCOPE_VERSION,
       scopeLabel: SCOPE_LABEL,
-      scopeRule: "[tipo variável]-5290.00-22313-[3 caracteres]-C1O-[sequencial 3/4 dígitos]",
+      scopeRule: "Somente siglas CSG e QTM na coluna C da relação ProjectWise",
       scopeAcceptedRecordCount: records.length,
       scopeExcludedCount: audit.excludedCount,
       recordCount: records.length,
