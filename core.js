@@ -2987,7 +2987,9 @@
 
       if (kind === 'unknown') {
         decision = REVIEW;
-        reason = `O status “${currentStatus}” não permite decidir automaticamente se ${document}-${revision} está pronto para postagem. Confira a fonte SIGEM antes de incluir.`;
+        reason = statusInfo.unverified
+          ? `A revisão ${revision} possui informação de análise apenas na LD/Colar SIGEM, não confirmada na Consulta Geral do SIGEM. Não atribuir “Em análise” sem confirmação da combinação documento-revisão.`
+          : `O status “${currentStatus}” não permite decidir automaticamente se ${document}-${revision} está pronto para postagem. Confira a fonte SIGEM antes de incluir.`;
         if (statusInfo.pendingLegacyRevision) reason += ` A LD menciona a revisão ${statusInfo.pendingLegacyRevision} em análise, mas isso não foi confirmado na Consulta Geral.`;
         completed = true;
         break;
