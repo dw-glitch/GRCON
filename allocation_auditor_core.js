@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.0.0';
+ const VERSION='1.0.1';
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
  const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet]);
@@ -107,7 +107,7 @@
    if(destUnit&&codedUnit!==destUnit)add('UNIT-PATH-MISMATCH','databook','databook','A unidade do documento diverge da unidade explícita do caminho.',[{code:p.unit,path:r.databook}],{severity:'error',origin:'LD'});
    if(text(r.title)&&p.report==='RIR'&&!norm(r.title).startsWith('RELATORIO DE INSPECAO DE RECEBIMENTO'))add('RIR-TITLE-PRECEDENT','title','title','Confira a identificação de relatório de inspeção de recebimento no título.',[{title:r.title,report:p.report}],{severity:'suggestion',source:'Critério fiscal a confirmar'});
    if(p.report==='RIR'&&/BOBINA|CABO/.test(norm(p.tag+' '+r.title))){
-    const missing=[];if(!/\b(?:KV|VOLT|TENSAO)\b|\d\s*[Kk][Vv]/.test(norm(r.title)))missing.push('classe de tensão');if(!/\b(?:MM|MM2|MM²|SECAO|CONDUTOR|CONDUTORES|\d+C#)\b/.test(norm(r.title)))missing.push('configuração / seção');if(!/EPR|XLPE|PVC|FORMACAO|ISOLACAO|CONSTRUT/.test(norm(r.title)))missing.push('formação / características construtivas');
+    const missing=[];if(!/\b(?:KV|VOLT|TENSAO)\b|\d\s*[Kk][Vv]/.test(norm(r.title)))missing.push('classe de tensão');if(!/\d+(?:[.,]\d+)?\s*MM(?:2|²)?(?![A-Z])|\b(?:MM|MM2|MM²|SECAO|CONDUTOR|CONDUTORES|\d+C#)\b/.test(norm(r.title)))missing.push('configuração / seção');if(!/EPR|XLPE|PVC|FORMACAO|ISOLACAO|CONSTRUT/.test(norm(r.title)))missing.push('formação / características construtivas');
     if(missing.length)add('CABLE-DETAILS','title','title','Conferir '+missing.join(', ')+'. Não completar com características presumidas.',[{title:r.title,missing}],{severity:'suggestion',source:'Precedente fiscal para RIR de cabos'});
    }
   }else if(!/^\w+-\d{4}\.\d{2}-/.test(r.document))add('CODE-UNRECOGNIZED','code','document','Codificação não reconhecida pelo auditor. Requer conferência.',[{value:r.document}]);
