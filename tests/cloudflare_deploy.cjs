@@ -53,3 +53,4 @@ assert.match(vercel, /grcon-ten\.vercel\.app/);
 assert.match(vercel, /"outputDirectory"\s*:\s*"\."/);
 
 console.log("Cloudflare deploy: configuração, segurança, API parity e workflows validados.");
+require('./cloudflare_native_build.cjs');

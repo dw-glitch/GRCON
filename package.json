@@ -41,6 +41,7 @@
     "benchmark:conference": "node scripts/benchmark-conference.cjs",
     "test:sigem-turso": "node tests/sigem_turso.cjs && node tests/sigem_turso_routes.cjs && node tests/sigem_turso_cli.cjs && node tests/sigem_migration_job.cjs && node tests/sigem_recovery_drill.cjs && node tests/sigem_workflow_diagnosis.cjs && node tests/sigem_migration_recovery.cjs",
     "test:vault-performance": "node tests/vault_query_performance.cjs",
-    "test:allocation-auditor": "node --test tests/allocation_auditor.cjs && node tests/allocation_auditor_database.cjs && node tests/allocation_auditor_worker.cjs && node tests/allocation_auditor_api.cjs && node tests/allocation_auditor_dom.cjs && node tests/allocation_auditor_ld.cjs"
+    "test:allocation-auditor": "node --test tests/allocation_auditor.cjs && node tests/allocation_auditor_database.cjs && node tests/allocation_auditor_worker.cjs && node tests/allocation_auditor_api.cjs && node tests/allocation_auditor_dom.cjs && node tests/allocation_auditor_ld.cjs",
+    "postbuild": "node scripts/prepare-cloudflare-build.mjs"
   }
 }
