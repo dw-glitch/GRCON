@@ -30,7 +30,13 @@ self.addEventListener("message", (event) => {
     }
     if (payload.type === "model") {
       const Dashboard = self.GrconSigemPwDashboard;
-      const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || [], { requireN1710Ld: true, ldAvailable: Boolean(payload.ldAvailable), sigemAvailable: Boolean(payload.sigemAvailable), pwAvailable: Boolean(payload.pwAvailable) });
+      // Chamadas antigas sem metadados de validade LD preservam semântica histórica.
+      // A interface atual envia os quatro sinalizadores e exige validação N-1710.
+      const settings = Object.prototype.hasOwnProperty.call(payload, "ldAvailable")
+        ? { requireN1710Ld: true, ldAvailable: Boolean(payload.ldAvailable),
+            sigemAvailable: Boolean(payload.sigemAvailable), pwAvailable: Boolean(payload.pwAvailable) }
+        : undefined;
+      const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || [], settings);
       const allScope = {
         all: Dashboard.aggregateModel(model, {}, { revisionScope: "all" }),
         ET: Dashboard.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
