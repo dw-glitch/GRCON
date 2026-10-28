@@ -1083,17 +1083,18 @@
     const pwAll = scopeRevisionMap(pwSource, revisionScope, sigemAll);
     const sigem = filterMap(sigemAll, "sigem", filters);
     const pw = filterMap(pwAll, "pw", filters);
-    if (source.requireN1710Ld && source.pwAvailable === false) {
-      for (const row of lists.all) {
-        if (!row.inPw) row.pwRegistrationStatus = "BASE PW NÃO CARREGADA — INCONCLUSIVO";
-      }
-    }
     const sigemKeys = new Set(sigem.keys());
     const pwKeys = new Set(pw.keys());
     const emittedKeys = new Set([...pw].filter(([, document]) => document.emitted).map(([key]) => key));
     if (emittedKeys.size > pwKeys.size) throw new Error("Inconsistência matemática: PW emitido maior que PW cadastrado.");
 
     const lists = buildComparisonLists(sigem, pw, { revisionScope, pwDocuments: source.pwAll });
+    if (source.requireN1710Ld && source.pwAvailable === false) {
+      for (const row of lists.all) {
+        if (!row.inPw) row.pwRegistrationStatus = "BASE PW NÃO CARREGADA — INCONCLUSIVO";
+      }
+    }
+
     const auditRows = (records, kind, reason) => {
       const map = scopeRevisionMap(buildEntryMap(records || [], kind), revisionScope);
       return [...map.values()].filter((entry) => documentPasses(entry, kind, filters)).map((entry) => {
