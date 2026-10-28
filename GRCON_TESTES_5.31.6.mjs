@@ -16,6 +16,7 @@ const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
+const SharedQuery = require(path.join(root, "shared_sigem_query_core.js"));
 const XLSX = require(path.join(root, "xlsx.full.min.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const Requests = require(path.join(root, "requests_core.js"));
@@ -268,6 +269,7 @@ check("Em Workflow na revisão 0 se comporta como Em Análise e não abre a revi
   const index = Core.buildIndex([technical], [workflow]);
   const result = Core.triageOne({ id: "workflow-next-revision", name: `${ntDocument}.pdf` }, index, {
     now: new Date("2026-08-31T12:00:00.000Z"),
+    sigemQueryContext: SharedQuery.context({ records: [{ document: ntDocument, revision: "0", status: "Em Workflow" }] }),
   });
 
   assert.equal(result.decision, Core.DISCARD);
@@ -292,7 +294,7 @@ check("Em Workflow interrompe a progressão de revisões como Em Análise", () =
   const result = Core.triageOne(
     { id: "workflow-sequence", name: `${ntDocument}.pdf` },
     Core.buildIndex([technical], history),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: ["0", "A"].map(revision => ({ document: ntDocument, revision, status: "Em Workflow" })) }) },
   );
 
   assert.equal(result.decision, Core.DISCARD);
