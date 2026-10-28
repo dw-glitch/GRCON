@@ -72,10 +72,10 @@ assert.throws(() => Core.parseLdMatrix([
 })();
 
 const csv = [
-  "NumeroDocumentoCliente;RevisaoCompleta;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão;datacriacao",
-  "CE-5290.00-22313-856-C1O-001;0;0;CE;Certificado;QUA;Qualidade;Superado;Não;01/09/2026",
-  "CE-5290.00-22313-856-C1O-001;A;A;CE;Certificado;QUA;Qualidade;Em Analise;Previsto;02/09/2026",
-  "DE-5290.00-22313-999-C1O-999;0;0;DE;Desenho;PRJ;Projeto;Superado;Sim;03/09/2026",
+  "NumeroDocumentoCliente;RevisaoCompleta;Sigla da Empresa;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão;datacriacao",
+  "CE-5290.00-22313-856-C1O-001;0;CSG;0;CE;Certificado;QUA;Qualidade;Superado;Não;01/09/2026",
+  "CE-5290.00-22313-856-C1O-001;A;CSG;A;CE;Certificado;QUA;Qualidade;Em Analise;Previsto;02/09/2026",
+  "DE-5290.00-22313-999-C1O-999;0;CSG;0;DE;Desenho;PRJ;Projeto;Superado;Sim;03/09/2026",
   `${pwEt};0;0;RIR;Relatório;INS;Instrumentação;Liberado;Sim;04/09/2026`,
 ].join("\n");
 const parsed = Core.parsePwCsv(csv, { fileName: "pw.csv", importedAt: "2026-09-13T10:00:00Z" });
@@ -105,7 +105,7 @@ assert.strictEqual(result.lists.toRegisterPw[0].document, "PR-5290.00-22313-122-
 assert.strictEqual(result.lists.pwNotEmitted[0].revision, "A");
 assert.ok(result.lists.all.some((row) => row.document.includes("999-C1O-999")), "N-1710 fora da LD deve continuar na comparação");
 assert.strictEqual(Core.aggregateModel(model, { documentClass: "ET" }).summary.sigem, 1);
-assert.equal(Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0").records.length, 1, "estado e emissão são opcionais para comprovar cadastro");
+assert.equal(Core.parsePwCsv("NumeroDocumentoCliente;Revisao;Sigla da Empresa\nABC;0;CSG").records.length, 1, "estado e emissão são opcionais para comprovar cadastro");
 
 (function dashboardRevisionScopesAreExplicitAndAuditable() {
   const doc = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
@@ -119,11 +119,11 @@ assert.equal(Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0").records.le
     { document: doc("300003"), revision: "0", status: "Postado", sourceRow: 99 },
   ];
   const pwRows = [
-    { document: doc("300001"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
-    { document: doc("300001"), revision: "A", state: "Liberado", lastEmission: "Sim" },
-    { document: doc("300002"), revision: "0", state: "Liberado", lastEmission: "Sim" },
-    { document: doc("300004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
-    { document: doc("300004"), revision: "B", state: "Liberado", lastEmission: "Sim" },
+    { document: doc("300001"), revision: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
+    { document: doc("300001"), revision: "A", state: "Liberado", lastEmission: "Sim", company: "CSG" },
+    { document: doc("300002"), revision: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
+    { document: doc("300004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
+    { document: doc("300004"), revision: "B", state: "Liberado", lastEmission: "Sim", company: "CSG" },
   ];
   const scopedModel = Core.createModel(sigemRows, pwRows);
   const revision0 = Core.aggregateModel(scopedModel, {}, { revisionScope: "revision0" });
@@ -154,10 +154,10 @@ assert.equal(Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0").records.le
     revision: "0",
     status: "Postado",
   }));
-  const pwRows = sigemRows.map((row) => ({ document: row.document, revision: "0", state: "Cadastrado", lastEmission: "Previsto" }));
+  const pwRows = sigemRows.map((row) => ({ document: row.document, revision: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" }));
   for (let index = 0; index < 500; index += 1) {
     sigemRows.push({ ...sigemRows[index], revision: "A" });
-    pwRows.push({ ...pwRows[index], revision: "A", lastEmission: "Sim" });
+    pwRows.push({ ...pwRows[index], revision: "A", lastEmission: "Sim", company: "CSG" });
   }
   const started = Date.now();
   const volumeModel = Core.createModel(sigemRows, pwRows);
@@ -174,10 +174,10 @@ assert.equal(Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0").records.le
   const et = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
   const sigemRows = ["000001", "000002", "000003"].map((id) => ({ document: et(id), revision: "0", status: "Postado" }));
   const pwRows = [
-    { document: et("000002"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
-    { document: et("000003"), revision: "0", state: "Liberado", lastEmission: "Sim" },
-    { document: et("000004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
-    { document: et("000005"), revision: "0", state: "Liberado", lastEmission: "Não" },
+    { document: et("000002"), revision: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
+    { document: et("000003"), revision: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" },
+    { document: et("000004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
+    { document: et("000005"), revision: "0", state: "Liberado", lastEmission: "Não", company: "CSG" },
   ];
   const classified = Core.aggregate(sigemRows, pwRows);
   assert.equal(classified.summary.sigemOnly, 1);
@@ -200,9 +200,9 @@ assert.equal(Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0").records.le
     { document: et("100002"), revision: "0", status: "Em Análise" },
   ];
   const pwRows = [
-    { document: et("100001"), revision: "", state: "Cadastrado", lastEmission: "Previsto" },
-    { document: et("100002"), revision: "Sem revisão", state: "Liberado", lastEmission: "Sim" },
-    { document: et("100003"), revision: "Não informada", state: "Cadastrado", lastEmission: "Previsto" },
+    { document: et("100001"), revision: "", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
+    { document: et("100002"), revision: "Sem revisão", state: "Liberado", lastEmission: "Sim", company: "CSG" },
+    { document: et("100003"), revision: "Não informada", state: "Cadastrado", lastEmission: "Previsto", company: "CSG" },
   ];
   const classified = Core.aggregate(sigemRows, pwRows);
   assert.equal(classified.summary.bothNotEmitted, 1, "código presente no SIGEM não pode ficar em Só PW por falta de revisão");
