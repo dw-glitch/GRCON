@@ -5,6 +5,8 @@ import {fileURLToPath} from 'node:url';
 // Only that environment needs this automatic packaging; other build providers
 // retain their existing build/output contract.
 if (process.env.WORKERS_CI === '1') {
+  const sha = process.env.WORKERS_CI_COMMIT_SHA || '';
+  console.log('Workers Builds: iniciando empacotamento de dist-cloudflare; commit ' + (/^[a-f0-9]{40}$/i.test(sha) ? sha : 'não informado') + '.');
   const root = fileURLToPath(new URL('../', import.meta.url));
   for (const script of ['build-cloudflare-package.mjs', 'verify-cloudflare-package.mjs']) {
     const result = spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url))], {
@@ -15,4 +17,5 @@ if (process.env.WORKERS_CI === '1') {
       process.exit(result.status || 1);
     }
   }
+  console.log('Workers Builds: dist-cloudflare gerado e validado para publicação.');
 }

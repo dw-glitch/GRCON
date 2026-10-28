@@ -21,7 +21,20 @@ try {
   assert.notEqual(failed.status,0);
   assert.match(failed.stderr,/Diretório obrigatório ausente: assets/);
   assert.match(failed.stderr,/Deploy deve ser interrompido/);
+  const fixture = path.join(temp,'package.json');
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const npmOptions = {cwd:temp,env:{...env,WORKERS_CI:'1',NPM_CONFIG_IGNORE_SCRIPTS:'true'},encoding:'utf8',shell:process.platform==='win32'};
+  fs.rmSync(path.join(temp,'dist-cloudflare'),{recursive:true,force:true});
+  fs.writeFileSync(fixture,JSON.stringify({scripts:{build:'node -e "process.exit(0)"',postbuild:'node scripts/prepare-cloudflare-build.mjs'}}));
+  const skippedHook=spawnSync(npm,['--ignore-scripts','run','build'],npmOptions);
+  assert.equal(skippedHook.status,0,skippedHook.stderr);
+  assert.equal(fs.existsSync(path.join(temp,'dist-cloudflare')),false,'Reproduce successful build with ignored postbuild and missing assets');
+  fs.writeFileSync(fixture,JSON.stringify({scripts:{build:'node scripts/prepare-cloudflare-build.mjs'}}));
+  const direct=spawnSync(npm,['--ignore-scripts','run','build'],npmOptions);
+  assert.notEqual(direct.status,0,'Direct packaging failure must fail the build even with ignore-scripts');
+  assert.match(direct.stderr,/Diretório obrigatório ausente: assets/);
   const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-  assert.equal(pkg.scripts.postbuild,'node scripts/prepare-cloudflare-build.mjs','npm run build must invoke the lifecycle in the native build');
-  console.log('Cloudflare native build: other providers unchanged; real packaging failure stops build.');
+  assert.match(pkg.scripts.build,/&& node scripts\/prepare-cloudflare-build\.mjs$/,'Packaging must be called directly by the build command');
+  assert.equal(pkg.scripts.postbuild,undefined,'Do not rely on a lifecycle skipped by ignore-scripts');
+  console.log('Cloudflare native build: ignored postbuild reproduced; direct packaging fails safely with ignore-scripts; other providers unchanged.');
 } finally {fs.rmSync(temp,{recursive:true,force:true});}

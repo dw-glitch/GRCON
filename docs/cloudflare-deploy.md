@@ -17,11 +17,13 @@ No painel de `grcon-cloudflare`, os comandos existentes podem permanecer:
 - Build: `npm run build`
 - Deploy: `npx wrangler deploy`
 
-O lifecycle `postbuild` detecta `WORKERS_CI=1`, disponibilizado pelo Workers Builds, e executa o empacotamento e a verificação completa de `dist-cloudflare/` antes de permitir o deploy. Fora desse ambiente, o lifecycle não gera nem altera esse pacote; os workflows existentes continuam a empacotar explicitamente. Qualquer falha no empacotamento/validação interrompe o build.
+O comando `build` chama diretamente `scripts/prepare-cloudflare-build.mjs`. O script detecta `WORKERS_CI=1`, disponibilizado pelo Workers Builds, e executa o empacotamento e a verificação completa de `dist-cloudflare/` antes de permitir o deploy. Não depende de lifecycle `postbuild`, que pode ser omitido com `ignore-scripts`. Fora desse ambiente, o script não gera nem altera esse pacote; os workflows existentes continuam a empacotar explicitamente. Qualquer falha no empacotamento/validação interrompe o build.
 
 `WORKERS_CI_COMMIT_SHA` e `WORKERS_CI_BUILD_UUID` identificam a versão publicada no `deployment-meta.json`; os overrides explícitos e as variáveis do GitHub continuam aceitos. O pacote não é commitado. Não alterar `assets.directory` para `react-dist`: o GRCON também precisa de arquivos legados, Workers, catálogos e demais assets.
 
 O log de 28/10/2026 às 10:06 UTC comprovou que o build React terminou, mas faltou o empacotamento: `assets.directory` apontava para `dist-cloudflare` inexistente. Esse erro antecede a publicação e não comprova falha de token ou existência/ausência de bucket.
+
+O log posterior das 10:14 UTC voltou a mostrar a ausência de dist-cloudflare e não contém a execução de postbuild. O commit desse build não aparece no trecho fornecido. A revisão passa a executar o empacotamento dentro do comando principal e o teste de regressão reproduz npm com ignore-scripts, sem presumir qual configuração ou commit foi usado no painel. Se for necessário configurar explicitamente um build anterior, o comando completo é `npm run build && npm run build:cloudflare && npm run verify:cloudflare`. Selecione o commit mais recente da main em vez de reutilizar uma revisão anterior.
 
 ### Verificação local e GitHub Actions
 
