@@ -19,7 +19,14 @@ async function readFile(file){
 const safe=v=>typeof v==='string'&&/^[\s]*[=+\-@\t\r]/.test(v)?"'"+v:v;
 function sheet(book,name,rows){const s=XLSX.utils.aoa_to_sheet(rows.map(row=>row.map(safe)));s['!cols']=rows[0].map(()=>({wch:26}));XLSX.utils.book_append_sheet(book,s,name);}
 async function operation(op,input){
- if(op==='inspect'){const {book}=await readFile(input.file);return book.SheetNames.map(name=>({name,range:book.Sheets[name]['!ref']||''}));}
+ if(op==='inspect'){const {book}=await readFile(input.file);return book.SheetNames.map(name=>{
+  const ws=book.Sheets[name],range=ws['!ref']||'';
+  if(!range)return {name,range,documentCount:0,model:'unknown'};
+  const dimensions=XLSX.utils.decode_range(range);
+  const sample=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,range:{s:{r:0,c:0},e:{r:Math.min(240,dimensions.e.r),c:Math.min(60,dimensions.e.c)}}});
+  try{const detected=C.parseRows(sample,{});return {name,range,documentCount:detected.documentCount,model:detected.model,headerRow:detected.headerRow};}
+  catch(e){return {name,range,documentCount:0,model:'unknown',warning:e.message||String(e)};}
+ });}
  if(op==='parse'){const {book,bytes}=await readFile(input.file);if(!book.Sheets[input.sheet])throw Error('Selecione a aba de origem.');const range=book.Sheets[input.sheet]['!ref'];if(range){const r=XLSX.utils.decode_range(range);if(r.e.r>100000||r.e.c>200)throw Error('Planilha acima dos limites de linhas ou colunas.');}
   const sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');
   return {...C.parseRows(XLSX.utils.sheet_to_json(book.Sheets[input.sheet],{header:1,defval:'',raw:true}),{contract:input.contract,sourceFile:input.file.name,sourceSheet:input.sheet,sourceHash:sha,allocation:input.allocation||''}),sha256:sha};
