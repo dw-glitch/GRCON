@@ -156,7 +156,7 @@
       const differences=e.levels.map((expected,i)=>({index:i,expected:text(expected),actual:text(r.levels[i])})).filter(x=>x.expected&&x.actual!==x.expected);
       if(differences.length){
        add('EAP-LEVEL-MISMATCH','hierarchy','levels','Os níveis disponíveis na EAP não coincidem com a alocação. Níveis adicionais sem referência na base não foram considerados erro.',[{requested:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,differences,source:e.source,version:context.versions?.eap}],{severity:context.homologated?.eap?'error':'pending'});
-       if(context.homologated?.eap&&r.officialAllocation)for(const x of differences)if(x.index<6)recommendations.push({field:'N'+(x.index+1),before:x.actual,after:x.expected,justification:'Nível existente na EAP aplicável à disciplina do Workflow. Confirmar a evidência antes de aprovar.',evidence:[JSON.stringify({code:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,version:context.versions?.eap,source:e.source})],confidence:'EAP homologada',humanReview:true});
+       if(r.officialAllocation)for(const x of differences)if(x.index<6)recommendations.push({field:'N'+(x.index+1),before:x.actual,after:x.expected,justification:'Nível existente na EAP aplicável à disciplina do Workflow. Confirmar a evidência antes de aprovar.',evidence:[JSON.stringify({code:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,version:context.versions?.eap,source:e.source})],confidence:context.homologated?.eap?'EAP homologada':'Base EAP ativa; homologação pendente',humanReview:true});
       }
     }
    }
