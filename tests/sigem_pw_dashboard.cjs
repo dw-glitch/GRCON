@@ -76,7 +76,7 @@ const csv = [
   "CE-5290.00-22313-856-C1O-001;0;CSG;0;CE;Certificado;QUA;Qualidade;Superado;Não;01/09/2026",
   "CE-5290.00-22313-856-C1O-001;A;CSG;A;CE;Certificado;QUA;Qualidade;Em Analise;Previsto;02/09/2026",
   "DE-5290.00-22313-999-C1O-999;0;CSG;0;DE;Desenho;PRJ;Projeto;Superado;Sim;03/09/2026",
-  `${pwEt};0;0;RIR;Relatório;INS;Instrumentação;Liberado;Sim;04/09/2026`,
+  `${pwEt};0;CSG;0;RIR;Relatório;INS;Instrumentação;Liberado;Sim;04/09/2026`,
 ].join("\n");
 const parsed = Core.parsePwCsv(csv, { fileName: "pw.csv", importedAt: "2026-09-13T10:00:00Z" });
 assert.strictEqual(parsed.meta.recordCount, 4, "parser preserva a base; escopo LD é aplicado no modelo");
