@@ -22,7 +22,7 @@ assert.equal(prepared.meta.uniqueDocumentCount,6);
 assert.equal(prepared.meta.validRevisionRecordCount,7);
 assert.equal(prepared.meta.duplicateRevisionCount,2);
 assert.equal(Core.parsePwCsv('NumeroDocumentoCliente;Revisao;Sigla da Empresa\nCODIGO-SEM-OUTRAS-COLUNAS;0;QTM').records.length,1);
-assert.throws(()=>Core.parsePwCsv('Status\nPrevisto'),/NumeroDocumentoCliente/);
+assert.throws(()=>Core.parsePwCsv('Status;Revisao;Sigla da Empresa\nPrevisto;0;CSG'),/NumeroDocumentoCliente/);
 const sigem=[...statuses.map((_,i)=>({document:et(i+1),revision:'0',status:'Postado'})),{document:'DOCUMENTO-EXTERNO',revision:'0'}, {document:et(99),revision:'0'}];
 const model=Core.createModel(sigem,prepared.records,[]);
 assert.equal(model.comparisonScope.pwOutOfScope,0,'a base PW saneada contém somente CSG/QTM');
