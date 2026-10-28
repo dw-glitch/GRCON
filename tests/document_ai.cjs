@@ -35,14 +35,15 @@ const {PGlite}=require('@electric-sql/pglite');
  const {verifyGithubToken}=await import('../cloudflare/teams-github.mjs');
  const pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
  const jwk={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'ai-test',use:'sig',alg:'RS256'},clock=Math.floor(Date.now()/1000);
- const cfg={repository:'dw-glitch/GRCON',repositoryId:'1322072089',ownerId:'202873892',audience:'grcon-document-ai-probe',visibility:'private',workflow:'dw-glitch/GRCON/.github/workflows/deploy-cloudflare.yml@refs/heads/main',allowedEvents:['push','workflow_dispatch']};
+ const cfg={repository:'dw-glitch/GRCON',repositoryId:'1322072089',ownerId:'202873892',audience:'grcon-document-ai-probe',visibility:'public',workflow:'dw-glitch/GRCON/.github/workflows/deploy-cloudflare.yml@refs/heads/main',allowedEvents:['push','workflow_dispatch']};
  const claims={iss:'https://token.actions.githubusercontent.com',aud:cfg.audience,sub:'repo:dw-glitch/GRCON:ref:refs/heads/main',iat:clock,nbf:clock-1,exp:clock+300,repository:cfg.repository,repository_id:cfg.repositoryId,repository_owner_id:cfg.ownerId,repository_visibility:cfg.visibility,actor_id:cfg.ownerId,ref:'refs/heads/main',workflow_ref:cfg.workflow,event_name:'push'};
  const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
  const sign=async change=>{const plain=b64({alg:'RS256',typ:'JWT',kid:jwk.kid})+'.'+b64({...claims,...change});return plain+'.'+Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,Buffer.from(plain))).toString('base64url');};
  const verification={useCache:false,fetchImpl:async(url,options)=>{if(options.redirect==='error')throw TypeError('Workers does not support redirect:error');assert.equal(options.redirect,'manual');return Response.json({keys:[jwk]});}};
  assert.equal((await verifyGithubToken(await sign({}),cfg,verification)).event_name,'push');
+ assert.equal((await verifyGithubToken(await sign({event_name:'workflow_dispatch'}),cfg,verification)).event_name,'workflow_dispatch');
  await assert.rejects(verifyGithubToken(await sign({}),cfg,{useCache:false,fetchImpl:async()=>new Response(null,{status:302,headers:{location:'https://untrusted.test'}})}),/OIDC_KEYS_UNAVAILABLE/);
- for(const change of [{repository_visibility:'public'},{aud:'other'},{actor_id:'other'},{repository_id:'other'},{ref:'refs/heads/other'},{workflow_ref:'other'},{event_name:'pull_request'}])await assert.rejects(verifyGithubToken(await sign(change),cfg,verification));
+ for(const change of [{repository_visibility:'private'},{aud:'other'},{actor_id:'other'},{repository_id:'other'},{repository_owner_id:'other'},{repository:'attacker/GRCON'},{sub:'repo:attacker/GRCON:ref:refs/heads/main'},{ref:'refs/heads/other'},{workflow_ref:'other'},{event_name:'pull_request'}])await assert.rejects(verifyGithubToken(await sign(change),cfg,verification));
  const worker=(await import('../cloudflare/worker-entry.mjs')).default,originalFetch=global.fetch;let modelCalls=0,reserved=0,allow=true,rev='v1';
  // Exercise the actual Worker probe configuration, not only a copied verifier config.
  let probeBudgetCalls=0;
@@ -57,8 +58,13 @@ const {PGlite}=require('@electric-sql/pglite');
   const accepted=await worker.fetch(probeRequest(await sign({})),probeEnv,{});
   assert.equal(accepted.status,200);assert.deepEqual(await accepted.json(),{ok:true,skipped:true,reason:'daily_limit'});
   assert.equal(probeBudgetCalls,1);
-  const publicToken=await worker.fetch(probeRequest(await sign({repository_visibility:'public'})),probeEnv,{});
-  assert.equal(publicToken.status,403);assert.equal(probeBudgetCalls,1,'wrong source cannot reach the service budget');
+  const manual=await worker.fetch(probeRequest(await sign({event_name:'workflow_dispatch'})),probeEnv,{});
+  assert.equal(manual.status,200);assert.deepEqual(await manual.json(),{ok:true,skipped:true,reason:'daily_limit'});
+  assert.equal(probeBudgetCalls,2);
+  for(const change of [{repository_visibility:'private'},{repository:'attacker/GRCON'},{actor_id:'other'},{repository_owner_id:'other'},{ref:'refs/heads/other'},{workflow_ref:'other'},{event_name:'pull_request'}]){
+   const rejected=await worker.fetch(probeRequest(await sign(change)),probeEnv,{});
+   assert.equal(rejected.status,403);assert.equal(probeBudgetCalls,2,'wrong source cannot reach the service budget');
+  }
  }finally{global.fetch=originalFetch;}
  const env={SUPABASE_URL:'https://qa.test',SUPABASE_SECRET_KEY:'sb_secret_qa',GRCON_DOCUMENT_AI_ENABLED:'true',AI:{run:async(...args)=>{modelCalls++;return fixture.run(...args);}}};
  const view={...data,pages:Object.fromEntries(['sigem','pw','history','vault','requests'].map(k=>[k,{revision:'v1',after:0}]))};
