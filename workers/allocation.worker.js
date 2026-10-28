@@ -124,6 +124,15 @@ async function exportGroup({results,meta,template}){
 self.onmessage=async({data})=>{const {id,operation,input}=data;try{
  let result;
  if(operation==='parse')result=await parseFile(input.kind,input.file);
+ else if(operation==='audit-revise-ld'){
+  const original=read(new Uint8Array(await input.file.arrayBuffer()));
+  for(const row of input.rows){
+   const sheet=original.Sheets[row.sheet];if(!sheet)throw Error('A aba de origem não existe na LD selecionada.');
+   const values=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false})[Number(row.row)-1]||[];
+   if(!values.some(value=>String(value).trim()===row.document))throw Error('O código exato não está na linha indicada. Reimporte a LD.');
+  }
+  result=await self.RECONTitleWriter.apply(input.file,input.rows,XLSX,JSZip);
+ }
  else if(operation==='bundled')result=await bundled(input.kind);
  else if(operation==='route-catalog')result=Engine.resolveDatabookCatalog(input.rows,input.config);
  else if(operation==='analyze')result=Engine.prepare(input);
@@ -136,3 +145,4 @@ self.onmessage=async({data})=>{const {id,operation,input}=data;try{
  }else throw Error('Operação desconhecida.');
  self.postMessage({id,result});
 }catch(error){self.postMessage({id,error:error.message||String(error)});}};
+

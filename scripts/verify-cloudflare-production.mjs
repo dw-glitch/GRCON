@@ -59,6 +59,7 @@ verifiedAssets.push('background_jobs_app.js','background-jobs.css','client_diagn
 verifiedAssets.push('docx-pdf.css','docx_pdf_layout.js','docx_pdf_core.js','docx_pdf_app.js','assets/vendor/pdfjs/pdf.min.mjs','assets/vendor/pdfjs/pdf.worker.min.mjs');
 verifiedAssets.push('shared_pw_query_app.js','allocation_generator_core.js','allocation_ld_export.js','allocation-generator.css','workers/allocation.worker.js','react-dist/allocation-app.js','vendor/recon/allocation_core.js','vendor/recon/allocation_workbook.js');
 verifiedAssets.push('document_explanations.js','posting_conference_bootstrap.js');
+verifiedAssets.push('allocation_auditor_core.js','allocation-auditor.css','workers/allocation-auditor.worker.js','react-dist/allocation-auditor-app.js');
 verifiedAssets.push('sigem_pw_scope_fix.js','sigem_pw_revision_core.js','sigem_pw_readiness_core.js','sigem_pw_evolution_core.js','sigem_pw_history_core.js','sigem-pw-dashboard.css');
 verifiedAssets.push('egrdt_teams_trace_app.js','egrdt_teams_trace_core.js','history_report.js','grcon_reposting_report.js');
 verifiedAssets.push('document_task_queue.js','document_master_app.js','import_review.js','managerial_report.js','grcon_backup.js','productivity_center.js');
@@ -70,6 +71,8 @@ for (const path of verifiedAssets) {
 }
 const jobsAnonymous=await fetch(new URL('/api/background-jobs/list?workspace=00000000-0000-4000-8000-000000000001',base),{signal:AbortSignal.timeout(20000)});
 assert.equal(jobsAnonymous.status,401,'Tarefas devem exigir sessão.');
+const auditorAnonymous=await fetch(new URL('/api/document-vault/allocation-audit-ai',base),{method:'POST',headers:{'content-type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});
+assert.equal(auditorAnonymous.status,401,'Auditor semântico deve exigir sessão.');
 const githubAnonymous = await fetch(new URL('/api/egrdt-teams/github', base), {method:'POST',body:'{}',signal:AbortSignal.timeout(20000)});
 assert.equal(githubAnonymous.status,401,'Retorno GitHub deve exigir OIDC assinado.');
 console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, verifiedAssets, cofreConfigured: true, powerAutomateConfigured: health.powerAutomateConfigured, powerAutomateUrlValid: health.powerAutomateUrlValid, anonymousCatalogStatus: anonymous.status }));

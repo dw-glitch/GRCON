@@ -1,0 +1,54 @@
+{
+  "corpus": {
+    "events": 15441,
+    "documents": 10159,
+    "textResponses": 15031,
+    "rawCommentVariants": 436,
+    "normalizedGroups": 427,
+    "nonTextFiscalCells": 6,
+    "ldRecords": 28806,
+    "databookPaths": 314
+  },
+  "splits": {
+    "development": 9189,
+    "validation": 3069,
+    "holdout": 3183
+  },
+  "splitPolicy": "exact code + contract; all revisions/submissions in one group; unproven aliases require manual lineage review",
+  "technical": {
+    "records": 15441,
+    "milliseconds": 189,
+    "recordsPerSecond": 81706,
+    "failureCount": 0,
+    "summary": {
+      "total": 15441,
+      "errors": 30,
+      "pending": 15441,
+      "suggestions": 304,
+      "clear": 0
+    }
+  },
+  "quality": {
+    "precision": null,
+    "recall": null,
+    "falsePositiveCount": null,
+    "falseNegativeCount": null,
+    "criticalMisses": null,
+    "reason": "No independently annotated and frozen homologation corpus. Descriptive split and performance benchmark only; no reliability percentage claimed."
+  },
+  "limitations": [
+    "ET applicability to contract not independently confirmed",
+    "Official contractual EAP Annex III Appendix A unavailable",
+    "TAG references not supplied to this performance benchmark",
+    "Data Book routing/homologation and workflow applicability require live contract context"
+  ],
+  "validationStatus": "technical benchmark; NOT independent operational homologation",
+  "integrationSuites": [
+    "React DOM + real Worker",
+    "XLSX import/export and formula safety",
+    "Cloudflare API with controlled AI binding",
+    "PGlite permission/isolation/immutability/retry tests"
+  ],
+  "migrationStatus": "Applied to Supabase and privileges introspected; no operational datasets inserted",
+  "deploymentStatus": "Not published: Cloudflare session requires authentication; complete local static-asset validation blocked by unavailable upstream mascot sprite"
+}

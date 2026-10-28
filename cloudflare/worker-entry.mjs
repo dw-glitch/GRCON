@@ -5,6 +5,7 @@ import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
 import {generateExplanation,INTENTS,SOURCE_LABELS,evidenceFor,modelInput} from './document-ai.mjs';
 import {validateDecision,allocationPrompt,recommendAllocation,automaticContextKeys,validateAutomaticBatch} from './allocation-ai.mjs';
 import {prepareTitlePrompt,suggestTitle} from './title-ai.mjs';
+import {prepareAuditPrompt,analyzeAudit} from './allocation-audit-ai.mjs';
 import AllocationCore from '../allocation_generator_core.js';
 
 const PREFIX = "/api/document-vault/";
@@ -151,6 +152,18 @@ async function handleTitleAi(request,env){
  if(!slot.allowed)return apiError('Limite individual da IA atingido.',429,'AI_LIMIT');
  try{return json({ok:true,...await suggestTitle(env.AI,prepared)});}
  catch{return apiError('Não foi possível verificar a escolha da IA. Use a sugestão técnica.',503,'AI_UNAVAILABLE');}
+}
+async function handleAllocationAuditAi(request,env){
+ const user=await authenticatedUser(request,env),body=await aiBody(request,9000),workspace=workspaceFrom(request,body);
+ if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
+ const prepared=prepareAuditPrompt(body);
+ if(!aiEnabled(env))return apiError('IA indisponível. A auditoria por regras continua disponível.',503,'AI_NOT_CONFIGURED');
+ const budget=await rpc(env,'grcon_document_ai_budget',{operation:'status',target_workspace:workspace,actor_id:user.id});
+ if(!budget.available)return apiError('Limite da IA atingido. A revisão manual permanece disponível.',429,'AI_DAILY_LIMIT');
+ const slot=await rpc(env,'grcon_document_ai_budget',{operation:'reserve',target_workspace:workspace,actor_id:user.id});
+ if(!slot.allowed)return apiError('Limite individual da IA atingido.',429,'AI_LIMIT');
+ try{return json({ok:true,analysis:await analyzeAudit(env.AI,prepared)});}
+ catch{return apiError('Resposta da IA não verificável. Use as evidências e a revisão manual.',503,'AI_UNAVAILABLE');}
 }
 async function handleDocumentAi(request,env,probe=false){
  if(probe){
@@ -786,6 +799,7 @@ async function routeVault(request, env) {
   if(action==='allocation-confirm'&&request.method==='POST')return handleAllocation(request,env,'confirm');
   if(action==='allocation-ai'&&request.method==='POST')return handleAllocation(request,env,'recommend');
   if(action==='title-ai'&&request.method==='POST')return handleTitleAi(request,env);
+  if(action==='allocation-audit-ai'&&request.method==='POST')return handleAllocationAuditAi(request,env);
   if(action==='ai-probe'&&request.method==='POST')return handleDocumentAi(request,env,true);
   if(action==='ai-status'&&request.method==='GET')return handleDocumentAi(request,env);
   if(action==='ai-explain'&&request.method==='POST')return handleDocumentAi(request,env);
@@ -844,5 +858,6 @@ export default {
     }
   },
 };
+
 
 

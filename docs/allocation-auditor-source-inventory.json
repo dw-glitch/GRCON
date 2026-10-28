@@ -1,0 +1,532 @@
+{
+  "referenceDate": "2026-10-28",
+  "scope": "UHDT-D — classificação pelo contexto dos arquivos; aplicabilidade contratual ainda deve ser homologada",
+  "notes": [
+    "Rows/columns are worksheet bounds and may include formatting-only cells.",
+    "Original workbooks were read without writing to them.",
+    "Official EAP Annex III Appendix A was not located in the available search."
+  ],
+  "files": [
+    {
+      "name": "01.03 UHDT-D_ANEXO I - Apêndice 3 - Fornecimento de Bens Tagueados Rev.B 2 1.xlsx",
+      "sha256": "d7de493ac163143bce1ddbb50dd880cdf04fe1a48284ea91f03ba53b7aed43df",
+      "bytes": 428449,
+      "sheets": [
+        {
+          "name": "CAPA",
+          "rows": 74,
+          "columns": 87
+        },
+        {
+          "name": "Notas",
+          "rows": 15,
+          "columns": 6
+        },
+        {
+          "name": "Apêndice",
+          "rows": 5922,
+          "columns": 12
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0302-2026_15_09_2026.xlsx",
+      "sha256": "5b53a9c01c054abf922a81a9fcf9d7ab41a2745463576d03890fbad52dc48249",
+      "bytes": 34499,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 11,
+          "columns": 18
+        },
+        {
+          "name": "GERAL",
+          "rows": 551,
+          "columns": 20
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0304-2026_15_09_2026.xlsx",
+      "sha256": "756e5a530aefc675987d6085003d40f873c52f243a10be915117103e06f833f5",
+      "bytes": 18385,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 10,
+          "columns": 16
+        },
+        {
+          "name": "GERAL",
+          "rows": 126,
+          "columns": 17
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0305-2026_16_09_2026.xlsx",
+      "sha256": "998e54764762f1a7661cea81891d155b5bf8faed0d5934ffd15cce774f50946d",
+      "bytes": 39035,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 67,
+          "columns": 16
+        },
+        {
+          "name": "GERAL",
+          "rows": 551,
+          "columns": 20
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0306-2026_21_09_2026.xlsx",
+      "sha256": "76e89a161d829f8c408c46de4a5abe003cac7d82d974e17dd20271da1d394a22",
+      "bytes": 12664,
+      "sheets": [
+        {
+          "name": "GERAL",
+          "rows": 17,
+          "columns": 20
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0307-2026_16_09_2026.xlsx",
+      "sha256": "dea6a4fac0b3e1355404742dfd4e1cc0a26fdb3b5daba82bccafe82ced4082b6",
+      "bytes": 169855,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 384,
+          "columns": 16
+        },
+        {
+          "name": "GERAL",
+          "rows": 2300,
+          "columns": 17
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0309-2026_16_09_2026.xlsx",
+      "sha256": "38352ce19e97ea4520a287e967c799a36c7be723534a9153c08b88295fbbd9b6",
+      "bytes": 33209,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 3,
+          "columns": 16
+        },
+        {
+          "name": "GERAL",
+          "rows": 540,
+          "columns": 20
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0310-2026.xlsx",
+      "sha256": "96e46f02493a8aa7d16e866eed95e2be7df959ef7adbea423cd8add0c08f6749",
+      "bytes": 10403,
+      "sheets": [
+        {
+          "name": "GERAL",
+          "rows": 4,
+          "columns": 16
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0311-2026_23_09_2026.xlsx",
+      "sha256": "0cdb076bbb083bbe7ea853ca8c578ae632c72407acfa02b281529b21b9cb2011",
+      "bytes": 36583,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 23,
+          "columns": 20
+        },
+        {
+          "name": "GERAL",
+          "rows": 540,
+          "columns": 21
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0313-2026_23_09_2026.xlsx",
+      "sha256": "a48af7fd87b76e71500d8671a4eadd5e07a89476fb83d670ec171f1903ab2304",
+      "bytes": 38474,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 61,
+          "columns": 16
+        },
+        {
+          "name": "GERAL",
+          "rows": 540,
+          "columns": 21
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0314-2026_25_09_2026.xlsx",
+      "sha256": "1f0904f81d0f9f3ddbf06a0e0528ea67052bc17b0052a7fa806964b05d69f70d",
+      "bytes": 10320,
+      "sheets": [
+        {
+          "name": "GERAL",
+          "rows": 3,
+          "columns": 16
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0318-2026.xlsx",
+      "sha256": "33d519af41e93168dae922d21c4b8da0381de87268c3c9d1a1c8fb383ca40df7",
+      "bytes": 121601,
+      "sheets": [
+        {
+          "name": "GERAL",
+          "rows": 1917,
+          "columns": 16
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0353-2026_27_10_2026_CONF.xlsx",
+      "sha256": "f99fa2d0e1a0a62bd8e9bed908aa8b0044b9b02f17d89fe4a582c1c89f76e7d5",
+      "bytes": 32138,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 5,
+          "columns": 16
+        },
+        {
+          "name": "GERAL",
+          "rows": 526,
+          "columns": 17
+        }
+      ]
+    },
+    {
+      "name": "C1O-ALOC-CM-0369-2026_27_10_2026_CONF.xlsx",
+      "sha256": "97460ef4002d5cbffc4061af37c1843d0ee56a444b26bd01a6f3fe79107d5927",
+      "bytes": 36128,
+      "sheets": [
+        {
+          "name": "APROVADO",
+          "rows": 6,
+          "columns": 16
+        },
+        {
+          "name": "GERAL",
+          "rows": 526,
+          "columns": 17
+        }
+      ]
+    },
+    {
+      "name": "CENTRAL DE ALOCAÇÃO.xlsx",
+      "sha256": "897f44d6002bd68b6da9e9f7a7e1943598794dc3175945412e05226b88308ee0",
+      "bytes": 2809741,
+      "sheets": [
+        {
+          "name": "Central de alocação",
+          "rows": 15448,
+          "columns": 31
+        },
+        {
+          "name": "Base - Caminho das Pastas",
+          "rows": 381,
+          "columns": 6
+        },
+        {
+          "name": "Base - Doc previsto no projeto",
+          "rows": 40910,
+          "columns": 4
+        },
+        {
+          "name": "Planilha1",
+          "rows": 25,
+          "columns": 12
+        }
+      ]
+    },
+    {
+      "name": "Caminho Data book_Rev.E(1).xlsx",
+      "sha256": "794fbcfbe475c8c61e0b9fb7769fbee68093595aa70bf94d62ad8880d9a2c5b2",
+      "bytes": 204639,
+      "sheets": [
+        {
+          "name": "CAPA",
+          "rows": 58,
+          "columns": 52
+        },
+        {
+          "name": "ORIENTAÇÕES",
+          "rows": 47,
+          "columns": 52
+        },
+        {
+          "name": "CAMINHO DB_SIGEM_REV.E",
+          "rows": 356,
+          "columns": 9
+        },
+        {
+          "name": "DATA BOOK_C&M_BASE AN_VII-AP_B",
+          "rows": 298,
+          "columns": 6
+        },
+        {
+          "name": "REF_NR13_SPIE",
+          "rows": 40,
+          "columns": 6
+        },
+        {
+          "name": "ANÁLISE ET x SIGEM",
+          "rows": 78,
+          "columns": 8
+        }
+      ]
+    },
+    {
+      "name": "Caminho das Pastas - 260803[145100] UHDT-D(1).XLSX",
+      "sha256": "39c52e7972196bc48781f18fd58938e4bf07b57d13b3706a662a1eeb7a93d512",
+      "bytes": 22878,
+      "sheets": [
+        {
+          "name": "Sheet1",
+          "rows": 381,
+          "columns": 6
+        }
+      ]
+    },
+    {
+      "name": "ET-5290.00-22000-912-1LV-001 - DEFINIÇÃO DE CODIFICAÇÃO DE DOCUMENTOS - Rev. N(7).pdf",
+      "sha256": "7a987244a4b32c875b0ecb29cf4b76c72aba5fa0946742c77997f9aacf4530df",
+      "bytes": 830627
+    },
+    {
+      "name": "ET-5290.00-22000-912-1LV-001 - DEFINIÇÃO DE CODIFICAÇÃO DE DOCUMENTOS - Rev. P(8).pdf",
+      "sha256": "50301c58ce28de70fb050c47af3507b3d87c1c5eb0a8b7d0e2aede4c74af09ce",
+      "bytes": 685510
+    },
+    {
+      "name": "ET-5290.00-22000-912-1LV-001 - DEFINIÇÃO DE CODIFICAÇÃO DE DOCUMENTOS - Rev. Q (APROVADA)(2).pdf",
+      "sha256": "f21fe999a2dc00904c6aac38ce3af52fe357b3efc94345f21f152037a45f1248",
+      "bytes": 685727
+    },
+    {
+      "name": "ET-5290.00-22000-912-1LV-001 - DEFINIÇÃO DE CODIFICAÇÃO DE DOCUMENTOS - Rev. R (APROVADA).pdf",
+      "sha256": "048ed43b2290bba36cd65844b28c2909a666646e064ae22e3fd549fc2b231667",
+      "bytes": 682953
+    },
+    {
+      "name": "LD-5290.00-22313-91A-C1O-001_0001_E(20261027-192547).xlsx",
+      "sha256": "be40d4e38e2ad21447b9f57139f1e3be99c9013c347f531d449227e45593da20",
+      "bytes": 4517981,
+      "sheets": [
+        {
+          "name": "CAPA ",
+          "rows": 1011,
+          "columns": 31
+        },
+        {
+          "name": "N-1710",
+          "rows": 6046,
+          "columns": 16367
+        },
+        {
+          "name": "CV",
+          "rows": 198,
+          "columns": 21
+        },
+        {
+          "name": "RNC",
+          "rows": 41,
+          "columns": 26
+        },
+        {
+          "name": "Colar SIGEM",
+          "rows": 25481,
+          "columns": 18
+        },
+        {
+          "name": "T",
+          "rows": 195,
+          "columns": 15
+        },
+        {
+          "name": "G",
+          "rows": 1,
+          "columns": 1
+        }
+      ]
+    },
+    {
+      "name": "LD-5290.00-22313-91A-C1O-002_0001_B(5).xlsx",
+      "sha256": "48ee4e93cc254954e57e3dcd24d30e5667057503d52242437ae2da134e77b57d",
+      "bytes": 3142176,
+      "sheets": [
+        {
+          "name": "CAPA ",
+          "rows": 985,
+          "columns": 26
+        },
+        {
+          "name": "N-1710",
+          "rows": 684,
+          "columns": 17
+        },
+        {
+          "name": "N-1710 MOD",
+          "rows": 577,
+          "columns": 24
+        },
+        {
+          "name": "Colar SIGEM",
+          "rows": 24773,
+          "columns": 19
+        },
+        {
+          "name": "LEGENDA",
+          "rows": 1000,
+          "columns": 4
+        },
+        {
+          "name": "INDICADOR_DESENVOLVIMENTO",
+          "rows": 1000,
+          "columns": 5
+        },
+        {
+          "name": "INDICADOR_STATUS APROVAÇÃO",
+          "rows": 1000,
+          "columns": 2
+        }
+      ]
+    },
+    {
+      "name": "LD-5290.00-22313-91A-C1O-003_0001_0(5).xlsx",
+      "sha256": "670e1147095d5271b1cc49ab75195a88041f8fc1336bfe9364828dfe110271ed",
+      "bytes": 6184999,
+      "sheets": [
+        {
+          "name": "CAPA ",
+          "rows": 1028,
+          "columns": 31
+        },
+        {
+          "name": "ET",
+          "rows": 18396,
+          "columns": 21
+        },
+        {
+          "name": "Planilha1",
+          "rows": 5,
+          "columns": 4
+        },
+        {
+          "name": "Colar SIGEM",
+          "rows": 25481,
+          "columns": 18
+        },
+        {
+          "name": "T",
+          "rows": 163,
+          "columns": 15
+        },
+        {
+          "name": "G",
+          "rows": 1,
+          "columns": 1
+        }
+      ]
+    },
+    {
+      "name": "LD-5290.00-22313-91A-C1O-004_0001_A.xlsx",
+      "sha256": "555d5944e95eed0890196de6491e05637968cab2dd8719cdbc5ce054988d55f1",
+      "bytes": 3764923,
+      "sheets": [
+        {
+          "name": "CAPA ",
+          "rows": 990,
+          "columns": 30
+        },
+        {
+          "name": "ET",
+          "rows": 3386,
+          "columns": 21
+        },
+        {
+          "name": "Colar SIGEM",
+          "rows": 25481,
+          "columns": 18
+        },
+        {
+          "name": "T",
+          "rows": 163,
+          "columns": 15
+        },
+        {
+          "name": "G",
+          "rows": 1,
+          "columns": 1
+        }
+      ]
+    },
+    {
+      "name": "LD-5290.00-22313-91A-C1O-005_0001_0(6).xlsx",
+      "sha256": "6e26c117fc3ac3beb9c33f890030eeab1279790afd4aeac7f5470ea2e78c8037",
+      "bytes": 3928773,
+      "sheets": [
+        {
+          "name": "CAPA ",
+          "rows": 990,
+          "columns": 30
+        },
+        {
+          "name": "ET",
+          "rows": 352,
+          "columns": 21
+        },
+        {
+          "name": "Colar SIGEM",
+          "rows": 25481,
+          "columns": 18
+        },
+        {
+          "name": "T",
+          "rows": 163,
+          "columns": 15
+        },
+        {
+          "name": "G",
+          "rows": 1,
+          "columns": 1
+        }
+      ]
+    },
+    {
+      "name": "N-1710(8).pdf",
+      "sha256": "31416c63a48b3930560cac9765923d90e4480954abacd2ae8ef64ba6020973e1",
+      "bytes": 2226623
+    },
+    {
+      "name": "WORKFLOWS_UHDT-D - 260325(1).xlsx",
+      "sha256": "3e4576e77659ab668f30dd2dda6a24ac7d448967db99fec070160242897ec7d4",
+      "bytes": 46447,
+      "sheets": [
+        {
+          "name": "UHDT_D",
+          "rows": 35,
+          "columns": 1
+        }
+      ]
+    }
+  ]
+}
