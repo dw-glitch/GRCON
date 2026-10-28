@@ -2,7 +2,7 @@
 importScripts('../xlsx.full.min.js','../jszip.min.js',
  '../vendor/recon/document_title_standard.js','../vendor/recon/document_title_standard_r.js',
  '../vendor/recon/allocation_normative_catalogs.js','../vendor/recon/allocation_normative_rules.js',
- '../allocation_auditor_core.js');
+ '../allocation_auditor_core.js','../allocation_auditor_revision.js');
 const C=self.GrconAllocationAuditorCore;
 let context=null,prepared=null;
 const cache=new Map();
@@ -32,13 +32,15 @@ async function operation(op,input){
   if(cache.has(hash))return cache.get(hash);
   const result=C.auditRecord(r,context,prepared);cache.set(hash,result);if(cache.size>5000)cache.delete(cache.keys().next().value);return result;
  }));}
+ if(op==='revise-allocation'){return self.GrconAllocationRevision.revise(input,{XLSX,JSZip,C});}
  if(op==='export'){
   const book=XLSX.utils.book_new(),rows=input.rows||[],events=input.events||[];
   sheet(book,'Auditoria',[['Documento','Revisão','Título','Situação','Categoria','Gravidade','Apontamento','Fonte','Evidência','Versão regras'],...rows.flatMap(r=>r.findings.length?r.findings.map(f=>[r.document,r.revision,r.title,r.status,f.category,f.severity,f.message,f.source,JSON.stringify(f.evidence),r.ruleVersion]):[[r.document,r.revision,r.title,r.status,'','','Nenhuma não conformidade detectada','','',r.ruleVersion]])]);
   sheet(book,'Correções LD',[['Documento','Revisão','Arquivo origem','Aba','Linha','Coluna','Campo','Valor anterior','Valor proposto','Justificativa','Estado','Responsável','Data','Evidências'],...events.filter(e=>e.field).map(e=>{const r=rows.find(x=>x.lineage===e.lineage);return [e.document,e.revision,r?.origin?.file||'',r?.origin?.sheet||'',r?.origin?.row||'',e.field==='title'?r?.origin?.titleColumn||'':'',e.field,e.before,e.after,e.justification,e.state,e.actor,e.at,JSON.stringify(e.evidence)];})]);
+  sheet(book,'Correções de alocação',[['Documento','Campo','Célula','Anterior','Proposto','Decisão','Justificativa','Evidências'],...events.filter(e=>['workflow','databook','N1','N2','N3','N4','N5','N6'].includes(e.field)).map(e=>{const r=rows.find(x=>x.lineage===e.lineage);const col=e.field==='workflow'?'C':e.field==='databook'?'J':String.fromCharCode(74+Number(e.field.slice(1)));return [e.document,e.field,r?.sourceRow?col+r.sourceRow:'',e.before,e.after,e.decision,e.justification,JSON.stringify(e.evidence)];})]);
   sheet(book,'Decisões',[['Documento','Revisão','Estado','Campo','Antes','Depois','Justificativa','Evidência','Responsável','Data'],...events.map(e=>[e.document,e.revision,e.state,e.field,e.before,e.after,e.justification,JSON.stringify(e.evidence),e.actor,e.at])]);
   sheet(book,'Histórico fiscal',[['Documento','Revisão','Alocação','LD','Versão LD','Retorno','Decisão','Comentário original','Arquivo','Aba','Linha'],...(input.history||[]).map(h=>[h.document,h.revision,h.allocation,h.ld||h.ldSheet,h.ldVersion,h.returnedAt,h.fiscalDecision,h.fiscalComment,h.sourceFile,h.sourceSheet,h.sourceRow])]);
-  sheet(book,'Fontes e limites',[['Campo','Valor'],['Contrato',input.contract],['Versões',JSON.stringify(input.versions)],['Aplicabilidade',JSON.stringify(input.applicability)],['Limite','Ausência de apontamentos não constitui aprovação. Precedentes fiscais exigem revisão.'],['Modelo oficial','Arquivos oficiais, quando presentes, são gerados pelo Gerador de Alocação existente.']]);
+  sheet(book,'Fontes e limites',[['Campo','Valor'],['Contrato',input.contract],['Versões',JSON.stringify(input.versions)],['Aplicabilidade',JSON.stringify(input.applicability)],['Limite','Ausência de apontamentos não constitui aprovação. Precedentes fiscais exigem revisão.'],['Modelo oficial','Correções aprovadas podem ser aplicadas em cópia do XLSX original com SHA-256 e verificação de células. A ausência de fonte oficial mantém o caso inconclusivo.']]);
   const bytes=XLSX.write(book,{type:'array',bookType:'xlsx'}),zip=new JSZip();zip.file('Auditoria_e_Correcoes.xlsx',bytes);zip.file('Rastreabilidade.json',JSON.stringify({version:C.VERSION,contract:input.contract,versions:input.versions,sourceVersions:input.sourceVersions,rows,events},null,2));zip.file('Catalogo_Fiscal.json',JSON.stringify(C.catalogComments(input.history||[]),null,2));
   for(const file of input.files||[])zip.file(file.name,file.base64,{base64:true});return zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
  }
