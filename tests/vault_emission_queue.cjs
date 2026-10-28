@@ -14,6 +14,7 @@ function harness({ failure = false, existing = true, conflict = false } = {}) {
   let active = 0, maxActive = 0, hashes = 0, queueLookups = 0;
   const root = {
     GrconDocumentVaultCore: Core,
+    GrconStorageFeatures: { showStorageUI: false, enableAutomaticUpload: true, enableManualUpload: true },
     GrconCloud: { state: { session: { access_token: "test" }, membership: { workspace_id: "contract-1", role: "operator" } } },
     GrconNotify: (message, kind) => notices.push({ message, kind }),
     crypto, setTimeout,
@@ -70,27 +71,28 @@ async function drain(h) {
 (async () => {
   const main = fs.readFileSync(require.resolve("../app.js"), "utf8");
   const html = fs.readFileSync(require.resolve("../index.html"), "utf8");
-  const choice = html.match(/<input\b[^>]*id="grdt-save-to-vault"[^>]*>/)?.[0];
-  assert.ok(choice, "vault choice is available before GRDT downloads");
-  assert.doesNotMatch(choice, /\bchecked\b/, "vault storage requires an explicit opt-in");
+  assert.doesNotMatch(html, /id="grdt-save-to-vault"/, "storage UI must not be rendered");
+  assert.match(html, /grcon_storage_policy\\.js/, "load centralized storage policy");
   const begin = main.indexOf("  function prepareVaultForEmission(");
-  const end = main.indexOf("  async function exportEgrdt(", begin);
+  const finish = main.indexOf("  async function exportEgrdt(", begin);
   let preparations = 0, startedUploads = 0;
-  const checkbox = { checked: false };
+  const checkbox = { checked: true };
   const choiceContext = vm.createContext({ els: { saveGrdtToVault: checkbox }, window: {
+    GrconStorageFeatures: { enableAutomaticUpload: false },
     GrconDocumentVault: { prepareEmissionFiles(plan) { preparations++; assert.equal(plan.entries.length, 1200); return () => startedUploads++; } },
   } });
-  vm.runInContext(main.slice(begin, end), choiceContext);
-  const optedOutPlan = { get entries() { throw new Error("Opt-out must skip even vault preparation"); } };
-  assert.equal(choiceContext.prepareVaultForEmission(optedOutPlan), null);
-  assert.equal(preparations, 0, "no preparation, hashing or uploads without consent");
+  vm.runInContext(main.slice(begin, finish), choiceContext);
+  const noReadPlan = { get entries() { throw new Error("Suspended storage must skip preparation"); } };
+  assert.equal(choiceContext.prepareVaultForEmission(noReadPlan), null);
+  assert.equal(preparations, 0, "disabled mode never hashes or queues uploads");
+  choiceContext.window.GrconStorageFeatures.enableAutomaticUpload = true;
+  checkbox.checked = false;
+  assert.equal(choiceContext.prepareVaultForEmission(noReadPlan), null, "opt-in remains required");
   checkbox.checked = true;
   const optedIn = choiceContext.prepareVaultForEmission({ entries: Array(1200).fill({}) });
-  assert.equal(preparations, 1);
-  assert.equal(startedUploads, 0, "opt-in still waits for successful GRDT delivery");
+  assert.equal(preparations, 1, "legacy upload path stays recoverable after authorization");
+  assert.equal(startedUploads, 0, "queue starts only after delivery");
   optedIn(); assert.equal(startedUploads, 1);
-  checkbox.checked = false;
-  assert.equal(choiceContext.prepareVaultForEmission(optedOutPlan), null, "the next emission can independently opt out");
   for (const [name, next] of [["exportEgrdt", "outputFileEntries"], ["exportZip", "buildBatchSummaryText"], ["exportFinalPackage", null]]) {
     const start = main.indexOf("  async function " + name + "(");
     const stop = next ? main.indexOf("  function " + next + "(", start) : main.indexOf('  els.ldInput.addEventListener', start);
