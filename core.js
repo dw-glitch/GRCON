@@ -2161,6 +2161,10 @@
     return { status: "Não Postado", item: null, source: "ausência de DOCUMENTO-REVISÃO na Colar SIGEM", conflict: false, incomplete: false };
   }
 
+  function verifiedGeneralQuerySource(source) {
+    return source === "shared-general-query" || source === "local-general-query";
+  }
+
   // Status operacional da eGRDT. O status individual da revisão permanece
   // preservado, mas uma revisão anterior ainda em análise impede considerar
   // uma revisão posterior Não Postado como pronta para o SIGEM.
@@ -2168,6 +2172,13 @@
     const controlled = group || { records: [], history: [] };
     const official = exactStatus || statusForRevision(controlled, revision, context);
     const rawStatus = text(official && official.status) || "Não Postado";
+    // A LD/Colar SIGEM pode fornecer um histórico auxiliar, mas jamais
+    // confirmar "Em Análise" sem uma linha da Consulta Geral para esta revisão.
+    if (statusKind(rawStatus) === "analysis" && !verifiedGeneralQuerySource(official?.source)) {
+      return { ...official, status: "Status SIGEM não confirmado",
+        revisionStatus: "Status SIGEM não confirmado", legacyStatus: rawStatus,
+        source: "legacy-unverified", incomplete: true };
+    }
     if (statusKind(rawStatus) !== "not_posted") {
       return { ...official, status: rawStatus, revisionStatus: rawStatus };
     }
@@ -2188,13 +2199,20 @@
         return info.valid && info.rank < targetRank && statusKind(item.status) === "analysis";
       }).sort((a, b) => revisionRank(b.revision) - revisionRank(a.revision))[0] || null;
     }
+    if (blocking && !verifiedGeneralQuerySource(blocking.source)) {
+      return { ...official, status: "Status SIGEM não confirmado", revisionStatus: rawStatus,
+        source: "legacy-unverified", pendingLegacyRevision: blocking.revision,
+        incomplete: true };
+    }
     if (!blocking) return { ...official, status: rawStatus, revisionStatus: rawStatus };
     const inheritedReason = `A revisão ${blocking.revision} permanece Em Análise no SIGEM (${blocking.status}). `
       + `A revisão ${normalizeRevision(revision)} está ${rawStatus}, mas não deve ser preparada para postagem `
       + "enquanto a análise anterior estiver aberta. Só inclua manualmente se houver uma exceção operacional confirmada.";
     return {
       ...official,
-      status: "Em Análise",
+      // Uma revisão anterior pendente bloqueia a emissão, mas não muda
+      // o status oficial da revisão que está sendo preparada.
+      status: rawStatus,
       revisionStatus: rawStatus,
       revisionStatusSource: official.source || "",
       blockingRevision: blocking.revision,
@@ -2379,6 +2397,10 @@
       revisionManual: Boolean(item.revisionManual),
       revisionSource: fileRevision.valid ? fileRevision.source : item.revisionSource || "não confirmada",
       status: item.status || "Não consta na LD",
+      statusOriginal: item.sigemRevisionStatus || item.status || "Não consta na LD",
+      sigemRevisionStatus: item.sigemRevisionStatus || item.status || "Não consta na LD",
+      sigemStatusSource: item.sigemStatusSource || "not-verified",
+      sigemStatusSnapshotId: item.sigemStatusSnapshotId || "",
       decision: REVIEW,
       reason: item.reason || "A informação precisa de conferência manual.",
       finalName: item.finalName || input.name || "arquivo.pdf",
@@ -2452,13 +2474,29 @@
     }
     const match = matches[0] || null;
     if (!match) {
+      const missingRevision = revisionFromName(input.name || "", inferredDocument) || "";
+      const query = root.GrconSharedSigemQueryCore;
+      const context = settings.sigemQueryContext;
+      // Buscar somente a identidade exata do arquivo e a própria revisão na
+      // Consulta Geral, sem reutilizar o status de outro código da LD.
+      const official = missingRevision && query?.resolve && context
+        ? query.resolve(inferredDocument, missingRevision, context, { status: "" })
+        : null;
+      const verified = verifiedGeneralQuerySource(official?.source);
+      const queryLoaded = Boolean(context?.shared || context?.local);
+      const sigemStatus = verified
+        ? text(official.status)
+        : queryLoaded ? "Não localizado na Consulta Geral" : "Status SIGEM não verificado";
       return reviewResult(input, {
         document: inferredDocument,
         sheet: inferredSheet,
         sheetSource: inferredSheet ? "prefixo do arquivo" : "não identificada",
-        revision: revisionFromName(input.name || "", inferredDocument) || "",
-        status: "Não consta na LD",
-        reason: `O código completo do arquivo não foi localizado na LD. A pesquisa operacional não substitui dígitos, letras, EAP, unidade ou tipo documental por similaridade. ${input.documentLookup.message} O texto interno do PDF não é usado para substituir a identidade informada pelo nome.`,
+        revision: missingRevision,
+        status: sigemStatus,
+        sigemRevisionStatus: sigemStatus,
+        sigemStatusSource: verified ? official.source : "not-verified",
+        sigemStatusSnapshotId: verified ? official.snapshotId || "" : "",
+        reason: `O código completo do arquivo não foi localizado na LD. A situação SIGEM é: ${sigemStatus} (Consulta Geral ${verified ? "verificada" : "sem confirmação para esta revisão"}). A pesquisa operacional não substitui dígitos, letras, EAP, unidade ou tipo documental por similaridade. ${input.documentLookup.message} O texto interno do PDF não é usado para substituir a identidade informada pelo nome.`,
         finalName: input.name || "arquivo.pdf",
         documentSource: identitySource,
       });
@@ -2950,6 +2988,16 @@
       if (kind === 'unknown') {
         decision = REVIEW;
         reason = `O status “${currentStatus}” não permite decidir automaticamente se ${document}-${revision} está pronto para postagem. Confira a fonte SIGEM antes de incluir.`;
+        if (statusInfo.pendingLegacyRevision) reason += ` A LD menciona a revisão ${statusInfo.pendingLegacyRevision} em análise, mas isso não foi confirmado na Consulta Geral.`;
+        completed = true;
+        break;
+      }
+
+      // Uma análise aberta na revisão anterior impede a seleção automática,
+      // sem atribuir "Em Análise" à revisão atual (que pode estar Não Postado).
+      if (statusInfo.blockingRevision) {
+        decision = DISCARD;
+        reason = statusInfo.inheritedReason;
         completed = true;
         break;
       }
@@ -2960,13 +3008,6 @@
       // usa a normalização central para impedir uma nova revisão sobre análise aberta.
       if (kind === "analysis") {
         decision = DISCARD;
-        if (statusInfo.blockingRevision) {
-          // A revisão solicitada continua Não Postado na fonte oficial; apenas
-          // a elegibilidade da eGRDT herda a pendência da revisão anterior.
-          reason = statusInfo.inheritedReason;
-          completed = true;
-          break;
-        }
         analysisEvidence = analysisEvidenceForRevision(group, revision, inferredSheet, statusInfo);
         // A revisão parada pela análise pode não ser a mesma da linha técnica
         // inicialmente selecionada (ex.: LD na revisão 0, análise aberta na
