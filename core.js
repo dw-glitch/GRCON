@@ -2177,7 +2177,7 @@
     if (statusKind(rawStatus) === "analysis" && !verifiedGeneralQuerySource(official?.source)) {
       return { ...official, status: "Status SIGEM não confirmado",
         revisionStatus: "Status SIGEM não confirmado", legacyStatus: rawStatus,
-        source: "legacy-unverified", incomplete: true };
+        source: "legacy-unverified", unverified: true };
     }
     if (statusKind(rawStatus) !== "not_posted") {
       return { ...official, status: rawStatus, revisionStatus: rawStatus };
@@ -2202,7 +2202,7 @@
     if (blocking && !verifiedGeneralQuerySource(blocking.source)) {
       return { ...official, status: "Status SIGEM não confirmado", revisionStatus: rawStatus,
         source: "legacy-unverified", pendingLegacyRevision: blocking.revision,
-        incomplete: true };
+        unverified: true };
     }
     if (!blocking) return { ...official, status: rawStatus, revisionStatus: rawStatus };
     const inheritedReason = `A revisão ${blocking.revision} permanece Em Análise no SIGEM (${blocking.status}). `
