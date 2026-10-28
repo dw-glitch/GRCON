@@ -24,6 +24,9 @@ const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes
  const officialHeaders=['NomeDocumento','Data Prevista','Workflow','Documento Ativo','Ação','Data da Linha Base','Propósito de Emissão Original','Documento Crítico','Observação','Caminho Data Book','N1','N2','N3','N4','N5','N6'];
  const officialRows=[officialHeaders,[doc,46322,'RNEST UHDTD U-32 C&M/ELETRICA','','INCLUSÃO','','PARA CONSTRUÇÃO','','','UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR','UHDTD U-32','10.SUPRIMENTO','10.02.BENS','','',''],[doc.replace('121','122'),46322,'RNEST UHDTD U-32 C&M/ELETRICA','','INCLUSÃO','','PARA CONSTRUÇÃO','','','UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR','UHDTD U-32','10.SUPRIMENTO','10.02.BENS','','','']];
  const officialFixture=vm.runInContext('(()=>{const b=XLSX.utils.book_new();XLSX.utils.book_append_sheet(b,XLSX.utils.aoa_to_sheet(__officialRows),"GERAL");return XLSX.write(b,{bookType:"xlsx",type:"array"});})()',Object.assign(ctx,{__officialRows:officialRows}));
+ const inspected=await request('inspect',{file:file('C1O-ALOC-CM-0375-2026.xlsx',new Uint8Array(officialFixture))});
+ assert.equal(inspected[0].model,'official-16');
+ assert.equal(inspected[0].documentCount,2);
  const official=await request('parse',{file:file('C1O-ALOC-CM-0375-2026.xlsx',new Uint8Array(officialFixture)),sheet:'GERAL',contract:'contract-a',allocation:'C1O-ALOC-CM-0375-2026'});
  assert.equal(official.model,'official-16');assert.equal(official.records.length,2);
  assert.equal(official.records[0].action,'INCLUSÃO');assert.equal(official.records[0].purpose,'PARA CONSTRUÇÃO');assert.equal(official.records[0].plannedDate,'46322');

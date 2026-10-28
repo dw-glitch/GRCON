@@ -61,3 +61,19 @@ test('EAP 10.2.1 escolhe a única folha pela disciplina do Workflow',()=>{
  assert.ok(unknown.findings.some(f=>f.id==='EAP-DISCIPLINE-AMBIGUOUS'));
  assert.ok(!unknown.findings.some(f=>f.id==='EAP-LEVEL-MISMATCH'));
 });
+
+test('official 16-column header wins over decorative document labels',()=>{
+ const h=['NomeDocumento','Data Prevista','Workflow','Documento Ativo','Ação','Data da Linha Base','Propósito de Emissão Original','Documento Crítico','Observação','Caminho Data Book','N1','N2','N3','N4','N5','N6'];
+ const out=C.parseRows([['Documento'],[],h,[doc,'01/01/2026','WF','','INCLUSÃO','','PARA CONSTRUÇÃO','','','UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR','U32','','','','','']],{contract:'contract-a'});
+ assert.equal(out.headerRow,3);
+ assert.equal(out.model,'official-16');
+ assert.equal(out.records.length,1);
+ assert.equal(out.records[0].document,doc);
+});
+test('header variants with punctuation preserve code and revision',()=>{
+ const out=C.parseRows([['Nº Documento','Título do Documento','Revisão'],[doc,'Relatório de inspeção','0']],{contract:'contract-a'});
+ assert.equal(out.records.length,1);
+ assert.equal(out.records[0].document,doc);
+ assert.equal(out.records[0].title,'Relatório de inspeção');
+ assert.equal(out.records[0].revision,'0');
+});
