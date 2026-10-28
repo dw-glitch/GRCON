@@ -3176,6 +3176,7 @@
     if (policy.allocation) return "allocation-blocked";
     if (!rowCanBeSelected(row) || row.hardBlock && !policy.allocation) return "technical-blocked";
     if (policy.unresolved) return "unresolved";
+    if (policy.previousAnalysis) return "review";
     if (policy.kind === "analysis") return "in-analysis";
     if (policy.manualOnly) return "manual-sigem";
     if (!E.validateEtPlanningPair(row, rowOutputSources(row)).valid) return "review";
