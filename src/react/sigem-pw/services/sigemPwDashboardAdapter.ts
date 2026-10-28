@@ -216,6 +216,7 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
       sigemRecords: state.sigem.records,
       pwRecords: state.pw.records,
       ldRecords: state.ld.records,
+      ldAvailable: Boolean(state.ld.meta && state.ld.records.length),
     });
   });
 }
@@ -236,7 +237,7 @@ async function rebuildModelAsync(): Promise<boolean> {
     console.warn("[SIGEM×PW] Worker de comparação indisponível; usando modo compatível:", error);
     await yieldFrame();
     const core = Core();
-    const model = core.createModel(state.sigem.records, state.pw.records, state.ld.records);
+    const model = core.createModel(state.sigem.records, state.pw.records, state.ld.records, { requireN1710Ld: true, ldAvailable: Boolean(state.ld.meta && state.ld.records.length) });
     built = {
       ok: true,
       type: "model",
@@ -678,7 +679,7 @@ function filteredRows(): SigemPwResult["lists"][string] {
     if (query) {
       let search = rowSearchText.get(row);
       if (search === undefined) {
-        search = Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.pwOriginalCode, row.pwFileName, row.pwSourceRow, row.situation].join(" "));
+        search = Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.pwOriginalCode, row.pwFileName, row.pwSourceRow, row.ldOriginalCode, row.n1710DocumentType, row.situation].join(" "));
         rowSearchText.set(row, search);
       }
       if (!search.includes(query)) return false;
@@ -757,11 +758,17 @@ async function exportCurrentList(): Promise<void> {
     const api = xlsx();
     const data = rows.map((row) => ({
       Classe: row.documentClass,
+      "Tipo N-1710": row.n1710DocumentType || "",
+      "Consta na LD N-1710?": row.ldStatus || (row.documentClass === "N-1710" ? "LD INDISPONÍVEL" : "NÃO SE APLICA"),
+      "Código original na LD": row.ldOriginalCode || "",
+      "Revisão na LD": row.ldRevision || "",
+      "Linha na LD": row.ldSourceRow || "",
+      "Resultado cadastro PW": row.pwRegistrationStatus || (row.inPw ? "CADASTRADO" : "NÃO LOCALIZADO NA BASE PW"),
       Documento: row.document,
       "Revisão": row.revision,
       "Status SIGEM": row.sigemStatus,
       "Data SIGEM": row.sigemDate || "",
-      "Existe no PW": row.inPw ? "SIM" : "NÃO",
+      "Existe no PW": row.inPw ? "SIM" : row.situationKey === "ldWithoutSigem" ? "NÃO VERIFICADO" : "NÃO",
       "Revisão localizada no PW": row.pwRevision || "",
       "Mesma revisão confirmada": row.pwRevisionMatched ? "SIM" : "NÃO",
       "Status PW": row.pwStatus,
@@ -783,6 +790,10 @@ async function exportCurrentList(): Promise<void> {
       { Item: "PW utilizada", Valor: text(exportMeta.pw.importedAt) },
       { Item: "Regra de cadastro", Valor: Core().EMISSION_RULE },
       { Item: "PW ID", Valor: text(exportMeta.pw.snapshotId) },
+      { Item: "LD N-1710 ID", Valor: text(state.ld.meta?.snapshotId) },
+      { Item: "LD N-1710 arquivo", Valor: text(state.ld.meta?.fileName) },
+      { Item: "LD N-1710 data", Valor: text(state.ld.meta?.importedAt) },
+      { Item: "Critério N-1710", Valor: "Apenas códigos presentes na LD validada integram os indicadores oficiais" },
       { Item: "Filtro de empresa", Valor: "Sigla na coluna C = CSG ou QTM" },
       { Item: "Escopo de revisão", Valor: exportMeta.list === "pwDuplicates" ? "Base PW completa (duplicados por código + revisão)" : exportMeta.scope === "revision0" ? "Revisão 0" : "Todas as revisões" },
       { Item: "Filtros", Valor: JSON.stringify(exportMeta.filters) },
