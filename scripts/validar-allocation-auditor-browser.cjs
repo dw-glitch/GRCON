@@ -62,6 +62,8 @@ const server = http.createServer((req,res) => {
     assert.ok(Object.keys(zip.files).some(name=>name.endsWith('.json')));
     await page.screenshot({path:path.join(out,'allocation-auditor-1440.png'),fullPage:true});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false,'No horizontal page overflow');
+    await page.getByLabel('Buscar código ou título',{exact:true}).fill('');
+    await page.getByLabel('Código exato',{exact:true}).uncheck();
     // Modelo oficial de 16 colunas: upload deve acionar importação e análise sem clique extra.
     const XLSX = require('../xlsx.full.min.js');
     const workbook = XLSX.utils.book_new();
@@ -70,7 +72,7 @@ const server = http.createServer((req,res) => {
     XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([columns,...officialRows]),'GERAL');
     const officialBytes=XLSX.write(workbook,{type:'buffer',bookType:'xlsx'});
     await page.locator('input[type=file][accept=".xlsx"]').first().setInputFiles({name:'C1O-ALOC-CM-0375-2026.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(officialBytes)});
-    await page.waitForFunction(()=>document.querySelector('.aa-import-details')?.textContent?.includes('2 documentos identificados')&&document.querySelectorAll('.aa-table tbody tr').length===2,{},{timeout:30000});
+    await page.waitForFunction(()=>document.querySelector('.aa-import-details')?.textContent?.includes('2 documentos ·')&&document.querySelectorAll('.aa-table tbody tr').length===2,{},{timeout:30000});
     assert.match(await page.locator('.aa-import-details').innerText(),/modelo oficial de 16 colunas reconhecido/i);
     await page.evaluate(()=>window.dispatchEvent(new Event('grcon:contract-context-changed')));
     await page.waitForFunction(()=>document.querySelectorAll('tbody tr').length===0);
