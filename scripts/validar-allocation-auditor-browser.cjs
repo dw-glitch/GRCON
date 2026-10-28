@@ -62,6 +62,16 @@ const server = http.createServer((req,res) => {
     assert.ok(Object.keys(zip.files).some(name=>name.endsWith('.json')));
     await page.screenshot({path:path.join(out,'allocation-auditor-1440.png'),fullPage:true});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false,'No horizontal page overflow');
+    // Modelo oficial de 16 colunas: upload deve acionar importação e análise sem clique extra.
+    const XLSX = require('../xlsx.full.min.js');
+    const workbook = XLSX.utils.book_new();
+    const columns=['NomeDocumento','Data Prevista','Workflow','Documento Ativo','Ação','Data da Linha Base','Propósito de Emissão Original','Documento Crítico','Observação','Caminho Data Book','N1','N2','N3','N4','N5','N6'];
+    const officialRows=['121','122'].map(n=>[code(n),46322,'RNEST UHDTD U-32 C&M/ELETRICA','','INCLUSÃO','','PARA CONSTRUÇÃO','','','UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR','UHDTD U-32','10.SUPRIMENTO','','','','']);
+    XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([columns,...officialRows]),'GERAL');
+    const officialBytes=XLSX.write(workbook,{type:'buffer',bookType:'xlsx'});
+    await page.locator('input[type=file][accept=".xlsx"]').first().setInputFiles({name:'C1O-ALOC-CM-0375-2026.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(officialBytes)});
+    await page.waitForFunction(()=>document.querySelector('.aa-import-details')?.textContent?.includes('2 documentos identificados')&&document.querySelectorAll('.aa-table tbody tr').length===2,{},{timeout:30000});
+    assert.match(await page.locator('.aa-import-details').innerText(),/modelo oficial de 16 colunas reconhecido/i);
     await page.evaluate(()=>window.dispatchEvent(new Event('grcon:contract-context-changed')));
     await page.waitForFunction(()=>document.querySelectorAll('tbody tr').length===0);
     assert.deepEqual(errors,[]);
