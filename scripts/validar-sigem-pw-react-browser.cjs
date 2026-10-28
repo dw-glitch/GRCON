@@ -262,6 +262,7 @@ async function installEvolutionFixture(page) {
       revisionComplete: revision,
       state: emitted ? "Liberado" : (extra.state || "Cadastrado"),
       lastEmission: emitted ? "Sim" : "Previsto",
+      company: "CSG",
       documentType: extra.documentType || "RIR",
       title: extra.title || `Documento PW ${id}`,
       discipline: extra.discipline || "INS",
