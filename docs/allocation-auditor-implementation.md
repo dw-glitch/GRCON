@@ -2,7 +2,7 @@
 
 Referência: 28/10/2026. Base inspecionada: `dw-glitch/GRCON`, commit `b13640ec79b43d36574850bb0a1bddd2eebc2999`.
 
-**Estado: implementação funcional em branch de trabalho; ainda não liberada em produção nem homologada tecnicamente.** A estrutura de persistência foi aplicada ao Supabase. Não houve inserção automática do acervo operacional, alteração de LD oficial ou alteração dos comentários da Central.
+**Estado: implementação funcional integrada à main pelo PR #322 (commit db1867950f14faa9fe47f8ffeba4633978debbec); publicação ainda não comprovada nem homologação técnica concluída.** A estrutura de persistência foi aplicada ao Supabase. Não houve inserção automática do acervo operacional, alteração de LD oficial ou alteração dos comentários da Central.
 
 ## Integração entregue
 
@@ -92,9 +92,9 @@ Em 28/10/2026 o usuário tornou o repositório público e autorizou retomar a cr
 
 A API precisa da credencial `CLOUDFLARE_API_TOKEN` já existente no GitHub e de `CLOUDFLARE_ACCOUNT_ID`. Permissão de deploy de Worker não implica permissão R2: eventual recusa deve ser registrada sem expor o segredo. Se R2 não estiver contratado, o fluxo não ativa assinatura automaticamente. O consumo de armazenamento/operações continua sujeito à franquia e aos limites existentes do R2.
 
-O pacote Cloudflare completo passou: 334 arquivos, referências locais íntegras. O Chromium existente no ambiente executou o React e Worker reais com contrato/RPC sintéticos: dois documentos, distinção exata 121/122, seleção, revisão, download ZIP, limpeza ao trocar contrato e zero erros de página. A imagem desktop foi inspecionada. Isso não comprova autenticação real, permissões reais em produção, inferência real nem homologação normativa.
+A verificação completa `npm run verify` terminou com código 0. O pacote Cloudflare completo passou: 334 arquivos, referências locais íntegras. O Chromium existente no ambiente executou o React e Worker reais com contrato/RPC sintéticos: dois documentos, distinção exata 121/122, seleção, revisão, download ZIP, limpeza ao trocar contrato e zero erros de página. A imagem desktop foi inspecionada. Os testes Chromium existentes do Gerador e de publicação também passaram: geração oficial, permissões, reinicialização por contrato, importação de 503 linhas e árvore Rev. E de 312 caminhos no cenário sintético. Isso não comprova autenticação real, permissões reais em produção, inferência real nem homologação normativa.
 
-A reexecução do último deploy bem-sucedido (`40534508430`) foi aceita pela API em 28/10/2026, mas permaneceu na fila sem jobs no momento desta atualização. Os commits de infraestrutura foram enviados à mesma branch do Auditor. Não há comprovação de criação de bucket ou nova publicação enquanto as etapas autenticadas não terminarem com sucesso. O workflow de produção exige verificação completa, testes do Auditor e R2, pacote íntegro, bucket privado, deploy e comparação do commit/arquivos publicados. A verificação pós-deploy inclui os quatro assets do Auditor e recusa HTTP 401 da rota sem sessão.
+A reexecução do último deploy bem-sucedido (`40534508430`) foi aceita pela API em 28/10/2026, mas permaneceu na fila sem jobs no momento desta atualização. Os commits de infraestrutura foram enviados à mesma branch do Auditor. Após a integração, o Workers Builds nativo falhou novamente, sem mensagem técnica ou anotações fornecidas pelo GitHub (build b9611f94-ed30-4177-83e0-36f59988b5e4). Não há comprovação de criação de bucket ou nova publicação enquanto as etapas autenticadas não terminarem com sucesso. O workflow de produção exige verificação completa, testes do Auditor e R2, pacote íntegro, bucket privado, deploy e comparação do commit/arquivos publicados. A verificação pós-deploy inclui os quatro assets do Auditor e recusa HTTP 401 da rota sem sessão.
 
 Rollback: o código pode ser revertido pelo commit de integração ou uma versão anterior do Worker; os registros históricos e originais do R2 não são alterados por esta entrega. As migrations devem permanecer quando houver análises salvas; o SQL de rollback recusa apagá-las nesse caso.
 
