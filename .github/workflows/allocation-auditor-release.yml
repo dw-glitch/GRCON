@@ -4,6 +4,8 @@ on:
   push:
     branches: [feat/allocation-auditor-20261027]
   workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -31,7 +33,7 @@ jobs:
       - run: npm run verify:cloudflare
   r2:
     name: Verificar ou criar bucket R2 privado
-    if: github.repository == 'dw-glitch/GRCON' && github.event.repository.private == false && github.ref == 'refs/heads/feat/allocation-auditor-20261027'
+    if: github.repository == 'dw-glitch/GRCON' && github.event.repository.private == false && (github.ref == 'refs/heads/feat/allocation-auditor-20261027' || (github.head_ref == 'feat/allocation-auditor-20261027' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
