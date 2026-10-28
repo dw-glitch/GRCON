@@ -69,7 +69,7 @@
   for(const r of context.records||[]){const k=JSON.stringify([r.document,r.revision||'',r.allocation||r.sourceFile||'']);batches.set(k,(batches.get(k)||0)+1);}
   for(const kind of ['appendix','li','scon'])for(const t of context.bases?.[kind]||[]) {const tag=text(t.tag||t.TAG);if(tag)tags.set(tag,{...t,kind});}
   for(const p of context.bases?.databook||[])paths.set(text(p.databook),p);
-  for(const e of context.bases?.eap||[])eaps.set(text(e.code),e);
+  for(const e of context.bases?.eap||[]){const code=text(e.code);if(!code)continue;const list=eaps.get(code)||[];list.push(e);eaps.set(code,list);}
   for(const r of context.ldRecords||[]){const list=ld.get(text(r.document))||[];list.push(r);ld.set(text(r.document),list);}
   return {byDocument,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
  }
@@ -128,7 +128,20 @@
   else if(!index.paths.has(r.databook))add('DATABOOK-NOT-FOUND','databook','databook','Caminho completo não encontrado na versão carregada.',[{path:r.databook,version:context.versions?.databook}],{severity:context.homologated?.databook?'error':'pending'});
   else {const entry=index.paths.get(r.databook);if(entry.discipline&&norm(entry.discipline)!==norm(r.discipline))add('PATH-DISCIPLINE','databook','databook','Disciplina incompatível com a classificação explícita do caminho.',[{path:r.databook,discipline:r.discipline,expected:entry.discipline}],{severity:'error'});}
   if(!index.eaps.size)add('EAP-BASE-MISSING','hierarchy','eap','EAP contratual não disponível. Hierarquia oficial não foi inferida do histórico.',[],{origin:'EAP'});
-  else {const e=index.eaps.get(r.eap);if(!context.homologated?.eap)add('EAP-APPLICABILITY','hierarchy','eap','A hierarquia carregada não comprova a EAP contratual. Confirme o Anexo III — Apêndice A aplicável.',[{version:context.versions?.eap}],{origin:'EAP'});if(!e)add('EAP-NOT-FOUND','hierarchy','eap','Item não comprovado na EAP carregada.',[{eap:r.eap,version:context.versions?.eap}],{severity:context.homologated?.eap?'error':'pending'});else if(Array.isArray(e.levels)&&Array.isArray(r.levels)&&r.levels.some((v,i)=>text(v)!==text(e.levels[i]))) {add('EAP-LEVEL-MISMATCH','hierarchy','levels','Níveis informados divergem da hierarquia da EAP.',[{actual:r.levels,expected:e.levels,source:e.source}],{severity:context.homologated?.eap?'error':'pending'});if(context.homologated?.eap&&r.officialAllocation)for(let i=0;i<6;i++)if(text(e.levels[i])&&text(r.levels[i])!==text(e.levels[i]))recommendations.push({field:'N'+(i+1),before:text(r.levels[i]),after:text(e.levels[i]),justification:'Nível da hierarquia divergente de EAP contratual homologada; confirmar a revisão aplicável.',evidence:[JSON.stringify({code:r.eap,version:context.versions?.eap,source:e.source})],confidence:'EAP homologada',humanReview:true});}}
+  else {
+    const selection=chooseEap(r.eap,r.workflow,index),e=selection.entry;
+    r.eapMatch={requested:r.eap,matchedCode:selection.matchedCode,discipline:selection.discipline,candidates:selection.candidates.length,ambiguous:selection.ambiguous};
+    if(!context.homologated?.eap)add('EAP-APPLICABILITY','hierarchy','eap','A hierarquia carregada não comprova a EAP contratual. Confirme o Anexo III — Apêndice A aplicável.',[{version:context.versions?.eap}],{origin:'EAP'});
+    if(!selection.matchedCode)add('EAP-NOT-FOUND','hierarchy','eap','Nenhum prefixo do código EAP consta na base carregada.',[{eap:r.eap,version:context.versions?.eap}],{severity:'pending'});
+    else if(selection.ambiguous)add('EAP-DISCIPLINE-AMBIGUOUS','hierarchy','eap','Há mais de uma hierarquia para o código EAP; o Workflow não selecionou uma disciplina única. Confira o Workflow e a fonte.',[{eap:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,discipline:selection.discipline,options:selection.candidates.map(c=>(c.levels||[]).filter(Boolean).slice(-1)[0])}],{severity:'pending'});
+    else if(e&&Array.isArray(e.levels)&&Array.isArray(r.levels)){
+      const differences=e.levels.map((expected,i)=>({index:i,expected:text(expected),actual:text(r.levels[i])})).filter(x=>x.expected&&x.actual!==x.expected);
+      if(differences.length){
+       add('EAP-LEVEL-MISMATCH','hierarchy','levels','Os níveis disponíveis na EAP não coincidem com a alocação. Níveis adicionais sem referência na base não foram considerados erro.',[{requested:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,differences,source:e.source,version:context.versions?.eap}],{severity:context.homologated?.eap?'error':'pending'});
+       if(context.homologated?.eap&&r.officialAllocation)for(const x of differences)if(x.index<6)recommendations.push({field:'N'+(x.index+1),before:x.actual,after:x.expected,justification:'Nível existente na EAP aplicável à disciplina do Workflow. Confirmar a evidência antes de aprovar.',evidence:[JSON.stringify({code:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,version:context.versions?.eap,source:e.source})],confidence:'EAP homologada',humanReview:true});
+      }
+    }
+   }
   const workflows=context.bases?.workflows||[];
   if(!text(r.workflow))add('WORKFLOW-MISSING','workflow','workflow','Workflow não informado. Verifique a necessidade de definição.',[]);
   else if(workflows.length&&!workflows.some(w=>text(w.workflow)===r.workflow))add('WORKFLOW-UNKNOWN','workflow','workflow','Workflow não localizado na referência carregada.',[{workflow:r.workflow}]);
@@ -160,5 +173,5 @@
   return [...groups.values()].map(g=>({...g,learning:g.findings.length&&new Set(g.occurrences.map(o=>o.document)).size>=3?'criterio-fiscal-recorrente':g.findings.length?'precedente-especifico':'avaliacao-sem-apontamento',normativeProof:false,humanReview:true}));
  }
  function splitGroup(r){let h=2166136261;for(const c of text(r.contract)+'|'+text(r.document))h=Math.imul(h^c.charCodeAt(0),16777619);const n=(h>>>0)%10;return n<6?'development':n<8?'validation':'holdout';}
- return {VERSION,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,applicable,buildTree,prepare,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
+ return {VERSION,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,applicable,buildTree,prepare,chooseEap,workflowDiscipline,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
 });
