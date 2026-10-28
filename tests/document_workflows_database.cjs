@@ -130,7 +130,7 @@ const workspace='00000000-0000-4000-8000-000000000001';
       return Response.json(data);
     }catch(error){return Response.json({message:error.message,code:'42501'},{status:403});}
   };
-  const env={SUPABASE_URL:'https://database.test',SUPABASE_SECRET_KEY:'sb_secret_qa',GRCON_DOCUMENTS:bucket};
+  const env={SUPABASE_URL:'https://database.test',SUPABASE_SECRET_KEY:'sb_secret_qa',GRCON_DOCUMENTS:bucket,GRCON_DOCUMENT_UPLOADS_ENABLED:'true'};
   const deleteFile=(actor=owner,target=workspace,id=fileId)=>worker.fetch(new Request('https://grcon.test/api/document-vault/delete',{method:'POST',headers:{authorization:'Bearer '+actor,'content-type':'application/json'},body:JSON.stringify({workspaceId:target,id})}),env);
   try {
     assert.equal((await deleteFile(viewer)).status,403);assert.equal(deleted,0);
