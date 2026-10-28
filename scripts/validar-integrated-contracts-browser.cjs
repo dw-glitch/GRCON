@@ -3,24 +3,29 @@ const assert=require('node:assert/strict');const path=require('node:path');const
 const base=process.env.GRCON_PREVIEW_URL || 'http://127.0.0.1:8778';
 const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync(out,{recursive:true});
 (async()=>{
+ const legacyVaultQa = process.env.GRCON_QA_VAULT_LEGACY === '1';
  const browser=await chromium.launch({headless:true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? {executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH} : {})});
  try{
  const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block',acceptDownloads:true});
+ if(legacyVaultQa) {
  await context.addInitScript(() => {
   window.GrconStorageFeatures = Object.freeze({
    showStorageUI:true, enableAutomaticUpload:true,
    enableManualUpload:true, enableAutomaticLookup:true,
   });
  });
+ }
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  // Explicit isolated-fixture opt-in for legacy document recovery tests; real GRCON
  // keeps the Vault UI and automatic lookup disabled pending corporate approval.
+ if(legacyVaultQa) {
  await page.route('**/document_vault_app.js',route=>{
   const original=fs.readFileSync(path.join(__dirname,'..','document_vault_app.js'),'utf8');
   const flag='const storageFeatures = root.GrconStorageFeatures || Object.freeze({ showStorageUI: false, enableAutomaticUpload: false, enableManualUpload: false, enableAutomaticLookup: false });';
   assert.ok(original.includes(flag),'Legacy Vault QA fixture requires the hidden-feature guard.');
   return route.fulfill({status:200,contentType:'application/javascript',body:original.replace(flag,'const storageFeatures = Object.freeze({ showStorageUI: true, enableAutomaticUpload: true, enableManualUpload: true, enableAutomaticLookup: true });')});
  });
+ }
  await page.route('https://kvyrttccwzdhasplfxnr.supabase.co/**',r=>r.fulfill({status:401,contentType:'application/json',body:'{"message":"QA no session"}'}));
  const code='RL-5290.00-22313-856-C1O-017';
  const vaultFile={id:'qa-file',sequence:77,document_code:code,revision:'0',file_name:code+'.docx',format:'docx',size_bytes:16,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',created_at:'2026-10-07T12:00:00Z',verified_at:'2026-10-07T12:01:00Z',allocated:true,status:'ready'};
@@ -149,6 +154,17 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  assert.equal(await page.locator('#grcon-control-help').count(),0,'ajuda expansível removida');
  assert.equal(await page.locator('#missing-documents').count(),1,'lista de ausentes preservada');
  assert.equal(await page.locator('#grdt-module').isVisible(),true);
+ if(!legacyVaultQa){
+  assert.equal(await page.locator('[data-vault-open]').count(),0,'Cofre não pode reaparecer na navegação.');
+  assert.equal(await page.locator('#document-vault-module').count(),0,'Cofre deve permanecer fora da interface.');
+  assert.deepEqual(errors,[]);
+  fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({
+    ok:true,rowsLoaded:2201,pageSize:100,filteredExport:3,
+    emailTemplateSaved:true,vaultUiHidden:true,legacyVaultRecovery:'disabled',errors
+  },null,2));
+  console.log('Chromium integrated: 2201 monitoring changes, filters, export, admin, email editor and Vault UI hiding passed. Legacy recovery is tested separately.');
+  return;
+ }
  await page.locator('#relation-start').click();
  await page.locator('#relation-text').fill(code+'\nRL-5290.00-22313-856-C1O-018');
  await page.locator('#relation-apply').click();
