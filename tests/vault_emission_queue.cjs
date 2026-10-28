@@ -72,7 +72,7 @@ async function drain(h) {
   const main = fs.readFileSync(require.resolve("../app.js"), "utf8");
   const html = fs.readFileSync(require.resolve("../index.html"), "utf8");
   assert.doesNotMatch(html, /id="grdt-save-to-vault"/, "storage UI must not be rendered");
-  assert.match(html, /grcon_storage_policy\\.js/, "load centralized storage policy");
+  assert.match(html, /grcon_storage_policy\.js/, "load centralized storage policy");
   const begin = main.indexOf("  function prepareVaultForEmission(");
   const finish = main.indexOf("  async function exportEgrdt(", begin);
   let preparations = 0, startedUploads = 0;
