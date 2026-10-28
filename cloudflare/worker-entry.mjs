@@ -9,6 +9,10 @@ import {prepareAuditPrompt,analyzeAudit,auditAiFailure} from './allocation-audit
 import AllocationCore from '../allocation_generator_core.js';
 
 const PREFIX = "/api/document-vault/";
+// Default deny until the company explicitly authorizes R2 document writes.
+// Reads of existing records stay available to authenticated, authorized users.
+const STORAGE_WRITE_ACTIONS = new Set(["init", "upload", "multipart/start", "multipart/part", "multipart/complete", "restart", "delete", "metadata"]);
+function storageWritesEnabled(env) { return env?.GRCON_DOCUMENT_UPLOADS_ENABLED === "true"; }
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
 const MIB = 1024 * 1024;
 
@@ -795,6 +799,9 @@ async function handleDelete(request, env) {
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if (STORAGE_WRITE_ACTIONS.has(action) && !storageWritesEnabled(env)) {
+    return apiError("Armazenamento documental suspenso até autorização corporativa.", 403, "STORAGE_WRITES_DISABLED");
+  }
   if(action==='allocation-generate'&&request.method==='POST')return handleAutomaticAllocation(request,env);
   if(action==='allocation-confirm'&&request.method==='POST')return handleAllocation(request,env,'confirm');
   if(action==='allocation-ai'&&request.method==='POST')return handleAllocation(request,env,'recommend');

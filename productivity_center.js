@@ -236,7 +236,7 @@
       if(complete&&APP==='GRCON'&&payload?.schema===root.GrconBackup?.BACKUP_SCHEMA){
         const validation=root.GrconBackup.validateBackup(payload);if(!validation.valid)throw new Error(validation.errors.join(' '));
         const summary=root.GrconBackup.summarizeBackup(payload);
-        if(!root.confirm('Restaurar '+summary.history+' eGRDT(s), '+summary.postings+' postagem(ns) e '+summary.dashboardRecords+' registro(s) de bases locais? Banco compartilhado e arquivos do Cofre não serão restaurados. Será criado um snapshot local de segurança.'))return;
+        if(!root.confirm('Restaurar '+summary.history+' eGRDT(s), '+summary.postings+' postagem(ns) e '+summary.dashboardRecords+' registro(s) de bases locais? Os dados compartilhados e arquivos externos não serão restaurados. Será criado um snapshot local de segurança.'))return;
         await root.GrconBackup.restore(payload);notify('Backup local restaurado.','success');root.setTimeout(()=>root.location.reload(),700);return;
       }
       if(complete&&APP==='GRCON'&&payload?.schema===FULL_SCHEMA&&root.GrconCloud?.state?.membership?.workspace_id&&!root.GrconCloud?.isMasterOwner?.())throw new Error('Este backup antigo não identifica os contratos. A restauração completa é exclusiva do Proprietário ADM.');
@@ -489,7 +489,7 @@
   async function recoverLocalSnapshot(){
     setBusy(true,'Consultando snapshot de recuperação…');
     try{const snapshot=await root.GrconBackup?.latestRecoverySnapshot();if(!snapshot){notify('Não há snapshot de recuperação desta conta e contrato neste navegador.','info');return;}
-      if(!root.confirm('Recuperar o estado local salvo antes da restauração de '+new Date(snapshot.createdAt).toLocaleString('pt-BR')+'? Banco compartilhado e Cofre têm recuperação própria.'))return;
+      if(!root.confirm('Recuperar o estado local salvo antes da restauração de '+new Date(snapshot.createdAt).toLocaleString('pt-BR')+'? Dados compartilhados e arquivos externos exigem recuperação própria.'))return;
       await root.GrconBackup.restore(snapshot.payload);notify('Estado local recuperado.','success');root.setTimeout(()=>root.location.reload(),700);
     }catch(error){notify(error.message||'Não foi possível recuperar o estado anterior.','error');}finally{setBusy(false,'Aguardando ação.');}
   }

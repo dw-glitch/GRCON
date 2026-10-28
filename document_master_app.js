@@ -7,7 +7,7 @@
   const api = () => root.GrconDocumentVault;
   const sections = [
     ['sigem','Consulta Geral / SIGEM'],['pw','ProjectWise'],['history','GRDT / eGRDT'],
-    ['vault','Arquivos no Cofre'],['requests','Controle de Solicitações'],['monitor','Meu monitoramento'],['monitorChanges','Últimas mudanças monitoradas'],['audit','Auditoria'],
+    ['requests','Controle de Solicitações'],['monitor','Meu monitoramento'],['monitorChanges','Últimas mudanças monitoradas'],['audit','Auditoria'],
   ];
   function status(message, error) {
     const target = document.getElementById('master-status');
@@ -74,7 +74,7 @@
     const identification=table([{description:known(['title','description']),class:known(['documentClass','class']),discipline:known(['discipline']),taxonomy:known(['taxonomy']),eap:known(['eap'])}], [['Descrição','description'],['Classe','class'],['Disciplina','discipline'],['Taxonomia','taxonomy'],['EAP','eap']]);
     currentDocument.columns=columns;
     const heading = '<h3>'+esc(code)+'</h3><p>Fontes consultadas separadamente. Navegue pelas páginas de cada fonte; versões e emissões permanecem identificadas.</p>'+
-      '<section class="master-source"><details id="master-explanation"><summary>Entender os resultados e suas fontes</summary><label>O que deseja consultar?<select id="master-explanation-intent">'+Object.entries(root.GrconDocumentExplanations?.questions||{}).map(([value,label])=>'<option value="'+value+'">'+esc(label)+'</option>').join('')+'</select></label><button type="button" data-master-explain>Consultar fontes</button><button type="button" data-master-target="conference">Abrir conferência deste código</button><div id="master-explanation-answer" aria-live="polite"></div></details></section><div class="master-file-actions"><button type="button" class="secondary-button" data-master-target="document">Abrir na Central SIGEM</button><button type="button" class="secondary-button" data-master-target="vault">Pesquisar no Cofre</button></div>';
+      '<section class="master-source"><details id="master-explanation"><summary>Entender os resultados e suas fontes</summary><label>O que deseja consultar?<select id="master-explanation-intent">'+Object.entries(root.GrconDocumentExplanations?.questions||{}).map(([value,label])=>'<option value="'+value+'">'+esc(label)+'</option>').join('')+'</select></label><button type="button" data-master-explain>Consultar fontes</button><button type="button" data-master-target="conference">Abrir conferência deste código</button><div id="master-explanation-answer" aria-live="polite"></div></details></section><div class="master-file-actions"><button type="button" class="secondary-button" data-master-target="document">Abrir na Central SIGEM</button></div>';
     document.getElementById('master-content').innerHTML = heading+'<section class="master-source"><h4>Identificação</h4>'+identification+'</section>'+sections.map(([key,label])=> {
       return '<section class="master-source" data-master-source="'+key+'"><h4>'+label+'</h4><div data-master-body>'+sourceMarkup(key,results[0].status==='rejected')+'</div></section>';
     }).join('');
@@ -96,7 +96,7 @@
     explainDocument();
     const host=document.getElementById('master-explanation-answer'),box=document.createElement('section');box.setAttribute('aria-live','polite');host.appendChild(box);
     if(Object.values(view.remote.pages||{}).some(page=>page.after)){box.textContent='Atualize a consulta do documento para usar a IA na primeira página das fontes.';return;}
-    const revisions=Object.fromEntries(['sigem','pw','history','vault','requests'].map(source=>[source,String(view.remote.pages?.[source]?.revision||'')]));
+    const revisions=Object.fromEntries(['sigem','pw','history','requests'].map(source=>[source,String(view.remote.pages?.[source]?.revision||'')]));
     const cacheKey=JSON.stringify({intent,revisions}),generation=(view.aiGeneration||0)+1;view.aiGeneration=generation;
     box.textContent='Preparando explicação…';button.disabled=true;
     try{
@@ -104,7 +104,7 @@
       if(scope!==epoch||ticket!==searchTicket||view!==currentDocument||view.aiGeneration!==generation||document.getElementById('master-explanation-intent').value!==intent)return;
       if(result.mode!=='workers-ai'||!Array.isArray(result.items))throw Error('Explicação indisponível.');
       view.aiCache||={};view.aiCache[cacheKey]=result;
-      box.innerHTML='<h4>Explicação por IA</h4><p class="master-empty">Confira as fontes. Esta explicação não altera a conferência nem a revisão física.</p>'+result.items.map(item=>'<p>'+esc(item.text)+'</p><div class="master-file-actions">'+(item.citations||[]).filter(c=>['sigem','pw','history','vault','requests'].includes(c.source)).map(c=>'<button type="button" data-master-source-link="'+c.source+'">Ver fonte: '+esc(c.label)+'</button>').join('')+'</div>').join('')+'<small>Fontes consultadas em '+esc(result.queriedAt)+'</small>';
+      box.innerHTML='<h4>Explicação por IA</h4><p class="master-empty">Confira as fontes. Esta explicação não altera a conferência nem a revisão física.</p>'+result.items.map(item=>'<p>'+esc(item.text)+'</p><div class="master-file-actions">'+(item.citations||[]).filter(c=>['sigem','pw','history','requests'].includes(c.source)).map(c=>'<button type="button" data-master-source-link="'+c.source+'">Ver fonte: '+esc(c.label)+'</button>').join('')+'</div>').join('')+'<small>Fontes consultadas em '+esc(result.queriedAt)+'</small>';
     }catch(error){if(scope===epoch&&ticket===searchTicket&&view===currentDocument&&view.aiGeneration===generation)box.textContent=error.message||'IA indisponível. A consulta por fontes acima continua disponível.';}
     finally{button.disabled=false;}
   }
@@ -151,10 +151,6 @@
         if(!root.GrconPostingConferenceNavigation)throw Error('Conferência indisponível.');
         const code=currentDocument.code;document.getElementById('document-master-dialog').close();await root.GrconPostingConferenceNavigation?.open();if(scope!==epoch)return;const ui=root.GrconPostingConferenceUi;if(!ui)throw Error('Conferência indisponível.');
         Object.keys(ui.state.filters).forEach(key=>ui.state.filters[key]='');ui.state.filters.document=code;ui.state.filters.search=code;ui.state.view='documents';ui.state.page=1;document.querySelectorAll('#pc-filters input,#pc-filters select,#pc-filters textarea').forEach(control=>{if(control.id!=='pc-wait')control.value=control.id==='pc-search'?code:'';});ui.render();
-      }else if(kind==='vault'){
-        document.getElementById('document-master-dialog').close();
-        await api().open();if(scope!==epoch)return;
-        const input=document.getElementById('vault-search');if(input){input.value=currentDocument.code;input.dispatchEvent(new Event('input',{bubbles:true}));}
       }else if(kind==='history'){
         await root.GRCONModuleLoader?.ensureModule?.('history');if(scope!==epoch)return;
         const record=(root.GrconHistory?.read?.()||[]).find(r=>[r.id,r.cloudId,r.clientRecordId].includes(value));
