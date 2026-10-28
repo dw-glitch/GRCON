@@ -86,10 +86,35 @@
       "correctionDecisions": 0,
       "officialPackageGenerated": false,
       "zipDownload": "triggered; bytes unavailable for inspection",
-      "semanticConsultation": "fallback: unverifiable response; fix proposed in PR 329",
+      "semanticConsultation": "verified structured response after PR 329; humanReview=true, normativeProof=false; quality not independently homologated",
       "otherRoles": "not exercised in production",
-      "crossContractSwitch": "not exercised in production"
+      "crossContractSwitch": "not exercised in production",
+      "additionalImportedSample": {
+        "allocationDocuments": 4,
+        "sourceLdFiles": 5,
+        "titleAndRevisionRecovered": true,
+        "timeout": "one shared-context attempt failed; next attempt completed; cause not conclusively traced",
+        "exactCodeFilter": true,
+        "sourceFilesChanged": false,
+        "savedAsAdditionalAudit": false
+      }
     },
-    "semanticAuditorQuality": "not homologated"
+    "semanticAuditorQuality": "not homologated",
+    "aiFix": {
+      "pullRequest": 329,
+      "commit": "a09c9c38d6ee5476f24c3ab3734d2593e2e23791",
+      "workflowRun": "https://github.com/dw-glitch/GRCON/actions/runs/40708443357",
+      "workflowConclusion": "success",
+      "workerVersion": "97d0a2d1-74ce-4ea5-a646-bb5d880a4224",
+      "servedMetadataBuild": "cf6bc8e9-5e05-48cc-a2c8-5b48ecc193f2",
+      "servedMetadataGeneratedAt": "2026-10-28T14:43:36.929Z",
+      "realStructuredResponse": true
+    },
+    "cableSectionRecognition": {
+      "pullRequest": 330,
+      "engineVersion": "1.0.1",
+      "unitTests": 21,
+      "requiresIndependentHomologation": true
+    }
   }
 }
