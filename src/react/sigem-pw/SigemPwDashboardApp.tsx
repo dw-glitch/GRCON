@@ -46,6 +46,9 @@ export function SigemPwDashboardApp() {
       </div>
 
       <SigemPwReadiness readiness={state.readiness} />
+      {state.pw.meta && (state.pw.meta.companyColumn !== "C" || state.pw.meta.scopeCompanyColumnMissing === true) ? (
+        <div className="spw-empty" role="alert"><strong>Reimportação do PW necessária</strong><span>A base atual não comprova a leitura da sigla da empresa pela coluna C. Os indicadores foram suspensos até importar uma consulta PW com essa coluna, evitando contagens incorretas.</span></div>
+      ) : null}
 
       <UiPanel className="spw-section-panel spw-bases-panel" labelledBy="spw-bases-title">
         <div className="spw-section-heading">
