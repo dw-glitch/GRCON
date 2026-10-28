@@ -2658,7 +2658,7 @@
       }
       if (missingFromList.length) {
         // Itens solicitados que não existem fisicamente na pasta nem puderam ser
-        // recuperados do Cofre permanecem somente no resumo de ausentes. Eles
+        // recuperados de outra origem permanecem somente no resumo de ausentes. Eles
         // não entram na tabela de resultados, na GRDT nem no histórico.
         setProgress(74, `${inputs.length.toLocaleString("pt-BR")} arquivo(s) físico(s) encontrado(s) · ${missingFromList.length.toLocaleString("pt-BR")} solicitado(s) ausente(s)`);
       }
@@ -2890,7 +2890,7 @@
         documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
 
         // A relação é o filtro absoluto. Pasta local é apenas a primeira fonte;
-        // todo item solicitado que faltar nela é resolvido automaticamente no Cofre.
+        // consulta adicional só ocorre quando autorizada pela política de armazenamento.
         if (missingFromList.length && window.GrconStorageFeatures?.enableAutomaticLookup === true && window.GrconDocumentVault?.resolveMissingEntries) {
           setProgress(33, `Buscando na fonte adicional os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
           try {
@@ -4075,8 +4075,9 @@
 
   function renderFileOrigin(row) {
     const origin = TriageQuery.origin(row);
+    const visibleOrigin = origin === "Cofre" ? "Arquivo histórico" : origin;
     const allocation = origin === "Cofre" && row && row.vaultAllocationLabel ? ` · Alocação: ${row.vaultAllocationLabel}` : "";
-    return `<span class="result-file-origin">Origem: ${escapeHtml(origin + allocation)}</span>`;
+    return `<span class="result-file-origin">Origem: ${escapeHtml(visibleOrigin + allocation)}</span>`;
   }
 
   let lastRenderedWindow = "";
