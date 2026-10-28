@@ -29,7 +29,10 @@
   const PW_COMPANY_COLUMN_INDEX = 2; // Coluna C (índice zero-based), obrigatória.
   const UNCLASSIFIED = "Não classificado";
   const SCOPE_CLASSES = Object.freeze(["ET", "N-1710", "CV", UNCLASSIFIED]);
-  const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
+  const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,4}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
+  // Candidatos permanecem em lista de conferência; código incompleto não comprova identidade.
+  const N1710_CANDIDATE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,4}-5290\.00-22313-[A-Z0-9]{3}-C1O-/i;
+  const LD_VALIDATION_VERSION = 1;
   const EMISSION_FLAGS = Object.freeze({ CURRENT: "SIM", HISTORICAL: "NAO", PLANNED: "PREVISTO" });
   const COMPARISON_SITUATIONS = Object.freeze({
     SIGEM_ONLY: "Postado no SIGEM, ainda não cadastrado no PW",
@@ -188,6 +191,16 @@
   /** Classe documental: ET, N-1710, CV e demais tipos identificados separadamente. */
   function documentClass(value) {
     return classFromIdentity(documentIdentity(value));
+  }
+
+  function n1710DocumentType(value) {
+    const canonical = canonicalDocumentCode(value);
+    const match = canonical.match(/^(?:[IAFLED]-)?([A-Z0-9]{2,4})-5290\.00-22313-[A-Z0-9]{3}-C1O-/);
+    return match ? match[1] : "";
+  }
+  function isN1710Candidate(value) {
+    const canonical = canonicalDocumentCode(value);
+    return N1710_CANDIDATE_RE.test(canonical) && !N1710_CODE_RE.test(canonical);
   }
 
   function classFromIdentity(identity) {
@@ -537,6 +550,7 @@
         revision: rowValue(row, revisionColumn),
         title: rowValue(row, titleColumn),
         documentClass: "N-1710",
+        sheetName: text(fileMeta && fileMeta.sheetName) || "N-1710",
         sourceRow: rowIndex + 1,
       });
     }
@@ -603,7 +617,12 @@
         entryKey: entryKey(identity.key, rawRevision),
         emissionFlag,
         emittedEvidence: kind === "pw" && [EMISSION_FLAGS.CURRENT, EMISSION_FLAGS.HISTORICAL].includes(emissionFlag),
-        inQualityLd: kind === "pw" && Boolean(ldUniverse && ldUniverse.has(identity.key)),
+        inQualityLd: Boolean(ldUniverse && ldUniverse.has(identity.key)),
+        ldOriginalCode: text(ldUniverse && ldUniverse.get(identity.key)?.document),
+        ldRevision: text(ldUniverse && ldUniverse.get(identity.key)?.revision),
+        ldSourceRow: Number(ldUniverse && ldUniverse.get(identity.key)?.sourceRow) || 0,
+        n1710DocumentType: n1710DocumentType(record && record.document),
+        n1710Candidate: isN1710Candidate(record && record.document),
       };
     }).filter((record) => record.documentKey && record.documentClass);
   }
@@ -806,34 +825,42 @@
     });
   }
 
-  function createModel(sigemRecords, pwRecords, ldRecords) {
-    // Cadastro é presença documental. A LD e os estados não excluem linhas PW.
+  function createModel(sigemRecords, pwRecords, ldRecords, settings) {
+    // Escopo PW: exclusivamente coluna C CSG/QTM. Cadastro e emissão seguem distintos.
+    // A opção requireN1710Ld habilita o universo oficial da interface; chamadas
+    // legadas sem a opção continuam úteis para relatórios históricos imutáveis.
     const enforceLd = arguments.length >= 3;
+    const requireN1710Ld = Boolean(settings && settings.requireN1710Ld);
+    const ldAvailable = Boolean(settings && settings.ldAvailable && Array.isArray(ldRecords) && ldRecords.length);
     const ldUniverse = buildLdUniverse(ldRecords || []);
-    // Filtrar ANTES da construção de mapas, indicadores, duplicidades e revisões.
-    // As bases originais são mantidas intactas para auditoria e exportação separada.
-    // A Consulta Geral/SIGEM mantém seu universo próprio; a sigla de
-    // responsabilidade pertence especificamente às linhas exportadas do PW.
     const sigemScope = { eligible: Array.isArray(sigemRecords) ? sigemRecords : [], outOfScope: [] };
     const pwScope = partitionPwCompanyRecords(pwRecords);
-    const normalizedSigem = normalizeRecords(sigemScope.eligible, "sigem", ldUniverse, enforceLd);
-    const normalizedPw = normalizeRecords(pwScope.eligible, "pw", ldUniverse, enforceLd);
+    const sourceSigem = normalizeRecords(sigemScope.eligible, "sigem", ldUniverse, enforceLd);
+    const sourcePw = normalizeRecords(pwScope.eligible, "pw", ldUniverse, enforceLd);
+    const isEligible = (record) => !requireN1710Ld || record.documentClass !== "N-1710"
+      || (ldAvailable && record.inQualityLd);
+    const normalizedSigem = sourceSigem.filter(isEligible);
+    const normalizedPw = sourcePw.filter(isEligible);
+    const excludedSigemN1710 = sourceSigem.filter((record) => record.documentClass === "N-1710" && !isEligible(record));
+    const excludedPwN1710 = sourcePw.filter((record) => record.documentClass === "N-1710" && !isEligible(record));
+    const candidates = sourceSigem.filter((record) => record.n1710Candidate);
     const sigemEntries = buildEntryMap(normalizedSigem, "sigem");
     const pwEntries = buildEntryMap(normalizedPw, "pw");
     return {
-      ldUniverse,
+      ldUniverse, ldAvailable, requireN1710Ld,
+      excludedSigemN1710, excludedPwN1710, n1710Candidates: candidates,
       comparisonScope: {
-        rule: "PW: CSG/QTM", version: PW_SCOPE_VERSION,
+        rule: "PW: CSG/QTM na coluna C; N-1710 oficial: código presente na LD", version: PW_SCOPE_VERSION,
         sigemAccepted: normalizedSigem.length, pwAccepted: normalizedPw.length,
+        sigemN1710Excluded: excludedSigemN1710.length,
+        pwN1710Excluded: excludedPwN1710.length,
+        ldAvailable, requireN1710Ld,
         sigemOutOfScope: sigemScope.outOfScope.length,
         pwOutOfScope: pwScope.outOfScope.length,
       },
-      normalizedSigem,
-      normalizedPw,
-      // O Dashboard novo usa as entradas por código + revisão. Os mapas
-      // documentais permanecem expostos para relatórios legados da mesma PR.
-      sigemEntries,
-      pwEntries,
+      normalizedSigem, normalizedPw,
+      // Preservar os registros originais, inclusive registros fora do universo oficial.
+      sigemEntries, pwEntries,
       sigemAll: buildDocumentMap(normalizedSigem, "sigem"),
       pwAll: buildDocumentMap(normalizedPw, "pw"),
     };
@@ -883,6 +910,13 @@
       pwEmission,
       pwLastEmission,
       pwCompany: text(pwEvidence && pwEvidence.current && pwEvidence.current.company),
+      n1710DocumentType: n1710DocumentType(reference.document),
+      ldStatus: reference.documentClass !== "N-1710" ? "NÃO SE APLICA"
+        : (sigemCurrent || pwEvidence?.current)?.inQualityLd ? "SIM" : "NÃO",
+      ldOriginalCode: text((sigemCurrent || pwEvidence?.current)?.ldOriginalCode),
+      ldRevision: text((sigemCurrent || pwEvidence?.current)?.ldRevision),
+      ldSourceRow: Number((sigemCurrent || pwEvidence?.current)?.ldSourceRow) || 0,
+      pwRegistrationStatus: pwEvidence ? (pwEntry ? "CADASTRADO" : "CADASTRADO — OUTRA REVISÃO") : "NÃO LOCALIZADO NA BASE PW",
       sigemOriginalCode: text(sigemEntry && sigemEntry.document),
       pwOriginalCode: text(pwEvidence && pwEvidence.document),
       pwRevisionEvidence: sigemEntry && reference.documentClass === "CV" && !pwEntry ? "Revisão PW não exigida para CV" : !pwEntry && pwEvidence ? "Correspondência da revisão não confirmada" : pwEntry && pwEntry.revisionKey === "__SEM_REVISAO__" ? "Não informada no PW" : "Informada no PW",
@@ -1046,6 +1080,41 @@
     if (emittedKeys.size > pwKeys.size) throw new Error("Inconsistência matemática: PW emitido maior que PW cadastrado.");
 
     const lists = buildComparisonLists(sigem, pw, { revisionScope, pwDocuments: source.pwAll });
+    const auditRows = (records, kind, reason) => {
+      const map = scopeRevisionMap(buildEntryMap(records || [], kind), revisionScope);
+      return [...map.values()].filter((entry) => documentPasses(entry, kind, filters)).map((entry) => ({
+        ...comparisonRow("audit:" + kind + ":" + reason + ":" + entry.key,
+          kind === "sigem" ? entry : null, kind === "pw" ? entry : null),
+        situationKey: reason,
+        situation: reason === "ldUnavailableN1710" ? "LD N-1710 indisponível: conferência pendente"
+          : "N-1710 não localizado na LD validada",
+        ldStatus: reason === "ldUnavailableN1710" ? "LD INDISPONÍVEL" : "NÃO",
+      }));
+    };
+    const ldReason = source.ldAvailable ? "outsideLdN1710" : "ldUnavailableN1710";
+    lists.sigemN1710OutsideLd = source.ldAvailable ? auditRows(source.excludedSigemN1710, "sigem", ldReason) : [];
+    lists.pwN1710OutsideLd = source.ldAvailable ? auditRows(source.excludedPwN1710, "pw", ldReason) : [];
+    lists.ldUnavailableN1710 = source.ldAvailable ? [] : [
+      ...auditRows(source.excludedSigemN1710, "sigem", ldReason),
+      ...auditRows(source.excludedPwN1710, "pw", ldReason),
+    ];
+    lists.n1710Candidates = auditRows(source.n1710Candidates, "sigem", "n1710Candidate")
+      .map((row) => ({ ...row, situation: "Código semelhante a N-1710: verificar formato completo" }));
+    const sigemAllCodes = new Set([
+      ...(source.normalizedSigem || []), ...(source.excludedSigemN1710 || []),
+    ].map((record) => record.documentKey));
+    lists.ldWithoutSigem = source.ldAvailable
+      ? [...(source.ldUniverse || new Map()).values()]
+        .filter((record) => !sigemAllCodes.has(record.documentKey))
+        .map((record) => ({
+          key: "ld:" + record.documentKey, document: text(record.document), documentKey: record.documentKey,
+          documentClass: "N-1710", n1710DocumentType: n1710DocumentType(record.document),
+          revision: text(record.revision) || "—", sigemStatus: "", pwStatus: "", pwEmission: "",
+          ldStatus: "SIM", ldOriginalCode: text(record.document), ldRevision: text(record.revision),
+          ldSourceRow: Number(record.sourceRow) || 0,
+          inSigem: false, inPw: false, situationKey: "ldWithoutSigem",
+          situation: "Presente na LD N-1710, não localizado na Consulta Geral",
+        })) : [];
     const gapSigemToPw = new Set(lists.sigemOnly.map((row) => row.key));
     const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
     const pwExclusive = new Set([...lists.pwOnlyNotEmitted, ...lists.pwOnlyEmitted].map((row) => row.key));
@@ -1117,6 +1186,11 @@
         pwEmittedEntries: [...pwAll.values()].filter((entry) => entry.emitted).length,
         pwSourceRows, pwDuplicateGroups: duplicateGroups, pwDuplicateExtraRows: duplicateExtraRows, pwDuplicateRows: duplicateRows.length,
         ldDocumentCount: source.ldUniverse ? source.ldUniverse.size : 0,
+        ldAvailable: Boolean(source.ldAvailable),
+        sigemN1710OutsideLd: (lists.sigemN1710OutsideLd || []).length,
+        pwN1710OutsideLd: (lists.pwN1710OutsideLd || []).length,
+        n1710Candidates: (lists.n1710Candidates || []).length,
+        ldWithoutSigem: (lists.ldWithoutSigem || []).length,
       },
       sets: { sigemKeys, pwKeys, emittedKeys, gapSigemToPw, gapPwToEmitted, pwExclusive, matched },
       documents: { sigem, pw, sigemAll, pwAll },
@@ -1425,10 +1499,10 @@
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
-    PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
+    PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, LD_VALIDATION_VERSION, N1710_CODE_RE, N1710_CANDIDATE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
     EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS, REVISION_SCOPES,
     text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords,
-    PW_COMPANIES, PW_COMPANY_COLUMN_INDEX, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass,
+    PW_COMPANIES, PW_COMPANY_COLUMN_INDEX, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass, n1710DocumentType, isN1710Candidate,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
