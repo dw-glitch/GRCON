@@ -98,6 +98,7 @@
       { Grupo: "Escopo", Indicador: "Coluna da sigla", Valor: trace.companyColumn || "Não validada" },
       { Grupo: "Escopo", Indicador: "Linhas CSG", Valor: trace.companyCounts.CSG || 0 },
       { Grupo: "Escopo", Indicador: "Linhas QTM", Valor: trace.companyCounts.QTM || 0 },
+      { Grupo: "Escopo", Indicador: "Linhas com múltiplas siglas válidas", Valor: trace.companyCounts.MULTIPLAS || 0 },
       { Grupo: "Escopo", Indicador: "Outras empresas", Valor: trace.excludedReasons.empresa_divergente || 0 },
       { Grupo: "Escopo", Indicador: "Sem sigla", Valor: trace.excludedReasons.sigla_ausente || 0 },
       { Grupo: "Origem", Indicador: "Arquivo PW", Valor: trace.fileName || "—" },
