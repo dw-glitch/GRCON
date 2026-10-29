@@ -57,6 +57,9 @@ const {chromium}=require("playwright");
       await page.addScriptTag({path:path.join(process.cwd(),file)});
     }
     await page.addStyleTag({path:path.join(process.cwd(),"sigem-posting-central.css")});
+    // Document filters are legacy controls; production starts in GRDT review.
+    await page.addStyleTag({content:'#sigem-module .scc-grdt-review>.scc-views{display:flex!important} #sigem-module .scc-grdt-review>.scc-filters{display:block!important}'});
+    await page.locator('[data-scc-view="documentos"]').click();
     await page.locator("#scc-query").waitFor();
     await page.waitForFunction(()=>document.querySelectorAll("#sigem-central-tbody tr[data-scc-index]").length>=2);
     assert.match(await page.locator("#sigem-central-base").innerText(),/Consulta_QA.xlsx/);
