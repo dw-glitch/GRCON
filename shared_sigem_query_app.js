@@ -91,6 +91,18 @@
     const conference = await runtime();
     await conference.kvSet(cacheKey(workspace), base);
   }
+  async function revokeLocalOverride(workspace, sharedId, explicit = false) {
+    const local = state.local;
+    if (typeof local?.meta?.localOverrideSnapshotId !== "string"
+      || !explicit && local.meta.localOverrideSnapshotId === (sharedId || "")) return;
+    const conference = await runtime();
+    if (state.local !== local || cloud()?.state?.membership?.workspace_id !== workspace) return;
+    const meta = { ...local.meta };
+    delete meta.localOverrideSnapshotId;
+    state.local = { ...local, meta };
+    try { await conference.kvSet(`local-sigem-query:${workspace}`, state.local); }
+    catch (_) { console.warn("Consulta Geral: não foi possível salvar a troca da fonte local em cache."); }
+  }
   async function activateConferenceWorkspace(workspace) {
     const conference = await runtime();
     const previous = await conference.kvGet(CONFERENCE_WORKSPACE_KEY, "");
@@ -169,7 +181,7 @@
           }
           if (!state.shared) {
             const cached = await cacheGet(workspace);
-            if (cached && valid()) { Core.validate(cached); state.shared = cached; state.stale = true; emit(); }
+            if (cached && valid()) { Core.validate(cached); state.shared = cached; await revokeLocalOverride(workspace, cached.meta?.snapshotId); if (!valid()) return null; state.stale = true; emit(); }
           }
         } catch (error) { console.warn("Consulta Geral: cache indisponível; consultando o banco", error); }
         if (!cloud()?.state?.online) throw new Error("Sem conexão. Usando a última Consulta Geral válida em cache.");
@@ -178,6 +190,8 @@
         if (!valid()) return null;
         if (!meta?.snapshot_id) { state.shared = null; await cachePut(workspace, null); state.stale = false; state.error = ""; emit(); return current(); }
         if (state.shared?.meta?.snapshotId === meta.snapshot_id) {
+          await revokeLocalOverride(workspace, meta.snapshot_id);
+          if (!valid()) return null;
           const dateChanged = state.shared.meta.referenceDate !== meta.metadata?.referenceDate;
           const changed = state.stale || state.error;
           state.stale = false; state.error = "";
@@ -198,7 +212,7 @@
         try { await cachePut(workspace, base); }
         catch (_) { cacheWarning = "Consulta Geral atual carregada. O cache offline não pôde ser atualizado."; }
         if (!valid()) return null;
-        state.shared = base; state.stale = false; state.error = cacheWarning; emit(); return current();
+        state.shared = base; await revokeLocalOverride(workspace, meta.snapshot_id); if (!valid()) return null; state.stale = false; state.error = cacheWarning; emit(); return current();
       } catch (error) {
         if (!valid()) return null;
         state.stale = Boolean(state.shared); state.error = String(error.message || error); emit(); return current();
@@ -371,6 +385,8 @@
     if (!canPublish()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
     if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
     await request("activate", { target_workspace: workspace, target_snapshot: id });
+    await revokeLocalOverride(workspace, id, true);
+    emit();
     return refreshAfterHistoryMutation(workspace);
   }
   async function deleteVersion(id) {

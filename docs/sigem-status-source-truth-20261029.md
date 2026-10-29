@@ -6,6 +6,8 @@ Uma importação feita na Conferência era salva como base local, mas `current()
 
 A importação explícita passa a ser a fonte usada neste navegador tanto pela Conferência quanto pela análise de arquivos. A seleção fica vinculada ao identificador da publicação compartilhada observada na importação e sobrevive à recarga. Uma publicação compartilhada diferente volta a ser a fonte corrente. A tela identifica a fonte utilizada; publicar continua sendo uma ação separada do proprietário para atualizar a equipe.
 
+Selecionar explicitamente uma versão compartilhada encerra a preferência local, inclusive ao escolher a versão que já estava publicada. Quando uma nova publicação substitui a preferência local, essa preferência é revogada no cache; restaurar posteriormente a versão antiga não reativa silenciosamente a importação local.
+
 Uma Consulta Geral carregada é um retrato completo: ausência de documento/revisão significa Não Postado nessa fonte, sem recuperar um status de outra base. Sem Consulta Geral, o caminho legado continua disponível. Conflitos e valores vazios exigem conferência; não se convertem em Em Análise. Duplicatas da mesma combinação usam a data mais recente. Status diferentes empatados na mesma data não escolhem uma linha arbitrária.
 
 O código completo exato tem precedência sobre variantes com/sem `nt-`. As variantes continuam ajudando quando só existe uma grafia; quando ambas existem, os status e revisões não são misturados. EAP, disciplina e identificador permanecem integrantes da identidade.

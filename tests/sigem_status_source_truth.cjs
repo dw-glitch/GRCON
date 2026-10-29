@@ -126,6 +126,11 @@ async function appScenario() {
   };
   root.GrconCloud.state.client = { rpc: async (name, args) => {
     if (name.endsWith('_current')) return { data: version };
+    if (name.endsWith('_activate')) {
+      version = { ...version, snapshot_id: args.target_snapshot };
+      serverRecords = args.target_snapshot === 'old-team-base' ? older.records : base.records;
+      return { data: args.target_snapshot };
+    }
     if (name.endsWith('_page')) return { data: serverRecords.slice(args.after_row, args.after_row + args.page_size).map((payload, i) => ({ row_number: args.after_row + i + 1, payload })) };
     throw new Error(`Unexpected RPC: ${name}`);
   } };
@@ -155,6 +160,16 @@ async function appScenario() {
   await app.refreshLatest();
   assert.equal(app.current().meta.snapshotId, 'new-team-base', 'a new team publication supersedes the local import');
   assertSource(app.current(), app.context());
+  assert.equal(app.state.local.meta.localOverrideSnapshotId, undefined, 'superseded selection is revoked permanently');
+  await app.activateVersion('old-team-base');
+  assert.equal(app.current().meta.snapshotId, 'old-team-base', 'restoring A cannot revive the old local override');
+  await app.setLocal(base);
+  assert.match(app.current().meta.snapshotId, /^local:/);
+  await app.activateVersion('old-team-base');
+  assert.equal(app.current().meta.snapshotId, 'old-team-base', 'explicit activation of the same shared A overrides the local selection');
+  app = loadApp();
+  await app.refresh();
+  assert.equal(app.current().meta.snapshotId, 'old-team-base', 'shared selection survives reload');
   assert.ok(events.some(e => e.type === 'grcon:shared-sigem-updated'));
 }
 appScenario().then(() => console.log('OK — five reported codes/seven revisions, import activation, reload, refresh, Worker context, triage, conflicts and stale fallback.')).catch(error => { console.error(error); process.exitCode = 1; });
