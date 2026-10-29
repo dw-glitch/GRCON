@@ -15,6 +15,21 @@ const ld = Core.parseLdMatrix([
 
 assert.equal(ld.records.length, 3, "reference parser preserves recognized ET/N-1710/CV classes");
 assert.equal(ld.records[0].status, "EMITIDO");
+const multiSheet = Core.parseReferenceSheets([
+  { name: "N-1710", matrix: [["DOCUMENTO", "REVISÃO", "TÍTULO"], [inScope, "B", "Cronograma"]] },
+  { name: "ET", matrix: [["DOCUMENTO", "REVISÃO", "TÍTULO"], [et, "0", "RIR"]] },
+  { name: "Instruções", matrix: [["Campo", "Descrição"], ["A", "B"]] },
+], { fileName: "LD-MISTA.xlsx" });
+assert.equal(multiSheet.records.length, 2, "ET and N-1710 sheets contribute to a single reference source");
+assert.deepEqual(multiSheet.meta.sheetNames, ["N-1710", "ET"]);
+assert.equal(multiSheet.records.find(row => row.document === et).sheetName, "ET");
+assert.equal(Core.parseReferenceSheets([
+  { name: "ET", matrix: [["DOCUMENTO", "REVISÃO"], [et, "0"]] },
+], { fileName: "LD-SOMENTE-ET.xlsx" }).records.length, 1, "ET-only workbooks are supported");
+assert.throws(() => Core.parseReferenceSheets([
+  { name: "Resumo", matrix: [["Observação"], ["nenhum documento"]] },
+], { fileName: "VAZIO.xlsx" }), /nenhuma aba/);
+
 const pw = [
   { document: inScope, revision: "0", company: "CSG", lastEmission: "Não" },
   { document: inScope, revision: "B", company: "CSG", lastEmission: "Sim" },
