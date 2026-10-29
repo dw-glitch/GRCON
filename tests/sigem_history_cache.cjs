@@ -5,7 +5,7 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  await db.exec("CREATE SCHEMA private;CREATE SCHEMA auth;CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role;");
  await db.exec("CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;");
  await db.exec("CREATE FUNCTION private.grcon_is_member(w uuid) RETURNS boolean LANGUAGE sql AS $$SELECT w='00000000-0000-4000-8000-000000000001'::uuid AND auth.uid()='00000000-0000-4000-8000-000000000009'::uuid$$;");
- await db.exec("CREATE TABLE private.grcon_sigem_query_snapshots(id uuid PRIMARY KEY,workspace_id uuid NOT NULL,record_count integer NOT NULL,fingerprint text,file_name text,status text,deleted_at timestamptz,published_at timestamptz,created_at timestamptz,created_by uuid,metadata jsonb);");
+ await db.exec("CREATE TABLE private.grcon_sigem_query_snapshots(id uuid PRIMARY KEY,workspace_id uuid NOT NULL,record_count integer NOT NULL,version integer,fingerprint text,file_name text,status text,deleted_at timestamptz,published_at timestamptz,created_at timestamptz,created_by uuid,metadata jsonb);");
  await db.exec("CREATE TABLE private.grcon_sigem_operational_rows(snapshot_id uuid,row_number integer,document_key text,revision_key text,payload jsonb);");
  await db.exec("CREATE TABLE public.grcon_profiles(id uuid PRIMARY KEY,display_name text,email text);GRANT USAGE ON SCHEMA auth,private TO authenticated;");
  await db.exec(fs.readFileSync('supabase/migrations/20261029133500_sigem_history_statistics_cache.sql','utf8'));
