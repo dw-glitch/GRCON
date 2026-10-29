@@ -32,6 +32,17 @@
     // Storage selection is server-owned. Preserve the existing RPC in runtimes
     // without an authenticated browser session (including offline tooling).
     const token = cloud()?.state?.session?.access_token;
+    if (["begin", "chunk", "publish"].includes(name)) {
+      if (!token || typeof root.fetch !== "function") throw new Error("Conecte-se para publicar a Consulta Geral no Turso.");
+      const action = {begin:"import-begin",chunk:"import-chunk",publish:"import-publish"}[name];
+      const input = name === "begin" ? {fileName:args.source_file,count:args.expected_count,metadata:args.source_metadata,expectedActive:args.expected_active}
+        : name === "chunk" ? {snapshot:args.upload_id,first:args.first_row,rows:args.rows} : {snapshot:args.upload_id};
+      const response = await root.fetch("/api/sigem-storage/" + action, {method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},
+        body:JSON.stringify({workspace:args.target_workspace,...input}),signal:AbortSignal.timeout(60000)});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error("A publicação no Turso não foi confirmada. A base anterior continua disponível. " + (result.error || ""));
+      return name === "chunk" ? result.count : result.id;
+    }
     if (name === "page" && token && typeof root.fetch === "function") {
       const response = await root.fetch("/api/sigem-storage/page", {
         method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -232,10 +243,10 @@
       const ensureWorkspace = () => {
         if (cloud()?.state?.membership?.workspace_id !== target_workspace) throw new Error("A área de trabalho mudou durante o envio. A base anterior permanece ativa.");
       };
-      for (let offset = 0; offset < base.records.length; offset += 500) {
+      for (let offset = 0; offset < base.records.length; offset += 250) {
         ensureWorkspace();
-        await request("chunk", { target_workspace, upload_id, first_row: offset + 1, rows: base.records.slice(offset, offset + 500) });
-        root.dispatchEvent(new CustomEvent("grcon:shared-sigem-progress", { detail: { done: Math.min(offset + 500, base.records.length), total: base.records.length } }));
+        await request("chunk", { target_workspace, upload_id, first_row: offset + 1, rows: base.records.slice(offset, offset + 250) });
+        root.dispatchEvent(new CustomEvent("grcon:shared-sigem-progress", { detail: { done: Math.min(offset + 250, base.records.length), total: base.records.length } }));
       }
       ensureWorkspace();
       await request("publish", { target_workspace, upload_id });

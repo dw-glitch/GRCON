@@ -20,7 +20,9 @@ assert.equal(flags.showStorageUI, false);
 assert.equal(flags.enableAutomaticUpload, false);
 assert.equal(flags.enableManualUpload, false);
 assert.equal(flags.enableAutomaticLookup, false);
-assert.equal(flags.storageProvider, "r2");
+assert.equal(flags.storageProvider, "none");
+assert.equal(flags.documentStorageRetired,true);
+assert.equal(flags.preserveExistingData,false);
 assert.equal(flags.futureOneDriveSupport, true);
 assert.equal(Object.isFrozen(flags), true);
 
@@ -41,4 +43,4 @@ assert.match(worker, /GRCON_DOCUMENT_UPLOADS_ENABLED === "true"/);
 assert.match(worker, /STORAGE_WRITE_ACTIONS\.has\(action\)/);
 assert.match(worker, /STORAGE_WRITES_DISABLED/);
 assert.match(worker, /if \(action === "download"/);
-console.log("vault_hidden_policy: OK — hidden UI, suspended writes and preserved legacy reads");
+console.log("vault_hidden_policy: OK — retired document storage, hidden UI and disabled uploads");

@@ -21,6 +21,10 @@ const crypto=require('node:crypto');
    assert.equal(route.request().headers().authorization,'Bearer synthetic-session');
    const action=new URL(route.request().url()).pathname.split('/').pop();steps.push(action);
    const input=route.request().postDataJSON();
+   if(action==='bases')return route.fulfill({json:{ok:true,bases:[{id:'s1',version:40,date:'2026-10-29',fileName:'Atual.xlsx',records:501,status:'active'},{id:'s2',version:39,date:'2026-10-28',fileName:'Antiga.xlsx',records:500,status:'archived'}]}});
+   if(action==='document-inventory')return route.fulfill({json:{ok:true,objects:0,bytes:0,catalogRecords:0,multipartUploads:0}});
+   if(action==='delete-base')return route.fulfill({json:{ok:true,complete:true}});
+
    if(backgroundScenario){
     let result;
     if(action==='background-copy'){backgroundLaunched=true;result={started:true};}
@@ -48,6 +52,14 @@ const crypto=require('node:crypto');
   assert.equal(await page.locator('[data-storage-copy]').isDisabled(),true);
   assert.equal(await page.locator('[data-storage-refresh]').isVisible(),true);
   assert.equal(await page.locator('[data-admin-panel="storage"]').isVisible(),true);
+  await page.locator('[data-delete-base="s2"]').waitFor();
+  assert.equal(await page.locator('[data-delete-base="s1"]').count(),0,'the active base has no delete control');
+  page.once('dialog',dialog=>dialog.dismiss());await page.locator('[data-delete-base="s2"]').click();
+  assert.equal(steps.includes('delete-base'),false,'cancelling confirmation cannot remove a base');
+  page.once('dialog',dialog=>dialog.accept());await page.locator('[data-delete-base="s2"]').click();
+  await page.locator('[data-delete-base="s2"]').waitFor();
+  assert.equal(steps.filter(x=>x==='delete-base').length,1,'confirmed removal sends exactly one request');
+
   for(const width of [1440,1366,1024]){await page.setViewportSize({width,height:900});assert.equal(await page.locator('#grcon-admin-dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false);}
   fs.mkdirSync('artifacts/sigem-storage',{recursive:true});await page.screenshot({path:'artifacts/sigem-storage/master-storage.png',fullPage:true});
   for(const scenario of ['success','retry','hash','incomplete','changed','pending']){

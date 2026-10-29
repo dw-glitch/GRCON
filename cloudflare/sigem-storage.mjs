@@ -1,5 +1,8 @@
 import {storageMode, tursoClient, initialize, beginSnapshot, copyPage, sealSnapshot, auditPage, verifiedPage, canonical, fail} from './sigem-turso.mjs';
 import {startMigration,migrationStatus,handleJobPage} from './sigem-migration-job.mjs';
+import {liveRpc,externalPage,handleLiveImport,serviceRpc} from './sigem-live.mjs';
+import {sha256} from './sigem-turso.mjs';
+import {documentInventory,purgeDocumentBatch,purgeSigemBase} from './storage-retirement.mjs';
 const PREFIX = '/api/sigem-storage/';
 const uuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v || '');
 const reply = (data, status = 200, headers = {}) => Response.json(data, {status, headers: {'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', ...headers}});
@@ -12,11 +15,11 @@ async function call(env, token, name, input) {
   return data;
 }
 function consent(env) { if (env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED !== 'true') throw fail('SIGEM_STORAGE_AUTHORIZATION_REQUIRED', 403); }
-async function body(request) {
+async function body(request, maxBytes = 16384) {
   const reader = request.body?.getReader();
   if (!reader) throw fail('SIGEM_INPUT_REQUIRED', 400);
   let text = '', size = 0; const decoder = new TextDecoder();
-  for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.byteLength; if (size > 16384) { await reader.cancel(); throw fail('SIGEM_INPUT_TOO_LARGE', 413); } text += decoder.decode(part.value, {stream: true}); }
+  for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.byteLength; if (size > maxBytes) { await reader.cancel(); throw fail('SIGEM_INPUT_TOO_LARGE', 413); } text += decoder.decode(part.value, {stream: true}); }
   try { return JSON.parse(text + decoder.decode()); } catch { throw fail('SIGEM_INPUT_INVALID', 400); }
 }
 export async function handleSigemStorage(request, env) {
@@ -30,13 +33,61 @@ export async function handleSigemStorage(request, env) {
     const auth = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {headers: {apikey: env.SUPABASE_SECRET_KEY, authorization: token}, signal: AbortSignal.timeout(10000)});
     const user=auth.ok?await auth.json():null;
     if (!uuid(user?.id)) throw fail('AUTH_INVALID', 401);
-    const input = request.method === 'POST' ? await body(request) : Object.fromEntries(url.searchParams);
+    const input = request.method === 'POST' ? await body(request, url.pathname === PREFIX+'import-chunk' ? 4000000 : 100000) : Object.fromEntries(url.searchParams);
     if (!input || Array.isArray(input) || !uuid(input.workspace)) throw fail('SIGEM_WORKSPACE_INVALID', 400);
     const action = url.pathname.slice(PREFIX.length), mode = storageMode(env);
     const control = (operation, data = {}) => call(env, token, 'grcon_sigem_storage_control', {target_workspace: input.workspace, operation, input: data});
+    const admin = (operation,data={}) => call(env,token,'grcon_storage_admin',{target_workspace:input.workspace,operation,input:data});
+    if(action==='bases'&&request.method==='GET')return reply({ok:true,...await admin('bases')});
+    if(action==='release-base'&&request.method==='POST'){
+      if(env.GRCON_SIGEM_RELEASE_ENABLED!=='true')throw fail('SIGEM_RELEASE_NOT_APPROVED');
+      if(!uuid(input.snapshot)||input.confirm!==input.snapshot)throw fail('SIGEM_RELEASE_CONFIRMATION_REQUIRED',400);
+      const source=await admin('base-source',{snapshot:input.snapshot}),inventory=await control('inventory');
+      const progress=await migrationStatus(env,input.workspace,inventory);
+      if(!progress.complete)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
+      const proof=[...(progress.completedSnapshots||[]),...progress.reports.flatMap(r=>r.snapshots||[])].find(p=>p.id===source.id&&p.fullAudit===true&&p.count===source.record_count&&p.validatedRecords===source.record_count);
+      if(!proof)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
+      const key=`sigem-backups/v1/${source.workspace_id}/${source.contract_id}/${source.id}/manifest-${proof.manifestHash}.json`;
+      if(proof.manifestKey!==key)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
+      const object=await env.GRCON_DOCUMENTS.get(key),bytes=object?await object.text():'';
+      if(await sha256(bytes)!==proof.manifestHash)throw fail('SIGEM_RELEASE_BACKUP_MISMATCH');
+      const manifest=JSON.parse(bytes),saved=manifest.source,{status:oldStatus,...oldMeta}=saved||{},{status:newStatus,...newMeta}=source;
+      if(canonical(oldMeta)!==canonical(newMeta)||!(oldStatus===newStatus||(oldStatus==='active'&&newStatus==='archived'))||manifest.checksum!==proof.checksum||manifest.recordCount!==source.record_count)throw fail('SIGEM_RELEASE_SOURCE_CHANGED');
+      const target=(await tursoClient(env).execute(`SELECT state,checksum,expected_count FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`,[source.workspace_id,source.contract_id,source.id])).rows[0];
+      if(target?.state!=='verified'||target.checksum!==proof.checksum||target.expected_count!==source.record_count)throw fail('SIGEM_RELEASE_DESTINATION_MISMATCH');
+      return reply({ok:true,...await serviceRpc(env,'grcon_sigem_release_service',{target_workspace:input.workspace,actor_id:user.id,target_snapshot:source.id,proof})});
+    }
+    if(action==='document-inventory'&&request.method==='GET'){
+      const scope=await admin('document-scope');
+      return reply({ok:true,...await documentInventory(env.GRCON_DOCUMENTS,scope.prefix),catalogRecords:scope.records,multipartUploads:scope.multipart.length});
+    }
+    if(action==='document-purge'&&request.method==='POST'){
+      if(input.confirm!=='EXCLUIR ARQUIVOS DO COFRE')throw fail('DOCUMENT_PURGE_CONFIRMATION_REQUIRED',400);
+      const scope=await admin('document-scope'),result=await purgeDocumentBatch(env.GRCON_DOCUMENTS,scope);
+      if(result.complete)await admin('document-finish');
+      return reply({ok:true,...result});
+    }
+    if(action==='delete-base'&&request.method==='POST'){
+      if(!uuid(input.snapshot)||input.confirm!==input.snapshot)throw fail('SIGEM_DELETE_CONFIRMATION_REQUIRED',400);
+      const source=await admin('base-source',{snapshot:input.snapshot});
+      // Probe the destination before tombstoning; source authorization and the
+      // active-base exclusion are rechecked transactionally in begin.
+      const db=tursoClient(env);await db.execute('SELECT 1');
+      await admin('delete-base-begin',{snapshot:input.snapshot});
+      const result=await purgeSigemBase(db,env.GRCON_DOCUMENTS,source);
+      if(result.complete)await admin('delete-base-finish',{snapshot:input.snapshot});
+      return reply({ok:true,...result});
+    }
+    if (['import-begin','import-chunk','import-publish'].includes(action) && request.method === 'POST') {
+      return reply({ok:true,...await handleLiveImport(env,user,input.workspace,action,input)});
+    }
     if (action === 'page' && request.method === 'POST') {
       const after = Number(input.after), size = Number(input.size);
       if (!uuid(input.snapshot) || !Number.isInteger(after) || after < 0 || after > 100000 || !Number.isInteger(size) || size < 1 || size > 1000) throw fail('SIGEM_PAGE_INVALID', 400);
+      if (env.GRCON_SIGEM_DIRECT_IMPORTS_ENABLED === 'true') {
+        const info = await liveRpc(env,user.id,input.workspace,'metadata',{snapshot:input.snapshot});
+        if (info.kind) return reply({ok:true,rows:await externalPage(env,info,after,size),source:'turso',shadow:'disabled'});
+      }
       // Definitive cutover stays locked until SQL projections and publication
       // protocol pass their integration gate. A config typo cannot bypass it.
       if (mode === 'turso') throw fail('SIGEM_CUTOVER_NOT_READY', 503);

@@ -11,8 +11,9 @@
     enableAutomaticLookup: false,
     enableStorageNotifications: false,
     enableStorageMetricsUI: false,
-    preserveExistingData: true,
-    storageProvider: "r2",
+    preserveExistingData: false,
+    storageProvider: "none",
+    documentStorageRetired: true,
     futureOneDriveSupport: true
   });
 })(window);
