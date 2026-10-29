@@ -33,7 +33,7 @@ self.addEventListener("message", (event) => {
       // Chamadas antigas sem metadados de validade LD preservam semântica histórica.
       // A interface atual envia os quatro sinalizadores e exige validação N-1710.
       const settings = Object.prototype.hasOwnProperty.call(payload, "ldAvailable")
-        ? { requireN1710Ld: true, ldAvailable: Boolean(payload.ldAvailable),
+        ? { requireN1710Ld: true, requireDocumentReference: true, ldAvailable: Boolean(payload.ldAvailable),
             sigemAvailable: Boolean(payload.sigemAvailable), pwAvailable: Boolean(payload.pwAvailable) }
         : undefined;
       const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || [], settings);
