@@ -20,7 +20,7 @@ export interface ManagerialDocument {
   action: string;
 }
 export interface ManagerialSummary {
-  active: number;
+  active: number | null;
   registered: number | null;
   emitted: number | null;
   posted: number | null;
@@ -84,8 +84,11 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
   const sigemIndex = fromIndex(state.model?.normalizedSigem || []);
   const rows: ManagerialDocument[] = [];
   const summary: ManagerialSummary = {
-    active: 0, registered: ready ? 0 : null, emitted: ready ? 0 : null,
-    posted: ready ? 0 : null, compliant: ready ? 0 : null,
+    active: referenceAvailable ? 0 : null,
+    registered: referenceAvailable && pwAvailable && state.model ? 0 : null,
+    emitted: referenceAvailable && pwAvailable && state.model ? 0 : null,
+    posted: referenceAvailable && sigemAvailable && state.model ? 0 : null,
+    compliant: ready ? 0 : null,
     pending: ready ? 0 : null, cancelled: 0, conflicts: 0,
   };
 
@@ -127,11 +130,11 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     else { situation = "Em conformidade"; action = "Sem ação necessária"; }
 
     if (!cancelled) {
-      summary.active++;
+      if (summary.active !== null) summary.active++;
+      if (summary.registered !== null && registered) summary.registered++;
+      if (summary.emitted !== null && emitted) summary.emitted++;
+      if (summary.posted !== null && posted) summary.posted++;
       if (ready) {
-        if (registered) summary.registered!++;
-        if (emitted) summary.emitted!++;
-        if (posted) summary.posted!++;
         if (situation === "Em conformidade") summary.compliant!++;
         if (situation === "Com pendência" || situation === "Em andamento") summary.pending!++;
       }
