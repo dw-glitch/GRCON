@@ -11,7 +11,7 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  create table public.grcon_contracts(id uuid primary key,workspace_id uuid,active boolean default true);
  create table public.grcon_memberships(workspace_id uuid,contract_id uuid,user_id uuid,active boolean default true,role text);
  create table private.grcon_master_owner(user_id uuid);
- create function private.grcon_operations_service(operation text) returns jsonb language plpgsql as $declare j record;begin select 'sigem_import'::text kind into j; if operation='noop' then return '{}';elsif operation like 'import_%' and j.kind='sigem_import' then return '{"legacyWrite":true}';end if;return '{}';end$;
+ create function private.grcon_operations_service(operation text) returns jsonb language plpgsql as $$declare j record;begin select 'sigem_import'::text kind into j; if operation='noop' then return '{}';elsif operation like 'import_%' and j.kind='sigem_import' then return '{"legacyWrite":true}';end if;return '{}';end$$;
  create function private.grcon_require_master_owner() returns void language plpgsql as $$begin if not exists(select 1 from private.grcon_master_owner where user_id=auth.uid()) then raise exception 'Master only' using errcode='42501';end if;end$$;
  create function private.grcon_has_role(w uuid,roles text[]) returns boolean language sql as $$select exists(select 1 from public.grcon_memberships where workspace_id=w and user_id=auth.uid() and active and role=any(roles))$$;
  create function private.grcon_document_key(v text) returns text language sql as $$select upper(trim(v))$$;
