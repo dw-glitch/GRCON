@@ -40,8 +40,11 @@ wrapper must forward the option unmodified.
 PW registration does not prove emission: `Previsto` counts as registration
 only; `Última emissão = Sim` is used as the current emission evidence.
 A historically emitted revision marked `Não` is not automatically current.
-SIGEM posting is inferred only from status values of its Consulta Geral
-projection, never from the reference sheet's `EMITIDO` field.
+SIGEM posting is determined by the document appearing in the authoritative Consulta Geral,
+even with an `Em Análise` or `Recusado` status; the reference sheet's `EMITIDO`
+field alone never proves a posting. A refused revision cannot be considered compliant.
+`Com pendências` includes items `Em andamento` awaiting PW emission, not those
+still `Em preparação`.
 
 When the PW/Consulta Geral data is missing, affected executive counters display
 an em dash instead of an incorrect zero. Reference-only documents appear in the
