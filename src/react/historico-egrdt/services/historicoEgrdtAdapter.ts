@@ -43,7 +43,7 @@ function report() {
 function appVersion(): string {
   return window.GrconConfig?.APP_VERSION
     || document.documentElement.dataset.version
-    || "5.44.17";
+    || "5.44.18";
 }
 
 function notify(message: string, kind = "info"): void {
@@ -218,6 +218,10 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
     teamsErrorCode: trace?.errorCode || null,
     teamsSigemEvidence: window.GrconTeamsTrace?.sigemEvidence(records) || {},
     workspaceId: window.GrconCloud?.state?.membership?.workspace_id,
+    // Transfer the shared/local active base explicitly: workers do not share
+    // window globals, and must not silently read another contract's IDB cache.
+    conferenceBase: window.GrconSharedSigemQuery?.current?.() || { meta: {}, records: [] },
+    conferenceBaseStale: Boolean(window.GrconSharedSigemQuery?.state?.stale),
   };
   const workerBuffer = await buildWorkbookInWorker(records, options, operation?.update).catch(() => null);
   const buffer = workerBuffer || await HistoryReport.buildWorkbook(records, options);
