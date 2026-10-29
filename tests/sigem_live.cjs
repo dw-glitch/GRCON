@@ -105,6 +105,30 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  assert.equal(retiredScope.prefix,'workspaces/'+id(1)+'/documents/');assert.equal(retiredScope.records,0);
  await assert.rejects(pg.query('select public.grcon_document_retirement_service($1,$2)',[id(1),'delete-base-finish']),/API de servidor/);
  await pg.exec('set role authenticated');await assert.rejects(pg.query('select public.grcon_document_retirement_service($1,$2)',[id(1),'document-scope']),/permission denied/);await pg.exec('reset role');
+
+ // Regression for SQLSTATE 42702 and monitored-document statement timeout.
+ await pg.exec('reset role');
+ await pg.exec([
+   "create function private.grcon_is_member(w uuid) returns boolean language sql security definer set search_path='' as $ select exists(select 1 from public.grcon_memberships where workspace_id=w and user_id=auth.uid() and active) $;",
+   "alter table private.grcon_sigem_comparisons add column compared_at timestamptz default now();",
+   "create table private.grcon_sigem_status_changes(workspace_id uuid,contract_id uuid,document_key text,previous_status text,comparison_id uuid,created_at timestamptz default now());",
+   "create table private.grcon_monitored_documents(id uuid primary key,workspace_id uuid,contract_id uuid,document_key text,document_code text,description text,note text,priority text,active boolean);"
+ ].join('\n'));
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029114800_fix_storage_admin_monitoring.sql','utf8'));
+ await pg.query('insert into private.grcon_monitored_documents values($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+   [id(92),id(1),id(2),'DOC-12','DOC-12','Monitoring regression','QA','alta',true]);
+ await pg.exec("set request.jwt.claim.sub='"+id(9)+"';set role authenticated;");
+ const bases=(await pg.query("select public.grcon_storage_admin($1,'bases','{}') r",[id(1)])).rows[0].r.bases;
+ assert.equal(bases.length,2,'Master lists active and archived copies without ambiguous SQL aliases');
+ assert.equal(bases.filter(s=>s.status==='active').length,1,'active snapshot remains protected');
+ const monitored=(await pg.query('select * from private.grcon_monitored_documents_list($1)',[id(1)])).rows;
+ assert.equal(monitored.length,1,'monitoring is scoped to explicitly watched codes');
+ assert.equal(monitored[0].document_key,'DOC-12');
+ assert.equal(monitored[0].current_status,'Em análise','monitored status is retrieved from the minimal Turso projection');
+ assert.equal(monitored[0].last_status,null,'missing historical change does not break monitoring');
+ await assert.rejects(pg.query('select * from private.grcon_monitored_documents_list($1)',[id(11)]),/Sem acesso ao contrato/,'cross-workspace monitoring is forbidden');
+ await pg.exec('reset role');
+
  console.log('sigem_live: full import/read fidelity, minimal Postgres storage, SQL publication gate, replay, conflicts, outage, tenant isolation, active-base protection and blocked legacy writes passed.');
  }finally{global.fetch=originalFetch;sqlite.close();await pg.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
