@@ -63,7 +63,7 @@ export function coordinatorSheets(state: SigemPwState): Record<string, Matrix> {
   const summary: Matrix = [
     ["SIGEM × PW — CONTROLE DOCUMENTAL", "Quantidade"],
     ["Data da geração", new Date().toLocaleString("pt-BR")],
-    ["Documentos ativos", report.summary.active],
+    ["Documentos ativos", report.summary.active ?? 0],
     ["Cadastrados no PW", report.summary.registered || 0],
     ["Emitidos no PW", report.summary.emitted || 0],
     ["Postados no SIGEM", report.summary.posted || 0],
