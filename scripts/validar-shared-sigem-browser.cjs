@@ -98,7 +98,7 @@ function rpc(name,args) {
  });
  assert.equal(triage.status,'Recusado');assert.equal(triage.sigemStatusSource,'local-general-query');assert.equal(triage.allocationFinding.kind,'allocated');
  // Exact revision lookup, no arbitrary revision fallback.
- assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','C','LEGACY').status),'LEGACY');
+ assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','C','LEGACY').status),'Não Postado', 'uma consulta completa é autoritativa e não reutiliza status legado de outra revisão');
  // Invalid/empty file leaves both shared and local last valid sources.
  const activeId=backend.active.snapshot_id;
  const originalActive={...backend.active};
