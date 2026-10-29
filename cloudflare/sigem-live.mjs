@@ -11,7 +11,15 @@ export async function serviceRpc(env,name,input){
  let response;
  try{response=await fetch(env.SUPABASE_URL+'/rest/v1/rpc/'+name,{method:'POST',headers,body:JSON.stringify(input),signal:AbortSignal.timeout(30000)});}catch{throw fail('SIGEM_CONTROL_UNAVAILABLE',503);}
  const data=await response.json().catch(()=>null);
- if(!response.ok)throw fail(data?.code==='42501'?'SIGEM_ACCESS_DENIED':'SIGEM_IMPORT_REJECTED',data?.code==='42501'?403:409);
+ if(!response.ok){
+  if(data?.code==='42501')throw fail('SIGEM_ACCESS_DENIED',403);
+  // PostgREST may return a SQL cancellation/lock conflict as 4xx. Keep actual
+  // integrity failures terminal, while allowing bounded replay of these
+  // explicitly transient database conditions.
+  if(['57014','55P03','40001','40P01','53300'].includes(data?.code))throw fail('SIGEM_CONTROL_BUSY',503);
+  if(response.status>=500)throw fail('SIGEM_CONTROL_UNAVAILABLE',503);
+  throw fail('SIGEM_IMPORT_REJECTED',409);
+ }
  return data;
 }
 export const liveRpc=(env,actor,workspace,operation,input={})=>serviceRpc(env,'grcon_sigem_live_service',{target_workspace:workspace,actor_id:actor,operation,input});
