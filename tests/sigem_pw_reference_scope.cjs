@@ -18,10 +18,11 @@ assert.equal(ld.records[0].status, "EMITIDO");
 const multiSheet = Core.parseReferenceSheets([
   { name: "N-1710", matrix: [["DOCUMENTO", "REVISÃO", "TÍTULO"], [inScope, "B", "Cronograma"]] },
   { name: "ET", matrix: [["DOCUMENTO", "REVISÃO", "TÍTULO"], [et, "0", "RIR"]] },
+  { name: "N-1710 MOD", matrix: [["DOCUMENTO N-1710", "REVISÃO", "TÍTULO"], ["DE-5290.00-22313-970-C1O-107", "A", "Fluxograma"]] },
   { name: "Instruções", matrix: [["Campo", "Descrição"], ["A", "B"]] },
 ], { fileName: "LD-MISTA.xlsx" });
-assert.equal(multiSheet.records.length, 2, "ET and N-1710 sheets contribute to a single reference source");
-assert.deepEqual(multiSheet.meta.sheetNames, ["N-1710", "ET"]);
+assert.equal(multiSheet.records.length, 3, "ET, N-1710 and N-1710 MOD contribute to a single reference source");
+assert.deepEqual(multiSheet.meta.sheetNames, ["N-1710", "ET", "N-1710 MOD"]);
 assert.equal(multiSheet.records.find(row => row.document === et).sheetName, "ET");
 assert.equal(Core.parseReferenceSheets([
   { name: "ET", matrix: [["DOCUMENTO", "REVISÃO"], [et, "0"]] },
