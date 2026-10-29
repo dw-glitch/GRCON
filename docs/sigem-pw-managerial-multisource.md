@@ -44,7 +44,7 @@ only; `Última emissão = Sim` is used as the current emission evidence.
 A historically emitted revision marked `Não` is not automatically current.
 SIGEM posting is determined by the document appearing in the authoritative Consulta Geral,
 even with an `Em Análise` or `Recusado` status; the reference sheet's `EMITIDO`
-field alone never proves a posting. A refused revision cannot be considered compliant.
+field alone never proves a posting. A refused revision cannot be considered compliant. Neither `Em análise` nor an unknown status demonstrates a favorable fiscal evaluation. Only explicitly favorable assessment without reservations qualifies for full conformity.
 `Com pendências` includes items `Em andamento` awaiting PW emission, not those
 still `Em preparação`.
 
