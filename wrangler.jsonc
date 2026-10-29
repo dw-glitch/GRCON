@@ -10,6 +10,8 @@
   "services": [{"binding":"GRCON_MIGRATION_SELF","service":"grcon-cloudflare"}],
   "vars": {
     "GRCON_SIGEM_STORAGE_MODE": "supabase",
+    "GRCON_SIGEM_DIRECT_IMPORTS_ENABLED": "true",
+    "GRCON_DOCUMENT_UPLOADS_ENABLED": "false",
     "GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED": "true",
     "GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED": "true",
     "GRCON_DOCUMENT_AI_ENABLED": "true",

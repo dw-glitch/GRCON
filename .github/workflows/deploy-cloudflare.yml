@@ -59,3 +59,7 @@ jobs:
           GRCON_PRODUCTION_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev
         run: node scripts/verify-document-ai-production.mjs
 
+      - name: Concluir remoção do armazenamento documental desativado
+        env:
+          GRCON_PRODUCTION_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev
+        run: node scripts/retire-document-storage.mjs

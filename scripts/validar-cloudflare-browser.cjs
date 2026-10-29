@@ -203,15 +203,10 @@ async function probe(page, pathname) {
 
     const vaultHealth = await context.request.get(baseUrl + "/api/document-vault/health");
     const vaultHealthBody = await vaultHealth.json().catch(() => ({}));
-    assert.ok([200, 503].includes(vaultHealth.status()), "Health do Cofre deve responder 200 configurado ou 503 sem secrets locais.");
-    assert.equal(vaultHealthBody.service, "grcon-document-vault");
-    assert.equal(typeof vaultHealthBody.powerAutomateConfigured, "boolean");
-    assert.equal(typeof vaultHealthBody.powerAutomateUrlValid, "boolean");
-    assert.equal(vaultHealthBody.powerAutomateConfigured, false, "Preview local não deve inventar secret do Power Automate.");
-    assert.equal(vaultHealthBody.powerAutomateUrlValid, false);
+    assert.equal(vaultHealth.status(),410,'O Cofre aposentado não pode ser reativado por configuração.');
+    assert.equal(vaultHealthBody.error,'DOCUMENT_STORAGE_RETIRED');
 
-    // Cofre is deliberately hidden pending corporate storage approval. Its authenticated
-    // API remains available, but neither navigation nor UI should be exposed.
+    // The document-storage module is dormant and has no visible entry point.
     await page.waitForFunction(() => Boolean(window.GrconDocumentVault), null, { timeout: 15000 });
     const vaultUi = await page.evaluate(() => ({
       navigation: document.querySelectorAll("[data-vault-open]").length,

@@ -52,7 +52,7 @@ async function createJob(env,actorId,workspace,kind,key,title,input){
 async function createStreamJob(request,env,actorId,workspace){
  const kind=request.headers.get('x-grcon-kind'),key=request.headers.get('x-grcon-key'),fingerprint=request.headers.get('x-grcon-fingerprint');
  const length=Number(request.headers.get('content-length'));
- if(!['conference_report','sigem_import'].includes(kind)||!key||key.length>240||!/^[a-f0-9]{64}$/.test(fingerprint||''))throw fail('INVALID_KIND');
+ if(!['conference_report'].includes(kind)||!key||key.length>240||!/^[a-f0-9]{64}$/.test(fingerprint||''))throw fail('INVALID_KIND');
  if(!request.body||!Number.isInteger(length)||length<1||length>MAX_INPUT)throw fail('INPUT_TOO_LARGE',413);
  const title=kind==='conference_report'?'Relatório de conferência SIGEM':'Publicação da Consulta Geral';
  const created=await operations(env,'create',{kind,key,title,fingerprint},actorId,workspace);

@@ -291,10 +291,6 @@
     if (state.busy || !root.GrconSharedSigemQuery.state.local) return;
     setBusy(true, "Publicando Consulta Geral para a equipe…");
     try {
-      if (root.GrconBackgroundJobs?.available?.()) {
-        await root.GrconBackgroundJobs.submit("sigem_import", root.GrconSharedSigemQuery.state.local);
-        return;
-      }
       await root.GrconSharedSigemQuery.publish(root.GrconSharedSigemQuery.state.local);
       await adoptSharedBase();
       notify("Consulta Geral publicada para todos os usuários.", "success");

@@ -507,7 +507,7 @@ async function waitEvolutionReady(page) {
     await page.addScriptTag({url:baseUrl+'/import_review.js'});
     await page.evaluate(()=>{GrconImportReview.saveProfile('Perfil anterior',{columns:{document:'NumeroDocumentoCliente',revision:'RevisaoCompleta',state:'o_statename',lastEmission:'Última emissão',documentType:'TipoDocumento'}});GrconImportReview.selectProfile('Perfil anterior');});
     const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
-    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-FORA-ESCOPO;0;ABC');
+    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-C1O-FORA-ESCOPO;0;ABC');
     await importFile(page,'#spw-pw-file',codeOnlyPath);
     const importReview = page.locator('#grcon-import-review');
     if (await importReview.isVisible().catch(() => false)) {
@@ -524,7 +524,8 @@ async function waitEvolutionReady(page) {
       readiness:GrconSigemPwDashboardUi.state.readiness?.failedChecks,
     }));
     assert.equal(codeOnlyDiagnostics.registered,1,'perfil anterior não exige campos opcionais ausentes: '+JSON.stringify(codeOnlyDiagnostics));
-    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),1,'siglas de outras empresas ficam separadas e não entram na comparação');
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeExcludedCount),1,'a importação registra a empresa divergente na auditoria da fonte');
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),0,'a empresa divergente foi separada antes de construir o modelo de comparação');
     await page.evaluate(()=>GrconImportReview.selectProfile(''));
     await importFile(page,'#spw-pw-file',presencePw);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
@@ -574,7 +575,7 @@ async function waitEvolutionReady(page) {
     });
     await waitIdle(page);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.records.length),6);
-    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),7,'migração aplica o escopo C1O vigente, versão 7');
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),8,'migração aplica o escopo C1O vigente, versão 8');
     metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:true,existingBaseReprocessed:true,savedProfileDocumentOnly:true};
     await page.locator('[data-revision-scope="all"]').click();
     await page.locator('[data-list="all"]').click();

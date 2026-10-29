@@ -13,6 +13,7 @@ const backend={active:null,uploads:new Map(),fail:false,offline:false,serial:0};
 function rpc(name,args) {
  if(backend.offline) return {data:null,error:{message:'QA offline'}};
  if(name==='grcon_egrdt_sequence_status') return {data:{last_generated:1984,next_available:1985,active_reservations:0,year:2026},error:null};
+ if(name==='grcon_is_master_owner')return {data:false,error:null};
  if(name==='grcon_document_tasks') return {data:[],error:null};
  if(name==='grcon_pw_base') return {data:{versions:[]},error:null};
  if(name==='versions') return {data:[],error:null};
@@ -34,10 +35,22 @@ function rpc(name,args) {
  async function user(role){
    const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block'});
    await context.route('**/qa-sigem/*',async route=>{const result=rpc(route.request().url().split('/').pop(),route.request().postDataJSON());await route.fulfill({json:result});});
+   await context.route('**/api/sigem-storage/**',async route=>{
+     const action=new URL(route.request().url()).pathname.split('/').pop(),i=route.request().postDataJSON();
+     assert.equal(route.request().headers().authorization,'Bearer synthetic-turso-session');
+     if(action.startsWith('import-')&&role!=='owner')return route.fulfill({status:403,json:{ok:false,error:'ACCESS_DENIED'}});
+     const names={'import-begin':'begin','import-chunk':'chunk','import-publish':'publish',page:'page'};
+     const args=action==='import-begin'?{target_workspace:i.workspace,source_file:i.fileName,expected_count:i.count,source_metadata:i.metadata,expected_active:i.expectedActive}
+       :action==='import-chunk'?{target_workspace:i.workspace,upload_id:i.snapshot,first_row:i.first,rows:i.rows}
+       :action==='import-publish'?{target_workspace:i.workspace,upload_id:i.snapshot}:{target_workspace:i.workspace,target_snapshot:i.snapshot,after_row:i.after,page_size:i.size};
+     const result=rpc(names[action],args);
+     if(result.error)return route.fulfill({status:503,json:{ok:false,error:result.error.message}});
+     return route.fulfill({json:{ok:true,...(action==='page'?{rows:result.data,source:'turso'}:action==='import-chunk'?{count:result.data}:{id:result.data})}});
+   });
    const page=await context.newPage(); page.on('pageerror',e=>errors.push(e.message));
    await page.goto(baseUrl);await page.waitForFunction(()=>window.GrconSharedSigemQuery&&window.GrconCloud);
    await page.evaluate((role)=>{
-     window.GrconCloud.state.membership={workspace_id:'qa-shared-workspace',role};window.GrconCloud.state.online=true;
+     window.GrconCloud.state.session={user:{id:'qa-'+role},access_token:'synthetic-turso-session'};window.GrconCloud.state.membership={workspace_id:'qa-shared-workspace',role};window.GrconCloud.state.online=true;
      window.GrconCloud.state.client={rpc:async(name,args)=>{const result=await fetch('/qa-sigem/'+name.replace('grcon_sigem_query_',''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(args)});return result.json();}};
      document.documentElement.classList.remove('grcon-cloud-pending'); document.getElementById('grcon-cloud-auth')?.remove();
      document.body.classList.remove('grcon-cloud-locked');

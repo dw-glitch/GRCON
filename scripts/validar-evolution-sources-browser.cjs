@@ -24,7 +24,7 @@ fs.mkdirSync(outputDir, { recursive: true });
       const core = window.GrconSigemPwDashboard;
       const row = n => ({ document: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${n}`, revision: "0", status: "Postado", lastEmission: "SIM" });
       const base = (system, id, date, count) => ({ meta: { kind: system, snapshotId: id, fileName: `${id}.xlsx`, importedAt: `${date}T12:00:00.000Z` },
-        records: Array.from({ length: count }, (_, n) => row(n)) });
+        records: Array.from({ length: count }, (_, n) => ({ ...row(n), ...(system === "pw" ? { company: "CSG" } : {}) })) });
       window.__evolutionBases = { s1: base("sigem", "s1", "2026-10-01", 1), s2: base("sigem", "s2", "2026-10-02", 2),
         p1: base("pw", "p1", "2026-10-01", 1), p2: base("pw", "p2", "2026-10-02", 2),
         remote: base("sigem", "remote", "2026-09-29", 1) };

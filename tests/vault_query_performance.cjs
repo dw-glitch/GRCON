@@ -63,9 +63,11 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  };
  try{
   const request=path=>new Request('https://app.test/api/document-vault/'+path+'?workspace='+uuid(1),{headers:{authorization:'Bearer synthetic-session'}}),env={SUPABASE_URL:'https://test.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_SYNTHETIC'};
-  let response=await worker.fetch(request('usage'),env,{});assert.equal(response.status,200);assert.equal((await response.json()).storage.usedBytes,2048);assert.ok(!names.includes('grcon_document_vault_storage_catalog'));
-  timeout=true;response=await worker.fetch(request('list'),env,{});assert.equal(response.status,503);assert.equal((await response.json()).error,'VAULT_QUERY_TIMEOUT');
-  unauthorized=true;response=await worker.fetch(request('usage'),env,{});assert.equal(response.status,401);assert.equal((await response.json()).error,'AUTH_INVALID');
+  for(const action of ['usage','list','download']){
+   const response=await worker.fetch(request(action),env,{});assert.equal(response.status,410);
+   assert.equal((await response.json()).error,'DOCUMENT_STORAGE_RETIRED');
+  }
+  assert.equal(names.length,0,'retired routes perform no catalog or R2 queries');
  }finally{global.fetch=originalFetch;}
  console.log('Cofre: allocation equivalence, pagination, scope, storage isolation, real Worker light usage and HTTP error classification passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
