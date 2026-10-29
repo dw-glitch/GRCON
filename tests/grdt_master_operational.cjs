@@ -34,14 +34,14 @@ for (const status of ["", "Sem status", "Pendente Certificação", "Cancelado"])
   assert.equal(policy(status).autoEligible, false, status);
 }
 const inherited = {document:"PR-5290.00-22313-175-C1O-013",revision:"C",
-  status:"Em Análise",sigemRevisionStatus:"Não Postado",blockingRevision:"B",
+  status:"Não Postado",sigemRevisionStatus:"Não Postado",blockingRevision:"B",
   blockingRevisionStatus:"Em Workflow",decision:Core.DISCARD,hardBlock:false};
-assert.equal(Q.selectionPolicy(inherited).label,"Em análise (rev. B)");
+assert.equal(Q.selectionPolicy(inherited).label,"Revisão B em análise");
 assert.equal(Q.selectionPolicy(inherited).autoEligible,false);
 assert.equal(Q.selectionPolicy(inherited).manualOnly,true);
 const inheritedSelected = new Set([0]), inheritedManual = new Set([0]);
 assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),false);
-inherited.manualSigemSelection = {revision:"C",kind:"analysis",statusKey:"EM ANALISE",blockingRevision:"B"};
+inherited.manualSigemSelection = {revision:"C",kind:"not_posted",statusKey:"NAO POSTADO",blockingRevision:"B"};
 assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),true,"exceção marcada conscientemente");
 inherited.blockingRevision = "A";
 assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),false,"mudança da revisão bloqueadora exige nova exceção");
@@ -247,13 +247,13 @@ vm.runInContext(appSource.slice(appSource.indexOf("  function rowIncludedForGene
   appSource.indexOf("  function guardedSelectedIndices(")), visualCtx);
 vm.runInContext(appSource.slice(appSource.indexOf("  function compactDecisionLabel("),
   appSource.indexOf("  function decisionGroupKey(")), visualCtx);
-const expectedVisualClasses = ["ready", "allocation-blocked", "in-analysis", "review", "unresolved", "allocation-conflict", "technical-blocked", "excluded"];
+const expectedVisualClasses = ["ready", "allocation-blocked", "review", "review", "unresolved", "allocation-conflict", "technical-blocked", "excluded"];
 for (let index = 0; index < visualRows.length; index += 1) {
   assert.equal(vm.runInContext(`selectionSituationClass(state.results[${index}], ${index})`, visualCtx), expectedVisualClasses[index]);
 }
 assert.equal(vm.runInContext("selectionSituationLabel(state.results[0], 0)", visualCtx), "Pronto");
 assert.match(vm.runInContext("selectionSituationLabel(state.results[1], 1)", visualCtx), /Não incluir · inclusão manual/);
-assert.match(vm.runInContext("selectionSituationLabel(state.results[2], 2)", visualCtx), /Em análise \(rev\. A\) · incluído manualmente/);
+assert.match(vm.runInContext("selectionSituationLabel(state.results[2], 2)", visualCtx), /Revisão A em análise · incluído manualmente/);
 assert.equal(vm.runInContext("selectionSituationLabel(state.results[6], 6)", visualCtx), "Não incluir");
 const statusCss = fs.readFileSync(require.resolve("../grdt-central-ux.css"), "utf8");
 const palettes = ["ready", "blocked", "analysis", "unresolved", "review"].map(name => {

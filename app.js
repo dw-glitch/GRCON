@@ -2406,6 +2406,7 @@
     row.status = resolved.status;
     row.statusOriginal = resolved.revisionStatus || resolved.status;
     row.sigemRevisionStatus = resolved.revisionStatus || resolved.status;
+    row.statusOperational = C.normalizeSigemStatus(resolved.status).normalized;
     row.blockingRevision = resolved.blockingRevision || "";
     row.blockingRevisionStatus = resolved.blockingRevisionStatus || "";
     row.blockingRevisionSource = resolved.blockingRevisionSource || "";
@@ -3173,6 +3174,7 @@
     if (policy.allocation) return "allocation-blocked";
     if (!rowCanBeSelected(row) || row.hardBlock && !policy.allocation) return "technical-blocked";
     if (policy.unresolved) return "unresolved";
+    if (policy.previousAnalysis) return "review";
     if (policy.kind === "analysis") return "in-analysis";
     if (policy.manualOnly) return "manual-sigem";
     if (!E.validateEtPlanningPair(row, rowOutputSources(row)).valid) return "review";
@@ -3194,6 +3196,7 @@
     if (row && TriageQuery.allocationAlert(row) === "not_allocated") return "bloqueado";
     if (row && TriageQuery.allocationAlert(row) === "conflict") return "revisar";
     if (row && TriageQuery.unresolvedStatus(row)) return 'nao_localizado';
+    if (row && row.blockingRevision) return "bloqueado";
     if (row && rowStatusPolicy(row).kind === "analysis") return "descartar";
     if (row && row.hardBlock) return "bloqueado";
     if (row && rowStatusPolicy(row).manualOnly) return "revisar";
@@ -4183,7 +4186,7 @@
         <td><span class="sigem-status" title="${escapeHtml(ldSigemStatus)}">${escapeHtml(ldSigemStatus)}</span></td>
         <td><span class="sigem-status" title="${escapeHtml(row.blockingRevision
           ? `Revisão ${row.blockingRevision}: ${row.blockingRevisionStatus}. Revisão ${row.revision}: ${row.sigemRevisionStatus}. Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || "LD / Colar SIGEM"}`
-          : `${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.blockingRevision ? `Em Análise (rev. ${row.blockingRevision})` : row.status || "—")}</span></td>
+          : `${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.status || "—")}${row.blockingRevision ? ` · Rev. ${escapeHtml(row.blockingRevision)} pendente` : ""}</span></td>
         <td><span class="posting-evidence ${row.postingEvidence && row.postingEvidence.complete ? "posted" : row.postingEvidence && row.postingEvidence.partial ? "review" : "none"}" title="${escapeHtml(row.postingEvidence && row.postingEvidence.explanation || "")}">${escapeHtml(row.postingStatus || (row.postingEvidence && row.postingEvidence.status) || "Sem evidência na LD")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(fiscalComment)}">${escapeHtml(fiscalComment)}</span></td>
         <td><span class="text-cell">${escapeHtml(allocation)}</span>${window.GrconAllocationRegistry?.badge(row.document) || ""}</td>

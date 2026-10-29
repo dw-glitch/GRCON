@@ -95,6 +95,14 @@ for (const status of ['Em Análise', 'Em Workflow']) {
   assert.equal(uiFunction('decisionGroupKey', row), 'descartar', status);
   assert.equal(uiFunction('compactDecisionLabel', row), 'Em análise', status);
 }
+const blocked = Core.grdtStatusForRevision({ records: [{ document: documents[0], revision: 'A' }], history: [] }, 'A',
+  Query.context({ records: [{ document: documents[0], revision: '0', status: 'Em Análise' }] }), documents[0]);
+assert.equal(blocked.status, 'Não Postado');
+assert.equal(blocked.blockingRevision, '0');
+const blockedRow = { ...blocked, decision: Core.DISCARD };
+assert.equal(TriageQuery.selectionPolicy(blockedRow).autoEligible, false);
+assert.equal(uiFunction('decisionGroupKey', blockedRow), 'bloqueado');
+assert.equal(uiFunction('compactDecisionLabel', blockedRow), 'Revisão 0 em análise');
 
 // Exercise the app import -> persistence -> refresh -> triage context. This
 // catches the original bug where setLocal() reported success but current()

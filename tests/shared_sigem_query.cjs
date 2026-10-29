@@ -48,7 +48,7 @@ assert.equal(result.status,'Em análise');
 assert.equal(result.sigemStatusSource,'shared-general-query');
 assert.equal(result.allocationFinding.kind,'allocated');
 const other=Core.triageOne({id:'test',name:doc+'_B.pdf'},index,{sigemQueryContext:Query.context(base('Em análise','A'))});
-assert.equal(Core.statusKind(other.status), 'analysis', 'revisão A em análise impede postar B');
+assert.equal(other.status, 'Não Postado', 'revisão A em análise bloqueia B sem alterar seu status');
 assert.equal(other.blockingRevision,'A');
 assert.equal(other.sigemRevisionStatus,'Não Postado');
 assert.equal(other.decision,Core.DISCARD);
@@ -66,7 +66,7 @@ const revised = Query.context({
 const nextGroup = {records:[{document:doc,revision:'C'}],history:[]};
 assert.equal(Core.statusForRevision(nextGroup,'C',revised).status,'Não Postado','status exato continua fiel ao SIGEM');
 const guarded=Core.grdtStatusForRevision(nextGroup,'C',revised,doc);
-assert.equal(guarded.status,'Em Análise');
+assert.equal(guarded.status,'Não Postado');
 assert.equal(guarded.revisionStatus,'Não Postado');
 assert.equal(guarded.blockingRevision,'B');
 assert.equal(guarded.blockingRevisionStatus,'Em Workflow');
@@ -79,7 +79,7 @@ const nextIndex=Core.buildIndex([{
 }],[{document:doc,revision:'C',status:'Não Postado',sheet:'Colar SIGEM'}]);
 const triagedNext=Core.triageOne({id:'next',name:doc+'_C.pdf'},nextIndex,{sigemQueryContext:revised});
 assert.equal(triagedNext.decision,Core.DISCARD);
-assert.equal(triagedNext.status,'Em Análise');
+assert.equal(triagedNext.status,'Não Postado');
 assert.equal(triagedNext.sigemRevisionStatus,'Não Postado');
 assert.equal(triagedNext.blockingRevision,'B');
 assert.match(triagedNext.reason,/revisão B permanece Em Análise/);

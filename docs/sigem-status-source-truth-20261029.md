@@ -12,6 +12,8 @@ O código completo exato tem precedência sobre variantes com/sem `nt-`. As vari
 
 A presença de documento/revisão continua comprovando postagem, inclusive quando o resultado técnico é Recusado. A correção não transforma recusa em aprovação e não cria uma nova revisão de um arquivo físico automaticamente.
 
+Uma análise aberta em revisão anterior continua impedindo a seleção automática de uma revisão posterior. Esse impedimento aparece como pendência da revisão anterior, sem substituir o status próprio da revisão conferida por Em Análise. A inclusão manual continua exigindo a confirmação da exceção.
+
 ## Verificação com o arquivo original
 
 Arquivo: `Consulta Geral - UHDTD U-32 MANHA (FTP) - 261029[100101].XLSX`.
