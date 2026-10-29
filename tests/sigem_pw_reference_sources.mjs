@@ -3,8 +3,8 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
-const file = new URL("../src/react/sigem-pw/services/sigemPwReferenceSources.ts", import.meta.url);
-const output = ts.transpileModule(readFileSync(file, "utf8"), {
+const sourceFile = new URL("../src/react/sigem-pw/services/sigemPwReferenceSources.ts", import.meta.url);
+const output = ts.transpileModule(readFileSync(sourceFile, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const module = { exports: {} };
