@@ -131,36 +131,49 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  await pg.exec('reset role');
 
 
- // New resumable release regression: version with 501 rows must not erase any
+ // New resumable release regression: version with 2,501 rows must not erase any
  // source row until full projection and destination proof have passed.
  await pg.exec("reset role;alter table private.grcon_master_owner add column singleton boolean default true;");
  await pg.exec(fs.readFileSync('supabase/migrations/20261029121000_sigem_resumable_release.sql','utf8'));
  await pg.exec(fs.readFileSync('supabase/migrations/20261029143000_sigem_projection_bulk.sql','utf8'));
  await pg.exec(fs.readFileSync('supabase/migrations/20261029143100_sigem_release_receipt_parity.sql','utf8'));
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029180000_sigem_bounded_release_validation.sql','utf8'));
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029180100_sigem_release_batch_size.sql','utf8'));
  await claims();
- const staged=id(31),stagedRows=legacyRows.map(r=>({...r,snapshot_id:staged}));
- await pg.query("insert into private.grcon_sigem_query_snapshots(id,workspace_id,contract_id,file_name,expected_count,record_count,status,created_by,metadata) values($1,$2,$3,'Batch.xlsx',501,501,'archived',$4,'{}')",[staged,id(1),id(2),id(9)]);
+ const staged=id(31),stagedRows=Array.from({length:2501},(_,i)=>({...legacyRows[i%legacyRows.length],snapshot_id:staged,row_number:i+1}));
+ await pg.query("insert into private.grcon_sigem_query_snapshots(id,workspace_id,contract_id,file_name,expected_count,record_count,status,created_by,metadata) values($1,$2,$3,'Batch.xlsx',2501,2501,'archived',$4,'{}')",[staged,id(1),id(2),id(9)]);
  await pg.query("insert into private.grcon_sigem_query_rows select * from jsonb_populate_recordset(null::private.grcon_sigem_query_rows,$1)",[JSON.stringify(stagedRows)]);
- const stagedProof={...proof,id:staged};
+ const stagedProof={...proof,id:staged,count:2501,validatedRecords:2501};
  const step=p=>pg.query("select public.grcon_sigem_release_step($1,$2,$3,$4) r",[id(1),id(9),staged,JSON.stringify(p)]).then(x=>x.rows[0].r);
  await assert.rejects(step({...stagedProof,fullAudit:false}),/AUDIT_REQUIRED/,'refuse unverified release');
  let phase=await step(stagedProof);
- assert.equal(phase.released,false);assert.equal(phase.phase,'projecting');assert.equal(phase.processed,500);
- assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,501,'do not delete old rows in an incomplete projection');
- assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,501,'readers never see partial projection');
+ assert.equal(phase.released,false);assert.equal(phase.phase,'projecting');assert.equal(phase.processed,2000);
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'do not delete old rows in an incomplete projection');
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'readers never see partial projection');
  phase=await step(stagedProof);
+ assert.equal(phase.phase,'validating');assert.equal(phase.processed,500);
+ const correctContent=(await pg.query('select content_id from private.grcon_sigem_projection_map where snapshot_id=$1 and row_number=501',[staged])).rows[0].content_id;
+ await pg.query('update private.grcon_sigem_projection_map set content_id=(select content_id from private.grcon_sigem_projection_map where snapshot_id=$1 and row_number=1) where snapshot_id=$1 and row_number=501',[staged]);
+ await assert.rejects(step(stagedProof),/PROJECTION_MISMATCH/,'a corrupt later page cannot advance validation or cleanup');
+ assert.equal((await pg.query('select validated_through from private.grcon_sigem_release_validation where snapshot_id=$1',[staged])).rows[0].validated_through,500);
+ await pg.query('update private.grcon_sigem_projection_map set content_id=$2 where snapshot_id=$1 and row_number=501',[staged,correctContent]);
+
+ while(phase.phase==='validating'){
+  assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'validation never erases the source');
+  phase=await step(stagedProof);
+ }
  assert.equal(phase.released,false);assert.equal(phase.phase,'cleaning');
- assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,501,'complete switch commits before cleanup');
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'complete switch commits before cleanup');
  assert.equal((await pg.query("select count(*) n from private.grcon_sigem_external_snapshots where snapshot_id=$1 and ready and projected and storage_kind='legacy'",[staged])).rows[0].n,1);
  assert.deepEqual(
    (await pg.query('select row_number,document_key,status_original from private.grcon_sigem_operational_rows where snapshot_id=$1 order by row_number',[staged])).rows.map(r=>[r.row_number,r.document_key,r.status_original]),
    stagedRows.map(r=>[r.row_number,r.document_key,r.status_original]),'all operational rows survive switching to Turso');
- phase=await step(stagedProof);
- assert.equal(phase.released,true);assert.equal(phase.remaining,0);assert.equal(phase.removed,501);
+ let removed=0;do{phase=await step(stagedProof);removed+=phase.removed;}while(!phase.released);
+ assert.equal(phase.remaining,0);assert.equal(removed,2501);
  assert.equal((await step(stagedProof)).removed,0,'a completed release is idempotent');
  await pg.query("update private.grcon_sigem_external_snapshots set receipt=receipt||'{\"ok\":true}'::jsonb where snapshot_id=$1",[staged]);
  assert.equal((await step(stagedProof)).released,true,'transport envelope differences preserve the verified receipt');
- assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,501,'operational view retains rows after raw cleanup');
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'operational view retains rows after raw cleanup');
 
  console.log('sigem_live: full import/read fidelity, minimal Postgres storage, SQL publication gate, replay, conflicts, outage, tenant isolation, active-base protection and blocked legacy writes passed.');
  }finally{global.fetch=originalFetch;sqlite.close();await pg.close();}
