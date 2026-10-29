@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { reconcileManagerial } from "../src/react/sigem-pw/services/sigemPwManagerial.ts";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+const file = new URL("../src/react/sigem-pw/services/sigemPwManagerial.ts", import.meta.url);
+const output = ts.transpileModule(readFileSync(file, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const module = { exports: {} };
+new Function("exports", "module", "require", output)(module.exports, module, require);
+const { reconcileManagerial } = module.exports;
 
 const main = "CR-5290.00-22313-911-C1O-001";
 const planned = "PR-5290.00-22313-122-C1O-002";
