@@ -64,6 +64,9 @@ BEGIN
    GET DIAGNOSTICS removed=ROW_COUNT;
    SELECT count(*) INTO remaining FROM private.grcon_sigem_query_rows r WHERE r.snapshot_id=s.id;
    IF remaining=0 THEN
+     IF NOT EXISTS(SELECT 1 FROM public.grcon_audit_events event
+       WHERE event.workspace_id=target_workspace AND event.action='sigem_payload_moved_to_turso'
+         AND event.entity_id=s.id::text) THEN
      INSERT INTO public.grcon_audit_events(workspace_id,contract_id,actor_id,
        action,entity_type,entity_id,metadata)
      VALUES(target_workspace,s.contract_id,actor_id,'sigem_payload_moved_to_turso',
@@ -71,6 +74,7 @@ BEGIN
        'checksum',proof->>'checksum','recordCount',s.record_count,
        'method','resumable_verified_projection'))
      ON CONFLICT DO NOTHING;
+     END IF;
    END IF;
    RETURN jsonb_build_object('released',remaining=0,'phase',
      CASE WHEN remaining=0 THEN 'complete' ELSE 'cleaning' END,
@@ -139,6 +143,8 @@ END $release_step$;
 
 REVOKE ALL ON FUNCTION private.grcon_sigem_release_step(uuid,uuid,uuid,jsonb)
   FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION private.grcon_sigem_release_step(uuid,uuid,uuid,jsonb)
+  TO service_role;
 CREATE OR REPLACE FUNCTION public.grcon_sigem_release_step(
  target_workspace uuid, actor_id uuid, target_snapshot uuid, proof jsonb)
 RETURNS jsonb LANGUAGE sql SET search_path TO ''
