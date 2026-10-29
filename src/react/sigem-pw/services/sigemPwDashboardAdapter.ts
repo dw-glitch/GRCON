@@ -514,12 +514,12 @@ async function parseQualityLdFile(file: File): Promise<{ meta: SigemPwBaseMeta; 
       catch (error) { cleanup(); reject(error); }
     });
   }
-  const sheetIndex = xlsx().read(buffer, { type: "array", bookSheets: true });
-  const sheetName = sheetIndex.SheetNames.find(name => Core().normalizeHeader(name) === "N 1710");
-  if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada.");
+  const workbook = xlsx().read(buffer, { type: "array", cellDates: false, dense: false });
   await yieldFrame();
-  const workbook = xlsx().read(buffer, { type: "array", cellDates: false, dense: false, sheets: [sheetName] });
-  return Core().parseLdMatrix(workbookMatrix(workbook.Sheets[sheetName], 40), { ...meta, sheetName });
+  const sheets = workbook.SheetNames
+    .filter(name => Boolean(workbook.Sheets[name]?.["!ref"]))
+    .map(name => ({ name, matrix: workbookMatrix(workbook.Sheets[name], 40) }));
+  return Core().parseReferenceSheets(sheets, meta);
 }
 
 async function persistReferenceBase(candidateLd: SigemPwBase, description: string): Promise<boolean> {
