@@ -2,6 +2,7 @@ import {storageMode, tursoClient, initialize, beginSnapshot, copyPage, sealSnaps
 import {startMigration,migrationStatus,handleJobPage} from './sigem-migration-job.mjs';
 import {liveRpc,externalPage,handleLiveImport,serviceRpc} from './sigem-live.mjs';
 import {sha256} from './sigem-turso.mjs';
+import {neonStatus} from './neon-auxiliary.mjs';
 import {documentInventory,purgeDocumentBatch,purgeSigemBase} from './storage-retirement.mjs';
 const PREFIX = '/api/sigem-storage/';
 const uuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v || '');
@@ -47,17 +48,7 @@ export async function handleSigemStorage(request, env) {
       if(!progress.complete)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
       const proof=[...(progress.completedSnapshots||[]),...progress.reports.flatMap(r=>r.snapshots||[])].find(p=>p.id===source.id&&p.fullAudit===true&&p.count===source.record_count&&p.validatedRecords===source.record_count);
       if(!proof)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
-      const key=`sigem-backups/v1/${source.workspace_id}/${source.contract_id}/${source.id}/manifest-${proof.manifestHash}.json`;
-      if(proof.manifestKey!==key)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
-      const object=await env.GRCON_DOCUMENTS.get(key),bytes=object?await object.text():'';
-      if(await sha256(bytes)!==proof.manifestHash)throw fail('SIGEM_RELEASE_BACKUP_MISMATCH');
-      const manifest=JSON.parse(bytes),saved=manifest.source,{status:oldStatus,...oldMeta}=saved||{},{status:newStatus,...newMeta}=source;
-      if(canonical(oldMeta)!==canonical(newMeta)||!(oldStatus===newStatus||(oldStatus==='active'&&newStatus==='archived'))||manifest.checksum!==proof.checksum||manifest.recordCount!==source.record_count)throw fail('SIGEM_RELEASE_SOURCE_CHANGED');
-      const target=(await tursoClient(env).execute(`SELECT state,checksum,expected_count FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`,[source.workspace_id,source.contract_id,source.id])).rows[0];
-      if(target?.state!=='verified'||target.checksum!==proof.checksum||target.expected_count!==source.record_count)throw fail('SIGEM_RELEASE_DESTINATION_MISMATCH');
-      // One request performs at most one bounded, durable PostgreSQL stage.
-      // The UI calls again using the same independently verified Turso/R2 proof.
-      return reply({ok:true,...await serviceRpc(env,'grcon_sigem_release_step',{target_workspace:input.workspace,actor_id:user.id,target_snapshot:source.id,proof})});
+      return reply({ok:true,...await releaseVerifiedPayload(env,input.workspace,user.id,source,proof)});
     }
     if(action==='document-inventory'&&request.method==='GET'){
       const scope=await admin('document-scope');
@@ -141,7 +132,8 @@ export async function handleSigemStorage(request, env) {
       status.supabaseCapacityBytes = configuredLimit('GRCON_SUPABASE_DB_LIMIT_BYTES');
       turso.capacityBytes = configuredLimit('GRCON_TURSO_DB_LIMIT_BYTES');
       turso.capacitySource = turso.capacityBytes ? 'worker_configuration' : null;
-      return reply({ok: true, ...status, mode, externalStorageAuthorized: env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED === 'true', preflightApproved: env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED === 'true', turso, backupPrefix: 'sigem-backups/v1/', cutoverReady: false, cleanupAllowed: false});
+      const neon = await neonStatus(env);
+      return reply({ok: true, ...status, mode, externalStorageAuthorized: env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED === 'true', preflightApproved: env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED === 'true', turso, neon, backupPrefix: 'sigem-backups/v1/', cutoverReady: false, cleanupAllowed: false});
     }
     if (action === 'inventory' && request.method === 'GET') return reply({ok: true, ...await control('inventory')});
     if(action==='background-copy'&&request.method==='POST'){
@@ -178,3 +170,23 @@ export async function handleSigemStorage(request, env) {
 
 
 
+
+export async function releaseVerifiedPayload(env,workspace,actor,source,proof,steps=1){
+  if(!proof||proof.id!==source.id||proof.fullAudit!==true||proof.count!==source.record_count||proof.validatedRecords!==source.record_count)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
+  const key=`sigem-backups/v1/${source.workspace_id}/${source.contract_id}/${source.id}/manifest-${proof.manifestHash}.json`;
+  if(proof.manifestKey!==key)throw fail('SIGEM_RELEASE_AUDIT_REQUIRED');
+  const object=await env.GRCON_DOCUMENTS.get(key),bytes=object?await object.text():'';
+  if(await sha256(bytes)!==proof.manifestHash)throw fail('SIGEM_RELEASE_BACKUP_MISMATCH');
+  const manifest=JSON.parse(bytes),saved=manifest.source,{status:oldStatus,...oldMeta}=saved||{},{status:newStatus,...newMeta}=source;
+  if(canonical(oldMeta)!==canonical(newMeta)||!(oldStatus===newStatus||(oldStatus==='active'&&newStatus==='archived'))||manifest.checksum!==proof.checksum||manifest.recordCount!==source.record_count)throw fail('SIGEM_RELEASE_SOURCE_CHANGED');
+  const target=(await tursoClient(env).execute(`SELECT state,checksum,expected_count FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`,[source.workspace_id,source.contract_id,source.id])).rows[0];
+  if(target?.state!=='verified'||target.checksum!==proof.checksum||target.expected_count!==source.record_count)throw fail('SIGEM_RELEASE_DESTINATION_MISMATCH');
+  // One request performs at most one bounded, durable PostgreSQL stage.
+  // The UI calls again using the same independently verified Turso/R2 proof.
+  let result;
+  for(let i=0;i<steps;i++){
+    result=await serviceRpc(env,'grcon_sigem_release_step',{target_workspace:workspace,actor_id:actor,target_snapshot:source.id,proof});
+    if(result.released)break;
+  }
+  return result;
+}

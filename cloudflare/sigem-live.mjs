@@ -33,15 +33,12 @@ export async function writeLiveChunk(db,s,first,rows){
  if(!Number.isInteger(first)||first<1||first+rows.length-1>s.expected_count||(first-1)%250!==0||rows.length!==Math.min(250,s.expected_count-first+1))throw fail('SIGEM_IMPORT_PAGE_INVALID',400);
  const last=first+rows.length-1,bytes=canonical(rows),checksum=await sha256(bytes);
  const read=async()=>(await db.execute(`SELECT row_number,payload_json FROM sigem_live_rows WHERE workspace_id=? AND contract_id=? AND snapshot_id=? AND row_number>=? AND row_number<=? ORDER BY row_number`,[...scope(s),first,last])).rows;
- let saved=await read();
- if(!saved.length){
-  await db.execute(`INSERT INTO sigem_live_rows(workspace_id,contract_id,snapshot_id,row_number,payload_json)
+ await db.execute(`INSERT INTO sigem_live_rows(workspace_id,contract_id,snapshot_id,row_number,payload_json)
    SELECT ?,?,?,?+CAST(key AS INTEGER),value FROM json_each(?) WHERE EXISTS(SELECT 1 FROM sigem_live_uploads WHERE workspace_id=? AND contract_id=? AND id=? AND state='importing') ON CONFLICT DO NOTHING`,[...scope(s),first,bytes,...scope(s)]);
-  saved=await read();
- }
+ const saved=await read();
  if(saved.length!==rows.length||saved.some((r,i)=>r.row_number!==first+i)||canonical(saved.map(r=>JSON.parse(r.payload_json)))!==bytes)throw fail('SIGEM_IMPORT_CONTENT_CONFLICT');
- await db.execute(`INSERT INTO sigem_live_batches VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING`,[...scope(s),first,last,checksum]);
- const proof=(await db.execute(`SELECT last_row,checksum FROM sigem_live_batches WHERE workspace_id=? AND contract_id=? AND snapshot_id=? AND first_row=?`,[...scope(s),first])).rows[0];
+ // Return the existing receipt on replay, preserving its original checksum.
+ const proof=(await db.execute(`INSERT INTO sigem_live_batches VALUES(?,?,?,?,?,?) ON CONFLICT(workspace_id,contract_id,snapshot_id,first_row) DO UPDATE SET first_row=excluded.first_row RETURNING last_row,checksum`,[...scope(s),first,last,checksum])).rows[0];
  if(proof?.last_row!==last||proof.checksum!==checksum)throw fail('SIGEM_IMPORT_CHECKPOINT_CONFLICT');
  return {count:rows.length,checksum};
 }
