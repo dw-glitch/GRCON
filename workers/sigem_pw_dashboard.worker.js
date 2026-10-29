@@ -7,14 +7,13 @@ self.addEventListener("message", (event) => {
     const payload = event.data || {};
     if (payload.type === "quality-ld") {
       importScripts("../xlsx.full.min.js");
-      const index = self.XLSX.read(payload.buffer, { type: "array", bookSheets: true });
-      const sheetName = index.SheetNames.find(name => self.GrconSigemPwDashboard.normalizeHeader(name) === "N 1710");
-      if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada.");
-      const book = self.XLSX.read(payload.buffer, { type: "array", cellDates: false, dense: false, sheets: [sheetName] });
-      const sheet = book.Sheets[sheetName];
-      const matrix = [];
-      if (sheet && sheet["!ref"]) {
+      const book = self.XLSX.read(payload.buffer, { type: "array", cellDates: false, dense: false });
+      const sheets = [];
+      for (const sheetName of book.SheetNames) {
+        const sheet = book.Sheets[sheetName];
+        if (!sheet || !sheet["!ref"]) continue;
         const range = self.XLSX.utils.decode_range(sheet["!ref"]);
+        const matrix = [];
         for (let row = range.s.r; row <= range.e.r; row += 1) {
           const values = [];
           for (let column = range.s.c; column <= Math.min(range.e.c, 39); column += 1) {
@@ -23,8 +22,9 @@ self.addEventListener("message", (event) => {
           }
           matrix.push(values);
         }
+        sheets.push({ name: sheetName, matrix });
       }
-      const parsed = self.GrconSigemPwDashboard.parseLdMatrix(matrix, { ...payload.meta, sheetName });
+      const parsed = self.GrconSigemPwDashboard.parseReferenceSheets(sheets, payload.meta);
       self.postMessage({ ok: true, type: "quality-ld", parsed });
       return;
     }
@@ -33,7 +33,7 @@ self.addEventListener("message", (event) => {
       // Chamadas antigas sem metadados de validade LD preservam semântica histórica.
       // A interface atual envia os quatro sinalizadores e exige validação N-1710.
       const settings = Object.prototype.hasOwnProperty.call(payload, "ldAvailable")
-        ? { requireN1710Ld: true, ldAvailable: Boolean(payload.ldAvailable),
+        ? { requireN1710Ld: true, requireDocumentReference: true, ldAvailable: Boolean(payload.ldAvailable),
             sigemAvailable: Boolean(payload.sigemAvailable), pwAvailable: Boolean(payload.pwAvailable) }
         : undefined;
       const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || [], settings);

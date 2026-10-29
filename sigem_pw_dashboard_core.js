@@ -518,6 +518,7 @@
     let documentColumn = -1;
     let revisionColumn = -1;
     let titleColumn = -1;
+    let statusColumn = -1;
     for (let rowIndex = 0; rowIndex < Math.min(rows.length, 80); rowIndex += 1) {
       const headers = (rows[rowIndex] || []).map(normalizeHeader);
       // A LD de comissionamento identifica a coluna em duas linhas:
@@ -531,6 +532,7 @@
       documentColumn = documentIndex;
       revisionColumn = headers.indexOf("REVISAO");
       titleColumn = headers.indexOf("TITULO");
+      statusColumn = headers.indexOf("STATUS");
       break;
     }
     if (headerRow < 0) throw new Error("LD da Qualidade inválida: cabeçalho DOCUMENTO não localizado na aba N-1710.");
@@ -541,7 +543,7 @@
       const row = rows[rowIndex] || [];
       const document = rowValue(row, documentColumn);
       const identity = documentIdentity(document);
-      if (!identity.key || documentClass(document) !== "N-1710" || seen.has(identity.key)) continue;
+      if (!identity.key || documentClass(document) === UNCLASSIFIED || seen.has(identity.key)) continue;
       seen.add(identity.key);
       records.push({
         document,
@@ -549,12 +551,13 @@
         canonicalDocument: identity.canonical,
         revision: rowValue(row, revisionColumn),
         title: rowValue(row, titleColumn),
-        documentClass: "N-1710",
+        status: rowValue(row, statusColumn),
+        documentClass: documentClass(document),
         sheetName: text(fileMeta && fileMeta.sheetName) || "N-1710",
         sourceRow: rowIndex + 1,
       });
     }
-    if (!records.length) throw new Error("LD da Qualidade inválida: nenhum documento N-1710 válido foi localizado.");
+    if (!records.length) throw new Error("Referência documental inválida: nenhum código documental reconhecido foi localizado.");
     return {
       ok: true,
       records,
@@ -568,6 +571,55 @@
         headerRow: headerRow + 1,
         recordCount: records.length,
         uniqueDocumentCount: records.length,
+      },
+      errors: [],
+    };
+  }
+
+  /**
+   * Read declared LD sheets only. Helper sheets such as "Colar SIGEM",
+   * "REL. PW" and summaries may contain DOCUMENTO columns but are NOT
+   * evidence that a code belongs to a source LD.
+   */
+  function parseReferenceSheets(sheets, fileMeta) {
+    const accepted = [];
+    for (const source of Array.isArray(sheets) ? sheets : []) {
+      const sheetName = text(source && source.name);
+      if (!sheetName || !Array.isArray(source.matrix)) continue;
+      const name = normalizeHeader(sheetName);
+      const isDocumentSheet = /^(?:N 1710(?: MOD)?|ET|CV)$/.test(name)
+        || /^LD(?: |$)/.test(name)
+        || /^(?:LISTA DE DOCUMENTOS|LISTA DOCUMENTAL|REFERENCIAS DOCUMENTAIS)(?: |$)/.test(name);
+      if (!isDocumentSheet) continue;
+      try {
+        const parsed = parseLdMatrix(source.matrix, { ...fileMeta, sheetName });
+        accepted.push(parsed);
+      } catch (error) {
+        const message = String(error && error.message || error);
+        if (/mais de uma coluna DOCUMENTO/.test(message)) throw new Error(sheetName + ": " + message);
+        if (!/cabeçalho DOCUMENTO não localizado|nenhum código documental reconhecido/.test(message)) throw error;
+      }
+    }
+    if (!accepted.length) {
+      throw new Error("LD inválida: aba N-1710 não foi localizada; nenhuma aba de referência documental reconhecida (N-1710, N-1710 MOD, ET, CV ou LD).");
+    }
+    // Keep the preexisting N-1710-only parser contract fully compatible.
+    if (accepted.length === 1) return accepted[0];
+    const records = accepted.flatMap(parsed => parsed.records);
+    const sheetNames = accepted.map(parsed => parsed.meta.sheetName);
+    return {
+      ok: true,
+      records,
+      meta: {
+        version: 1,
+        fileName: text(fileMeta && fileMeta.fileName),
+        fileSize: Number(fileMeta && fileMeta.fileSize) || 0,
+        lastModified: Number(fileMeta && fileMeta.lastModified) || 0,
+        importedAt: text(fileMeta && fileMeta.importedAt) || new Date().toISOString(),
+        sheetName: sheetNames.join(", "),
+        sheetNames,
+        recordCount: records.length,
+        uniqueDocumentCount: new Set(records.map(record => record.documentKey)).size,
       },
       errors: [],
     };
@@ -831,6 +883,8 @@
     // legadas sem a opção continuam úteis para relatórios históricos imutáveis.
     const enforceLd = arguments.length >= 3;
     const requireN1710Ld = Boolean(settings && settings.requireN1710Ld);
+    // Opt-in for the live managerial dashboard. Historical snapshots retain the older N-1710-only behavior.
+    const requireDocumentReference = Boolean(settings && settings.requireDocumentReference);
     const ldAvailable = Boolean(settings && settings.ldAvailable && Array.isArray(ldRecords) && ldRecords.length);
     // Ausência de uma fonte nunca comprova ausência documental.
     const sigemAvailable = !requireN1710Ld || settings.sigemAvailable !== false;
@@ -840,12 +894,14 @@
     const pwScope = partitionPwCompanyRecords(pwRecords);
     const sourceSigem = normalizeRecords(sigemScope.eligible, "sigem", ldUniverse, enforceLd);
     const sourcePw = normalizeRecords(pwScope.eligible, "pw", ldUniverse, enforceLd);
-    const isEligible = (record) => !requireN1710Ld || (!record.n1710Candidate
-      && (record.documentClass !== "N-1710" || (ldAvailable && record.inQualityLd)));
+    const isEligible = (record) => requireDocumentReference
+      ? (ldAvailable && record.inQualityLd && !record.n1710Candidate)
+      : (!requireN1710Ld || (!record.n1710Candidate
+        && (record.documentClass !== "N-1710" || (ldAvailable && record.inQualityLd))));
     const normalizedSigem = sourceSigem.filter(isEligible);
     const normalizedPw = sourcePw.filter(isEligible);
-    const excludedSigemN1710 = sourceSigem.filter((record) => record.documentClass === "N-1710" && !isEligible(record));
-    const excludedPwN1710 = sourcePw.filter((record) => record.documentClass === "N-1710" && !isEligible(record));
+    const excludedSigemN1710 = sourceSigem.filter((record) => (requireDocumentReference || record.documentClass === "N-1710") && !isEligible(record));
+    const excludedPwN1710 = sourcePw.filter((record) => (requireDocumentReference || record.documentClass === "N-1710") && !isEligible(record));
     const candidates = [
       ...sourceSigem.filter((record) => record.n1710Candidate).map((record) => ({ ...record, auditSource: "sigem" })),
       ...sourcePw.filter((record) => record.n1710Candidate).map((record) => ({ ...record, auditSource: "pw" })),
@@ -853,7 +909,7 @@
     const sigemEntries = buildEntryMap(normalizedSigem, "sigem");
     const pwEntries = buildEntryMap(normalizedPw, "pw");
     return {
-      ldUniverse, ldAvailable, sigemAvailable, pwAvailable, requireN1710Ld,
+      ldUniverse, ldAvailable, sigemAvailable, pwAvailable, requireN1710Ld, requireDocumentReference,
       excludedSigemN1710, excludedPwN1710, n1710Candidates: candidates,
       sourceSigemEntries: excludedSigemN1710.length || excludedPwN1710.length ? buildEntryMap(sourceSigem, "sigem") : undefined,
       sourcePwEntries: excludedSigemN1710.length || excludedPwN1710.length ? buildEntryMap(sourcePw, "pw") : undefined,
@@ -1110,8 +1166,8 @@
           kind === "pw" ? entry : source.sourcePwEntries?.get(entry.key) || null,
           kind === "sigem" && relatedPw && !source.sourcePwEntries?.has(entry.key) ? { pwDocumentEntry: relatedPw } : undefined),
         situationKey: reason,
-        situation: reason === "ldUnavailableN1710" ? "LD N-1710 indisponível: conferência pendente"
-          : "N-1710 não localizado na LD validada",
+        situation: reason === "ldUnavailableN1710" ? "Referências documentais indisponíveis: conferência pendente"
+          : "Documento fora das referências vigentes",
         ldStatus: reason === "ldUnavailableN1710" ? "LD INDISPONÍVEL" : "NÃO",
       });
       });
@@ -1136,12 +1192,12 @@
         .filter((record) => !sigemAllCodes.has(record.documentKey))
         .map((record) => ({
           key: "ld:" + record.documentKey, document: text(record.document), documentKey: record.documentKey,
-          documentClass: "N-1710", n1710DocumentType: n1710DocumentType(record.document),
+          documentClass: documentClass(record.document), n1710DocumentType: n1710DocumentType(record.document),
           revision: text(record.revision) || "—", sigemStatus: "", pwStatus: "", pwEmission: "",
           ldStatus: "SIM", ldOriginalCode: text(record.document), ldRevision: text(record.revision),
           ldSourceRow: Number(record.sourceRow) || 0,
           inSigem: false, inPw: false, situationKey: "ldWithoutSigem",
-          situation: "Presente na LD N-1710, não localizado na Consulta Geral",
+          situation: "Presente na referência documental, não localizado na Consulta Geral",
         })) : [];
     const gapSigemToPw = new Set(lists.sigemOnly.map((row) => row.key));
     const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
@@ -1333,7 +1389,8 @@
   }
 
   function historySnapshot(base) {
-    return { meta: { ...base.meta }, records: base.records };
+    return { meta: { ...base.meta }, records: base.records,
+      ...(base.meta?.kind === "ld" && Array.isArray(base.sourceRecords) ? { sourceRecords: base.sourceRecords } : {}) };
   }
 
   async function loadHistory() {
@@ -1532,7 +1589,7 @@
     text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords,
     PW_COMPANIES, PW_COMPANY_COLUMN_INDEX, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass, n1710DocumentType, isN1710Candidate,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
-    parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
+    parsePwCsv, parseLdMatrix, parseReferenceSheets, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
     openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
     saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, updateSnapshotMetadata, deleteSnapshot, migrateLegacyBases, loadBases,

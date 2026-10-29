@@ -5,6 +5,7 @@ import { SigemPwReadiness } from "./components/SigemPwReadiness";
 import { SigemPwAnalysisSources } from "./components/SigemPwAnalysisSources";
 import { SigemPwBases } from "./components/SigemPwBases";
 import { SigemPwSystemsSummary } from "./components/SigemPwSystemsSummary";
+import { SigemPwManagerialOverview } from "./components/SigemPwManagerialOverview";
 import { SigemPwRevisionScopeSelector } from "./components/SigemPwRevisionScopeSelector";
 import { SigemPwSituationCards } from "./components/SigemPwSituationCards";
 import { SigemPwListFilters } from "./components/SigemPwListFilters";
@@ -38,6 +39,7 @@ export function SigemPwDashboardApp() {
         onEvolution={() => { void adapter.openEvolution(); }}
         onHistory={() => { void adapter.openHistory(); }}
         onExport={() => { void adapter.exportCurrentList(); }}
+        onCoordinatorExport={() => { void adapter.exportCoordinatorWorkbook(); }}
       />
 
       <div className="spw-progress" id="spw-progress" hidden={!state.busy} role="status" aria-live="polite">
@@ -71,7 +73,8 @@ export function SigemPwDashboardApp() {
           onImportSigem={(file) => { void adapter.importSigem(file); }}
           onImportPw={(file) => { void adapter.importPw(file); }}
           onPublishPw={() => { void adapter.publishPw(); }}
-          onImportLd={(file) => { void adapter.importLd(file); }}
+          onImportLd={(files) => { void adapter.importLd(files); }}
+          onToggleLd={(id, active) => { void adapter.toggleLdSource(id, active); }}
           onEditDate={(system) => adapter.openBaseDateEditor(system)}
         />
       </UiPanel>
@@ -89,7 +92,8 @@ export function SigemPwDashboardApp() {
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
         <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
-        <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} />
+        <SigemPwManagerialOverview state={state} />
+        <details className="spw-import-options"><summary>Indicadores operacionais por revisão</summary><SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} /></details>
         {state.pw.meta ? <section className="spw-pw-audit" aria-label="Conferência da lista PW" id="spw-pw-audit">
           <div><strong>{fmt(state.result?.quality.pwSourceRows || 0)}</strong><span>linhas PW com código · CSG/QTM</span></div>
           <div><strong>{fmt(Number(state.pw.meta?.scopeExcludedCount) || 0)}</strong><span>linhas PW de outras empresas ou sem sigla</span></div>
@@ -99,18 +103,16 @@ export function SigemPwDashboardApp() {
           <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwDuplicates")}>Ver duplicados PW</button>
           <small>A lista de duplicados usa apenas o PW das empresas CSG/QTM. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
         </section> : null}
-        {!state.ld.meta && state.sigem.meta ? <div className="spw-empty" role="alert"><strong>LD N-1710 necessária para os totais oficiais</strong><span>Documentos N-1710 permanecem em “N-1710 aguardando LD” até carregar e validar a LD. ET e CV mantêm seus critérios próprios.</span></div> : null}
+        {!state.ld.meta && state.sigem.meta ? <div className="spw-empty" role="alert"><strong>Referências documentais necessárias para os totais oficiais</strong><span>Sem referências válidas, o painel oficial não calcula cadastro, emissão ou postagem. Inclua as fontes do contrato antes de comparar.</span></div> : null}
         {state.result?.quality?.ldAvailable ? <div className="spw-pw-audit" role="status">
-          <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> N-1710 SIGEM fora da LD</span>
+          <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> SIGEM fora das referências</span>
           <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("sigemN1710OutsideLd")}>Conferir na lista</button>
-          <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> N-1710 PW fora da LD</span>
+          <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> PW fora das referências</span>
           <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwN1710OutsideLd")}>Conferir PW</button>
         </div> : null}
-        <SigemPwSituationCards
-          state={state}
-          activeList={state.activeList}
-          onSelect={(list) => adapter.setActiveList(list)}
-        />
+        <details className="spw-import-options"><summary>Comparativos operacionais e situações por revisão</summary>
+          <SigemPwSituationCards state={state} activeList={state.activeList} onSelect={(list) => adapter.setActiveList(list)} />
+        </details>
       </UiPanel>
 
       <UiPanel className="spw-list-card" labelledBy="spw-list-title">

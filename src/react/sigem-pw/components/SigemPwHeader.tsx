@@ -7,6 +7,7 @@ interface Props {
   onEvolution(): void;
   onHistory(): void;
   onExport(): void;
+  onCoordinatorExport(): void;
 }
 
 function fmt(value: number): string {
@@ -17,13 +18,13 @@ function Icon({ path }: { path: string }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d={path}></path></svg>;
 }
 
-export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHistory, onExport }: Props) {
+export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHistory, onExport, onCoordinatorExport }: Props) {
   return (
     <div className="spw-heading-shell">
       <UiPageHeader
         eyebrow="Controle documental integrado"
-        title="Dashboard SIGEM × ProjectWise"
-        description="Compare somente o PW com sigla CSG ou QTM na coluna C, preservando os critérios de cadastro, emissão e revisão."
+        title="SIGEM × PW — Controle Documental"
+        description="Acompanhe o cadastro no PW, emissões, postagens SIGEM, revisões e pendências do controle documental."
         meta={(
           <>
             <UiMetaPill><strong>PW: CSG + QTM · coluna C</strong></UiMetaPill>
@@ -42,6 +43,7 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
         <button className="secondary-button" id="spw-history-open" type="button" disabled={busy} onClick={onHistory}>
           <Icon path="M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4" /><span>Gerenciar histórico</span>
         </button>
+        <button className="secondary-button" id="spw-coordinator-export" type="button" disabled={busy || !ready} onClick={onCoordinatorExport}>Exportar controle Excel</button>
         <button className="primary-button" id="spw-export" type="button" disabled={busy} onClick={onExport}>
           <Icon path="M12 3v12M8 11l4 4 4-4M5 19h14" /><span>Exportar lista</span>
         </button>

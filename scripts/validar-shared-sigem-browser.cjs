@@ -77,19 +77,28 @@ function rpc(name,args) {
  assert.equal(await b.page.locator('#pc-publish').isVisible(),false);
  assert.equal(backend.active.snapshot_id,sharedBeforeLocal);
  assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.state.local?.meta?.source),'local-general-query');
- assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B','LEGACY').status),'Em análise');
+ assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B','LEGACY').status),'Recusado');
  await b.page.evaluate(async()=>{await window.GrconSigemPwDashboardBootstrap.open();});
- await b.page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.sigem.records.length===2);
- assert.equal(await b.page.evaluate(()=>window.GrconSigemPwDashboardUi.state.sigem.meta.snapshotId),backend.active.snapshot_id);
+ await b.page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.ready&&!window.GrconSigemPwDashboardUi.state.busy);
+ const selected=await b.page.evaluate(()=>({
+   codeCount:window.GrconSigemPwDashboardUi.state.sigem.records.length,
+   selectedId:window.GrconSigemPwDashboardUi.state.sigem.meta?.snapshotId,
+   sourceId:window.GrconSharedSigemQuery.current()?.meta?.snapshotId,
+   sourceCount:window.GrconSharedSigemQuery.current()?.records.length,
+   error:window.GrconSigemPwDashboardUi.state.analysisError,
+ }));
+ assert.equal(selected.error,'',"dashboard source must be available");
+ assert.equal(selected.selectedId,selected.sourceId,"dashboard must follow the current source choice");
+ assert.equal(selected.codeCount,selected.sourceCount,"dashboard must not silently switch to an outdated shared source");
  await b.page.screenshot({path:path.join(output,'dashboard-shared.png'),fullPage:true});
  // Same status engine used in control; its alocação remains from technical/planned data.
  const triage=await b.page.evaluate(()=>{
    const doc='RL-5290.00-22313-ABC-C1O-001';const record={document:doc,revision:'B',sheet:'N-1710',title:'RELATÓRIO',discipline:'CIVIL',documentType:'RL',databook:'Databook',allocationStatus:'ALOCADO'};
    return window.TriagemCore.triageOne({name:doc+'_0001_B.pdf'},window.TriagemCore.buildIndex([record],[{document:doc,revision:'B',status:'Não Postado',sheet:'Colar SIGEM'}]),{sigemQueryContext:window.GrconSharedSigemQuery.context()});
  });
- assert.equal(triage.status,'Em análise');assert.equal(triage.sigemStatusSource,'shared-general-query');assert.equal(triage.allocationFinding.kind,'allocated');
+ assert.equal(triage.status,'Recusado');assert.equal(triage.sigemStatusSource,'local-general-query');assert.equal(triage.allocationFinding.kind,'allocated');
  // Exact revision lookup, no arbitrary revision fallback.
- assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','C','LEGACY').status),'LEGACY');
+ assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','C','LEGACY').status),'Não Postado', 'uma consulta completa é autoritativa e não reutiliza status legado de outra revisão');
  // Invalid/empty file leaves both shared and local last valid sources.
  const activeId=backend.active.snapshot_id;
  const originalActive={...backend.active};
@@ -97,7 +106,7 @@ function rpc(name,args) {
  assert.equal(await a.page.evaluate(()=>window.GrconSharedSigemQuery.current().meta.snapshotId),activeId);
  // Interrupted upload preserves active version; newest local never supersedes shared match.
  await a.page.locator('#pc-file').setInputFiles(update); await a.page.waitForFunction(()=>window.GrconSharedSigemQuery.state.local?.records.length===1&&!window.GrconPostingConferenceUi.state.busy);
- assert.equal(await a.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B').status),'Em análise');
+ assert.equal(await a.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B').status),'Recusado');
  backend.fail=true;await a.page.locator('#pc-publish').click();await a.page.waitForFunction(()=>!window.GrconSharedSigemQuery.state.busy);assert.equal(backend.active.snapshot_id,activeId);
  backend.fail=false;await a.page.locator('#pc-publish').click();await a.page.waitForFunction(()=>window.GrconSharedSigemQuery.state.shared?.records.length===1&&!window.GrconSharedSigemQuery.state.busy);
  const updatedActive={...backend.active};
@@ -137,7 +146,7 @@ function rpc(name,args) {
  await a.page.locator('#grdt-reissue-documents').fill(documentCode);await a.page.locator('#grdt-reissue-find').click();
  assert.match(await a.page.locator('#grdt-reissue-results').innerText(),/Status SIGEM: Recusado/);
  await a.page.locator('[data-field="revision"]').fill('C');await a.page.locator('[data-field="revision"]').press('Tab');
- assert.match(await a.page.locator('#grdt-reissue-results').innerText(),/Status SIGEM: —/);
+ assert.match(await a.page.locator('#grdt-reissue-results').innerText(),/Status SIGEM: Não Postado/, 'a revisão C ausente em snapshot autoritativo não herda B nem status de origem antiga');
  await a.page.screenshot({path:path.join(output,'reissue-shared.png'),fullPage:true});
  // Normal control: real file inputs, actual analysis Worker, manual revision/purpose and XLS output.
  const ldBook=XLSX.utils.book_new();

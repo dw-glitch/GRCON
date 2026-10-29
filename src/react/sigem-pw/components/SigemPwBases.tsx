@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { SigemPwBase, SigemPwResult, SigemPwState } from "../types/domain";
+import { listedSources } from "../services/sigemPwReferenceSources";
 
 function fmt(value: number): string {
   return Number(value || 0).toLocaleString("pt-BR");
@@ -29,7 +30,7 @@ function BaseInfo({ kind, title, empty, base, result }: {
         </div>
         <strong>{empty}</strong>
         <small>Carregue uma base válida para iniciar.</small>
-        <em>{kind === "ld" ? "LD opcional: a presença no PW já comprova cadastro." : "Base ausente não é tratada como zero."}</em>
+        <em>{kind === "ld" ? "Referências obrigatórias para os indicadores oficiais." : "Base ausente não é tratada como zero."}</em>
       </div>
     );
   }
@@ -39,7 +40,7 @@ function BaseInfo({ kind, title, empty, base, result }: {
     : kind === "pw"
       ? result?.quality.pwEntries
       : result?.quality.ldDocumentCount;
-  const suffix = kind === "ld" ? "códigos N-1710 elegíveis" : "registros/revisões válidos";
+  const suffix = kind === "ld" ? "documentos únicos no controle" : "registros/revisões válidos";
   const originalDate = base.meta.sourceImportedAt && base.meta.sourceImportedAt !== base.meta.importedAt
     ? ` · importada originalmente em ${fmtDate(base.meta.sourceImportedAt)}`
     : "";
@@ -80,11 +81,12 @@ function UploadIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 14v5h14v-5"></path></svg>;
 }
 
-export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onEditDate, onPublishPw }: {
+export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onToggleLd, onEditDate, onPublishPw }: {
   state: SigemPwState;
   onImportSigem(file: File): void;
   onImportPw(file: File): void;
-  onImportLd(file: File): void;
+  onImportLd(files: File[]): void;
+  onToggleLd(sourceId: string, active: boolean): void;
   onEditDate(system: "sigem" | "pw"): void;
   onPublishPw(): void;
 }) {
@@ -95,6 +97,13 @@ export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onE
     const file = event.target.files?.[0];
     event.target.value = "";
     if (file) handler(file);
+  };
+
+  const sources = listedSources(state.ld);
+  const onLdFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length) onImportLd(files);
   };
 
   return (
@@ -120,11 +129,24 @@ export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onE
       </article>
 
       <article className="spw-base-card" data-loaded={Boolean(state.ld.meta)}>
-        <BaseInfo kind="ld" title="REFERÊNCIA N-1710 · LD DA QUALIDADE" empty="LD da Qualidade não carregada" base={state.ld} result={state.result} />
+        <BaseInfo kind="ld" title="REFERÊNCIAS DOCUMENTAIS" empty="Nenhuma referência carregada" base={state.ld} result={state.result} />
         <div className="spw-base-actions">
-          <button className="secondary-button" id="spw-ld-update" type="button" disabled={state.busy} onClick={() => ldRef.current?.click()}><UploadIcon /><span>{state.ld.meta ? "Atualizar LD da Qualidade" : "Carregar LD da Qualidade"}</span></button>
-          <input ref={ldRef} id="spw-ld-file" hidden type="file" accept=".xlsx,.xls,.xlsm" onChange={onFile(onImportLd)} />
+          <button className="secondary-button" id="spw-ld-update" type="button" disabled={state.busy} onClick={() => ldRef.current?.click()}><UploadIcon /><span>{state.ld.meta ? "Adicionar ou atualizar arquivos" : "Adicionar arquivos de referência"}</span></button>
+          <input ref={ldRef} id="spw-ld-file" hidden multiple type="file" accept=".xlsx,.xls,.xlsm" onChange={onLdFiles} />
         </div>
+        {sources.length ? <details className="spw-import-options">
+          <summary>Gerenciar fontes ativas ({sources.filter(source => source.active).length}/{sources.length})</summary>
+          <div role="group" aria-label="Ativar ou desativar referências documentais">
+            {sources.map(source => <label key={source.id} style={{display:"flex",gap:8,alignItems:"center",margin:"8px 0"}}>
+              <input type="checkbox" checked={source.active} disabled={state.busy}
+                onChange={event => onToggleLd(source.id, event.target.checked)} />
+              <span><strong>{source.fileName}</strong><small style={{display:"block"}}>{fmt(source.recordCount)} registros · {fmtDate(source.importedAt)}</small></span>
+            </label>)}
+          </div>
+          {Number(state.ld.meta?.referenceConflictCount || 0) > 0
+            ? <p role="alert">Há {fmt(Number(state.ld.meta?.referenceConflictCount))} documento(s) com divergências entre as fontes. Revise antes de considerar conformidade.</p>
+            : null}
+        </details> : null}
       </article>
     </section>
   );

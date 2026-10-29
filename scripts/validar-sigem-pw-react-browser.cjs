@@ -25,6 +25,15 @@ function writeFixtures() {
     ["ITEM", "DOCUMENTO \r\nN-1710 ", "REVISÃO", "TÍTULO"],
     ["1", n1710, "0", "Documento N-1710 de teste"],
   ]), "N-1710");
+  // Official comparison requires the document to belong to a reference LD.
+  // Seed an ET sheet with every synthetic RIR document in the main fixtures,
+  // including PW-only codes; otherwise all but one are correctly excluded.
+  XLSX.utils.book_append_sheet(ldBook, XLSX.utils.aoa_to_sheet([
+    ["DOCUMENTO", "REVISÃO", "TÍTULO"],
+    [revisionDoc, "B", "RIR de teste"],
+    ...Array.from({length:247},(_,i)=>[et(String(100000+i).padStart(6,"0")), "0", "RIR de teste"]),
+    ...["200001","200002","200003","200004"].map(id=>[et(id), "0", "RIR de teste"]),
+  ]), "ET");
   fs.writeFileSync(ldFile, XLSX.write(ldBook, { type: "buffer", bookType: "xlsx" }));
 
   const sigemRows = [
@@ -484,30 +493,31 @@ async function waitEvolutionReady(page) {
       ld: Boolean(window.GrconSigemPwDashboardUi.state.ld.meta),
     })), { sigem: false, pw: true, ld: false });
 
-    // Presence and duplicates must also work with no LD and with PW loaded alone.
+    // Preserve raw PW without LD, but scope official totals to documented references.
     await resetDashboard(page);
     const presencePw = path.join(fixtureDir, 'PW_presence_duplicates.csv');
     const presenceSigem = path.join(fixtureDir, 'SIGEM_presence.xlsx');
     const presenceDoc = et('600001'), otherRevisionDoc = et('600002'), missingDoc = et('600099');
+    const externalDoc = et('600003'), codeOnlyDoc = et('600000');
     fs.writeFileSync(presencePw, [
       'NumeroDocumentoCliente;RevisaoCompleta;Sigla da Empresa;o_statename;Última emissão;o_filename',
       `${presenceDoc};;CSG;;;original.pdf`,
       `${presenceDoc.replaceAll('_','-')};;CSG;Cancelado;;copia.docx`,
-      'DOCUMENTO-C1O-EXTERNO;B;CSG;Qualquer estado;;externo.pdf',
-      'DOCUMENTO-C1O-EXTERNO;B;CSG;Outro estado;;externo2.pdf',
+      `${externalDoc};B;CSG;Qualquer estado;;externo.pdf`,
+      `${externalDoc};B;CSG;Outro estado;;externo2.pdf`,
       `${otherRevisionDoc};A;CSG;Estado desconhecido;???;rev-a.pdf`,
       `${otherRevisionDoc};B;CSG;Superado;;rev-b.pdf`,
     ].join('\n'));
     const presenceBook=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(presenceBook,XLSX.utils.aoa_to_sheet([
-      ['DOCUMENTO','REVISÃO','STATUS'],[presenceDoc,'0','Postado'],['DOCUMENTO-C1O-EXTERNO','0','Postado'],
+      ['DOCUMENTO','REVISÃO','STATUS'],[presenceDoc,'0','Postado'],[externalDoc,'0','Postado'],
       [otherRevisionDoc,'0','Postado'],[missingDoc,'0','Postado']
     ]),'Consulta Geral');
     fs.writeFileSync(presenceSigem,XLSX.write(presenceBook,{type:'buffer',bookType:'xlsx'}));
     await page.addScriptTag({url:baseUrl+'/import_review.js'});
     await page.evaluate(()=>{GrconImportReview.saveProfile('Perfil anterior',{columns:{document:'NumeroDocumentoCliente',revision:'RevisaoCompleta',state:'o_statename',lastEmission:'Última emissão',documentType:'TipoDocumento'}});GrconImportReview.selectProfile('Perfil anterior');});
     const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
-    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-C1O-FORA-ESCOPO;0;ABC');
+    fs.writeFileSync(codeOnlyPath, ['NumeroDocumentoCliente;Revisao;Sigla da Empresa', `${codeOnlyDoc};0;CSG`, `${et('600098')};0;ABC`].join('\n'));
     await importFile(page,'#spw-pw-file',codeOnlyPath);
     const importReview = page.locator('#grcon-import-review');
     if (await importReview.isVisible().catch(() => false)) {
@@ -523,10 +533,22 @@ async function waitEvolutionReady(page) {
       sourceScope:GrconSigemPwDashboardUi.state.model?.comparisonScope,
       readiness:GrconSigemPwDashboardUi.state.readiness?.failedChecks,
     }));
-    assert.equal(codeOnlyDiagnostics.registered,1,'perfil anterior não exige campos opcionais ausentes: '+JSON.stringify(codeOnlyDiagnostics));
+    assert.equal(codeOnlyDiagnostics.registered,0,'sem LD, PW importado não deve entrar na contagem oficial: '+JSON.stringify(codeOnlyDiagnostics));
+    assert.equal(codeOnlyDiagnostics.records.length,1,'perfil anterior preserva código sem metadados opcionais');
+    assert.equal(codeOnlyDiagnostics.sourceScope.pwN1710Excluded,1,'código fora da referência deve continuar auditável');
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeExcludedCount),1,'a importação registra a empresa divergente na auditoria da fonte');
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),0,'a empresa divergente foi separada antes de construir o modelo de comparação');
     await page.evaluate(()=>GrconImportReview.selectProfile(''));
+    const presenceLd=path.join(fixtureDir,'LD_presence_scope.xlsx');
+    const presenceLdBook=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(presenceLdBook,XLSX.utils.aoa_to_sheet([
+      ['DOCUMENTO','REVISÃO'],[codeOnlyDoc,'0'],[presenceDoc,'0'],
+      [otherRevisionDoc,'0'],[externalDoc,'0'],[missingDoc,'0']
+    ]),'ET');
+    fs.writeFileSync(presenceLd,XLSX.write(presenceLdBook,{type:'buffer',bookType:'xlsx'}));
+    await importFile(page,'#spw-ld-file',presenceLd);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),1,
+      'PW previamente importado deve ser incluído após referência válida');
     await importFile(page,'#spw-pw-file',presencePw);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.quality.pwSourceRows),6);
@@ -547,9 +569,9 @@ async function waitEvolutionReady(page) {
     assert.deepEqual(duplicateRows.map(r=>r['Linha no arquivo PW']),[2,3,4,5]);
     assert.ok(duplicateRows.every(r=>r['Existe no PW']==='SIM' && r['Ocorrências do grupo']===2));
     assert.deepEqual(duplicateRows.map(r=>r['Status PW']),['','Cancelado','Qualquer estado','Outro estado']);
-    await page.locator('#spw-class').selectOption('Não classificado');
-    await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.filters.documentClass==='Não classificado');
-    assert.equal(await page.locator('#spw-table tbody tr').count(),2);
+    await page.locator('#spw-class').selectOption('ET');
+    await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.filters.documentClass==='ET');
+    assert.equal(await page.locator('#spw-table tbody tr').count(),4);
     await page.locator('#spw-clear').click();
     await importFile(page,'#spw-sigem-file',presenceSigem);
     await page.locator('[data-list="sigem"]').click();
@@ -576,7 +598,7 @@ async function waitEvolutionReady(page) {
     await waitIdle(page);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.records.length),6);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),8,'migração aplica o escopo C1O vigente, versão 8');
-    metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:true,existingBaseReprocessed:true,savedProfileDocumentOnly:true};
+    metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:false,scopeWithoutLdExcluded:true,existingBaseReprocessed:true,savedProfileDocumentOnly:true};
     await page.locator('[data-revision-scope="all"]').click();
     await page.locator('[data-list="all"]').click();
     await resetDashboard(page);
@@ -640,6 +662,9 @@ async function waitEvolutionReady(page) {
     assert.equal(summary.pwOnlyEmitted, 1);
     assert.equal(summary.classifiedTotal, 255);
 
+    // The legacy revision KPIs were deliberately collapsed behind a disclosure.
+    // Expand them before exercising their existing click-to-filter behavior.
+    await page.getByText('Comparativos operacionais e situações por revisão',{exact:true}).click();
     await page.locator('[data-summary-list="bothEmitted"]').click();
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.activeList === "bothEmitted");
     assert.equal(await page.locator("#spw-table tbody tr").count(), 2, "KPI da FASE B deve filtrar a relação detalhada sem recalcular o modelo");
