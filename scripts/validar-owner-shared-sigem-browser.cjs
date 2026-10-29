@@ -91,6 +91,9 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20001);
  await page.locator('[data-revision-scope="revision0"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
+ // The revision-level KPI is intentionally collapsed under the new
+ // managerial panel. Expose it before the legacy click assertions.
+ await page.getByText('Indicadores operacionais por revisão',{exact:true}).click();
  // The SIGEM headline KPI is auditable and its detail list must equal the number shown for the active revision scope.
  await page.locator('[data-summary-list="sigem"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.activeList),'sigem');
