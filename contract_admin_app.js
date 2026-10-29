@@ -313,6 +313,36 @@
           panel.remove();await loadBaseManagement(host,api,valid);
         }catch(error){message.textContent=error.message+" A exclusão pode ser retomada nesta tela.";button.disabled=false;}
       });
+      // The Master may release verified legacy payloads without deleting the
+      // historical snapshot. Every release is checked again in the Worker:
+      // full audit, immutable R2 manifest, verified Turso destination and
+      // exact source fields. A failed request leaves all unproven rows intact.
+      const releasable=bases.filter(b=>!b.storage&&(b.status==='active'||b.status==='archived'));
+      if(releasable.length){
+        const transfer=document.createElement("section");transfer.className="grcon-admin-storage-release";
+        transfer.innerHTML='<h4>Liberar espaço da Consulta Geral no Supabase</h4><p>As planilhas completas de '+releasable.length+' base(s) ainda estão no Supabase. Libere apenas as que tiverem cópia, auditoria integral e backup comprovados no Turso. As bases continuam disponíveis no GRCON; a base ativa não será excluída.</p><button type="button" data-release-verified>Liberar cópias verificadas</button><p data-release-progress role="status" aria-live="polite"></p>';
+        panel.append(transfer);
+        const releaseButton=transfer.querySelector("[data-release-verified]"),progress=transfer.querySelector("[data-release-progress]");
+        releaseButton.addEventListener("click",async()=>{
+          if(!valid()||!root.confirm('Liberar do Supabase apenas os registros completos das '+releasable.length+' bases com cópia integral comprovada no Turso?\\nAs bases e os índices operacionais permanecem; o servidor recusará qualquer base sem auditoria e backup válidos.'))return;
+          releaseButton.disabled=true;
+          let released=0,failed=null;
+          for(const base of releasable){
+            if(!valid())break;
+            progress.textContent='Verificando e liberando '+(released+1)+' de '+releasable.length+' base(s): versão '+base.version+'.';
+            try{
+              const result=await api("release-base",{snapshot:base.id,confirm:base.id});
+              if(result?.released!==true)throw new Error("SIGEM_RELEASE_NOT_CONFIRMED");
+              released++;
+            }catch(error){failed='Versão '+base.version+': '+error.message;break;}
+          }
+          if(!valid())return;
+          panel.remove();
+          await loadBaseManagement(host,api,valid);
+          const status=host.querySelector("[data-base-message]");
+          if(status)status.textContent=failed?'Liberadas '+released+' base(s). Interrompido em '+failed+' As demais continuam preservadas. Recarregue e retome após conferir a auditoria.':'Liberadas '+released+' base(s) verificadas. Os registros operacionais permaneceram no Supabase. Confira o tamanho físico do banco e realize manutenção somente após esvaziar a tabela legada.';
+        });
+      }
       const retire=document.createElement("div");retire.innerHTML='<h4>Desativação do armazenamento documental</h4><p>Os envios e acessos ao antigo Cofre estão desativados.</p><button type="button" data-document-inventory>Verificar arquivos para remoção</button><p data-document-message role="status" aria-live="polite"></p>';panel.append(retire);
       const preview=retire.querySelector("button"),status=retire.querySelector("[data-document-message]");
       preview.addEventListener("click",async()=>{
