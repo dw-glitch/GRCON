@@ -15,7 +15,7 @@ arithmetically interchangeable with document-level reporting.
 ## Importing multiple sources
 
 Choose several Excel files in the `REFERÊNCIAS DOCUMENTAIS` card.
-The import reads recognizable document sheets, including ET-only workbooks.
+The import reads recognizable document sheets, including N-1710 MOD and ET-only workbooks.
 Sheet names and original rows are retained; instruction sheets are ignored. Sources are
 identified by normalized filenames. Re-importing the same filename replaces only
 that source, while all other sources remain intact. The collapsed manager lists
