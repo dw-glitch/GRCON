@@ -587,7 +587,7 @@
       const sheetName = text(source && source.name);
       if (!sheetName || !Array.isArray(source.matrix)) continue;
       const name = normalizeHeader(sheetName);
-      const isDocumentSheet = /^(?:N 1710|ET|CV)$/.test(name)
+      const isDocumentSheet = /^(?:N 1710(?: MOD)?|ET|CV)$/.test(name)
         || /^LD(?: |$)/.test(name)
         || /^(?:LISTA DE DOCUMENTOS|LISTA DOCUMENTAL|REFERENCIAS DOCUMENTAIS)(?: |$)/.test(name);
       if (!isDocumentSheet) continue;
@@ -601,7 +601,7 @@
       }
     }
     if (!accepted.length) {
-      throw new Error("LD inválida: aba N-1710 não foi localizada; nenhuma aba de referência documental reconhecida (N-1710, ET, CV ou LD).");
+      throw new Error("LD inválida: aba N-1710 não foi localizada; nenhuma aba de referência documental reconhecida (N-1710, N-1710 MOD, ET, CV ou LD).");
     }
     // Keep the preexisting N-1710-only parser contract fully compatible.
     if (accepted.length === 1) return accepted[0];
