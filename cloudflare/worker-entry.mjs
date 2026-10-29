@@ -1,4 +1,5 @@
 import {handleSigemStorage} from './sigem-storage.mjs';
+import {handleReleaseMaintenance} from './sigem-maintenance.mjs';
 import {purgeDocumentBatch} from './storage-retirement.mjs';
 import {liveRpc,externalRowsByNumber} from './sigem-live.mjs';
 import {canonical,sha256} from './sigem-turso.mjs';
@@ -883,6 +884,8 @@ export default {
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
+      const maintenanceResponse = await handleReleaseMaintenance(request, env);
+      if (maintenanceResponse) return maintenanceResponse;
       const sigemResponse = await handleSigemStorage(request, env);
       if (sigemResponse) return sigemResponse;
       const githubResponse = await handleGithubRoute(request, env);
