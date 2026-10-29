@@ -576,40 +576,48 @@
     };
   }
 
-  /** Read every recognizable document sheet, not only a tab literally named N-1710.
-   * Non-document/instruction sheets are skipped; invalid ambiguous headers stop import.
-   * Source sheet and row remain attached to each record for traceability. */
+  /**
+   * Read declared LD sheets only. Helper sheets such as "Colar SIGEM",
+   * "REL. PW" and summaries may contain DOCUMENTO columns but are NOT
+   * evidence that a code belongs to a source LD.
+   */
   function parseReferenceSheets(sheets, fileMeta) {
-    const recognized = [];
-    const records = [];
+    const accepted = [];
     for (const source of Array.isArray(sheets) ? sheets : []) {
       const sheetName = text(source && source.name);
       if (!sheetName || !Array.isArray(source.matrix)) continue;
+      const name = normalizeHeader(sheetName);
+      const isDocumentSheet = /^(?:N 1710|ET|CV)$/.test(name)
+        || /^LD(?: |$)/.test(name)
+        || /^(?:LISTA DE DOCUMENTOS|LISTA DOCUMENTAL|REFERENCIAS DOCUMENTAIS)(?: |$)/.test(name);
+      if (!isDocumentSheet) continue;
       try {
         const parsed = parseLdMatrix(source.matrix, { ...fileMeta, sheetName });
-        recognized.push(sheetName);
-        records.push(...parsed.records);
+        accepted.push(parsed);
       } catch (error) {
         const message = String(error && error.message || error);
-        if (/mais de uma coluna DOCUMENTO/.test(message)) {
-          throw new Error(sheetName + ": " + message);
-        }
+        if (/mais de uma coluna DOCUMENTO/.test(message)) throw new Error(sheetName + ": " + message);
         if (!/cabeçalho DOCUMENTO não localizado|nenhum código documental reconhecido/.test(message)) throw error;
       }
     }
-    if (!records.length) {
-      throw new Error("Referência inválida: nenhuma aba com códigos documentais reconhecidos foi localizada.");
+    if (!accepted.length) {
+      throw new Error("LD inválida: aba N-1710 não foi localizada; nenhuma aba de referência documental reconhecida (N-1710, ET, CV ou LD).");
     }
+    // Keep the preexisting N-1710-only parser contract fully compatible.
+    if (accepted.length === 1) return accepted[0];
+    const records = accepted.flatMap(parsed => parsed.records);
+    const sheetNames = accepted.map(parsed => parsed.meta.sheetName);
     return {
-      ok: true, records,
+      ok: true,
+      records,
       meta: {
         version: 1,
         fileName: text(fileMeta && fileMeta.fileName),
         fileSize: Number(fileMeta && fileMeta.fileSize) || 0,
         lastModified: Number(fileMeta && fileMeta.lastModified) || 0,
         importedAt: text(fileMeta && fileMeta.importedAt) || new Date().toISOString(),
-        sheetName: recognized.join(", "),
-        sheetNames: recognized,
+        sheetName: sheetNames.join(", "),
+        sheetNames,
         recordCount: records.length,
         uniqueDocumentCount: new Set(records.map(record => record.documentKey)).size,
       },
