@@ -14,7 +14,7 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  await db.exec("GRANT EXECUTE ON FUNCTION public.grcon_sigem_query_history(uuid) TO authenticated;");
  const one=id(30),two=id(31),ws=id(1),user=id(9);
  await db.query("INSERT INTO private.grcon_sigem_query_snapshots(id,workspace_id,record_count,fingerprint,file_name,status,created_at,created_by,metadata) VALUES($1,$2,4,'first','Old.xlsx','archived',now(),$3,'{}')",[one,ws,user]);
- const docs=[['IS-RNEST-1','0'],['IS-RNEST-1','1'],['IS-5290.00-22313-955-C1O-001','0'],['IS-5290.00-22313-955-C1O-001','0']];
+ const docs=[['ABC-RNEST-1','0'],['ABC-RNEST-1','1'],['IS-5290.00-22313-955-C1O-001','0'],['IS-5290.00-22313-955-C1O-001','0']];
  for(let i=0;i<docs.length;i++)await db.query("INSERT INTO private.grcon_sigem_operational_rows VALUES($1,$2,$3,$4,$5)",[one,i+1,docs[i][0],docs[i][1],JSON.stringify({document:docs[i][0],revision:docs[i][1]})]);
  await db.exec("SET request.jwt.claim.sub='"+user+"';SET ROLE authenticated;");
  const history=()=>db.query('SELECT * FROM public.grcon_sigem_query_history($1)',[ws]).then(x=>x.rows);
