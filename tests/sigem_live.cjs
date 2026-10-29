@@ -129,6 +129,34 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  await assert.rejects(pg.query('select * from private.grcon_monitored_documents_list($1)',[id(11)]),/Sem acesso ao contrato/,'cross-workspace monitoring is forbidden');
  await pg.exec('reset role');
 
+
+ // New resumable release regression: version with 501 rows must not erase any
+ // source row until full projection and destination proof have passed.
+ await pg.exec("reset role;alter table private.grcon_master_owner add column singleton boolean default true;");
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029121000_sigem_resumable_release.sql','utf8'));
+ await claims();
+ const staged=id(31),stagedRows=legacyRows.map(r=>({...r,snapshot_id:staged}));
+ await pg.query("insert into private.grcon_sigem_query_snapshots(id,workspace_id,contract_id,file_name,expected_count,record_count,status,created_by,metadata) values($1,$2,$3,'Batch.xlsx',501,501,'archived',$4,'{}')",[staged,id(1),id(2),id(9)]);
+ await pg.query("insert into private.grcon_sigem_query_rows select * from jsonb_populate_recordset(null::private.grcon_sigem_query_rows,$1)",[JSON.stringify(stagedRows)]);
+ const stagedProof={...proof,id:staged};
+ const step=p=>pg.query("select public.grcon_sigem_release_step($1,$2,$3,$4) r",[id(1),id(9),staged,JSON.stringify(p)]).then(x=>x.rows[0].r);
+ await assert.rejects(step({...stagedProof,fullAudit:false}),/AUDIT_REQUIRED/,'refuse unverified release');
+ let phase=await step(stagedProof);
+ assert.equal(phase.released,false);assert.equal(phase.phase,'projecting');assert.equal(phase.processed,500);
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,501,'do not delete old rows in an incomplete projection');
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,501,'readers never see partial projection');
+ phase=await step(stagedProof);
+ assert.equal(phase.released,false);assert.equal(phase.phase,'cleaning');
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,501,'complete switch commits before cleanup');
+ assert.equal((await pg.query("select count(*) n from private.grcon_sigem_external_snapshots where snapshot_id=$1 and ready and projected and storage_kind='legacy'",[staged])).rows[0].n,1);
+ assert.deepEqual(
+   (await pg.query('select row_number,document_key,status_original from private.grcon_sigem_operational_rows where snapshot_id=$1 order by row_number',[staged])).rows.map(r=>[r.row_number,r.document_key,r.status_original]),
+   stagedRows.map(r=>[r.row_number,r.document_key,r.status_original]),'all operational rows survive switching to Turso');
+ phase=await step(stagedProof);
+ assert.equal(phase.released,true);assert.equal(phase.remaining,0);assert.equal(phase.removed,501);
+ assert.equal((await step(stagedProof)).removed,0,'a completed release is idempotent');
+ assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,501,'operational view retains rows after raw cleanup');
+
  console.log('sigem_live: full import/read fidelity, minimal Postgres storage, SQL publication gate, replay, conflicts, outage, tenant isolation, active-base protection and blocked legacy writes passed.');
  }finally{global.fetch=originalFetch;sqlite.close();await pg.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
