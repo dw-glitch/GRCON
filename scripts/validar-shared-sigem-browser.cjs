@@ -79,8 +79,17 @@ function rpc(name,args) {
  assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.state.local?.meta?.source),'local-general-query');
  assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B','LEGACY').status),'Recusado');
  await b.page.evaluate(async()=>{await window.GrconSigemPwDashboardBootstrap.open();});
- await b.page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.sigem.records.length===2);
- assert.equal(await b.page.evaluate(()=>window.GrconSigemPwDashboardUi.state.sigem.meta.snapshotId),backend.active.snapshot_id);
+ await b.page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.ready&&!window.GrconSigemPwDashboardUi.state.busy);
+ const selected=await b.page.evaluate(()=>({
+   codeCount:window.GrconSigemPwDashboardUi.state.sigem.records.length,
+   selectedId:window.GrconSigemPwDashboardUi.state.sigem.meta?.snapshotId,
+   sourceId:window.GrconSharedSigemQuery.current()?.meta?.snapshotId,
+   sourceCount:window.GrconSharedSigemQuery.current()?.records.length,
+   error:window.GrconSigemPwDashboardUi.state.analysisError,
+ }));
+ assert.equal(selected.error,'',"dashboard source must be available");
+ assert.equal(selected.selectedId,selected.sourceId,"dashboard must follow the current source choice");
+ assert.equal(selected.codeCount,selected.sourceCount,"dashboard must not silently switch to an outdated shared source");
  await b.page.screenshot({path:path.join(output,'dashboard-shared.png'),fullPage:true});
  // Same status engine used in control; its alocação remains from technical/planned data.
  const triage=await b.page.evaluate(()=>{
