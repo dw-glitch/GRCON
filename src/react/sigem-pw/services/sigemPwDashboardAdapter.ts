@@ -13,6 +13,7 @@ import type {
 } from "../types/domain";
 
 import { ensureSharedSigemHistoryCompatibility } from "./sharedSigemHistoryCompatibility";
+import { buildReferenceBase } from "./sigemPwReferenceSources";
 
 const PRE_STAGE7_RESET_KEY = "sigem-pw-stage7-preupdate-reset-v1";
 const EMPTY_BASE = (): SigemPwBase => ({ meta: null, records: [] });
@@ -519,46 +520,87 @@ async function parseQualityLdFile(file: File): Promise<{ meta: SigemPwBaseMeta; 
   return Core().parseLdMatrix(workbookMatrix(workbook.Sheets[sheetName], 40), { ...meta, sheetName });
 }
 
-async function importLd(file: File): Promise<void> {
+async function persistReferenceBase(candidateLd: SigemPwBase, description: string): Promise<boolean> {
+  if (window.GrconImportReview && !await window.GrconImportReview.review("ld", candidateLd, state.ld)) return false;
+  const candidatePw = state.pw.meta ? Core().sanitizePwBase(state.pw, candidateLd) : null;
+  const previousHistory = state.history;
+  const recorded = candidatePw
+    ? await registerHistoryBeforeActivation("pw", candidatePw, {
+        reason: "quality-ld-revalidation",
+        recordedAt: text(candidateLd.meta?.importedAt),
+        ldRecords: candidateLd.records,
+      })
+    : null;
+  let saved: { ld: SigemPwBase; pw: SigemPwBase | null };
+  try {
+    saved = await Core().saveLdAndReprocessPw(candidateLd, state.pw);
+  } catch (error) {
+    try {
+      await rollbackStagedImport(recorded, [
+        [Core().LD_BASE_KEY, state.ld],
+        [Core().PW_BASE_KEY, state.pw],
+        [Core().HISTORY_KEY, previousHistory],
+      ]);
+    } catch (rollbackError) {
+      throw new Error(`${messageOf(error, "Falha ao salvar referências documentais.")} ${messageOf(rollbackError, "")}`.trim());
+    }
+    throw new Error(`${messageOf(error, "Falha ao salvar referências documentais.")} As bases anteriores foram restauradas.`);
+  }
+  state.ld = saved.ld;
+  if (saved.pw) state.pw = saved.pw;
+  state.history = await Core().loadHistory();
+  await rebuildModelAsync();
+  renderFromModel(true);
+  if (saved.pw) window.dispatchEvent(new CustomEvent("grcon:pw-base-updated", {
+    detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard-references" },
+  }));
+  notify(`${description}: ${fmt(candidateLd.records.length)} documentos únicos, ${fmt(Number(candidateLd.meta?.referenceConflictCount) || 0)} conflito(s) de origem.`, "success");
+  return true;
+}
+
+async function importLd(files: File | File[]): Promise<void> {
   if (state.busy) return;
-  setBusy(true, "Lendo o universo N-1710 da LD da Qualidade…");
+  const input = (Array.isArray(files) ? files : [files]).filter(Boolean);
+  if (!input.length) return;
+  setBusy(true, `Consolidando ${input.length} fonte(s) documentais…`);
   await yieldFrame();
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await window.GRCONModuleLoader.ensure("xlsx");
-    const parsed = await parseQualityLdFile(file);
-    const candidateLd: SigemPwBase = { meta: {...parsed.meta,localContext:importContext()}, records: parsed.records };
-    if (window.GrconImportReview && !await window.GrconImportReview.review("ld",candidateLd,state.ld)) return;
-    const candidatePw = state.pw.meta ? Core().sanitizePwBase(state.pw, candidateLd) : null;
-    const previousHistory = state.history;
-    const recorded = candidatePw
-      ? await registerHistoryBeforeActivation("pw", candidatePw, { reason: "quality-ld-revalidation", recordedAt: text(parsed.meta.importedAt), ldRecords: candidateLd.records })
-      : null;
-    let saved: { ld: SigemPwBase; pw: SigemPwBase | null };
-    try {
-      saved = await Core().saveLdAndReprocessPw(candidateLd, state.pw);
-    } catch (error) {
-      try {
-        await rollbackStagedImport(recorded, [
-          [Core().LD_BASE_KEY, state.ld],
-          [Core().PW_BASE_KEY, state.pw],
-          [Core().HISTORY_KEY, previousHistory],
-        ]);
-      } catch (rollbackError) {
-        throw new Error(`${messageOf(error, "Falha ao ativar a LD da Qualidade.")} ${messageOf(rollbackError, "")}`.trim());
-      }
-      throw new Error(`${messageOf(error, "Falha ao ativar a LD da Qualidade.")} A LD, o PW anterior e o histórico foram restaurados.`);
+    const names = new Set<string>();
+    const additions: Array<{ file: File; meta: SigemPwBaseMeta; records: SigemPwRecord[] }> = [];
+    for (const file of input) {
+      if (!/\\.(?:xlsx|xls|xlsm)$/i.test(file.name)) throw new Error(`Arquivo inválido: ${file.name}. Utilize Excel.`);
+      const key = file.name.trim().toLocaleLowerCase("pt-BR");
+      if (names.has(key)) throw new Error(`Arquivo repetido na seleção: ${file.name}.`);
+      names.add(key);
+      state.progressMessage = `Lendo ${file.name} (${additions.length + 1}/${input.length})…`;
+      emit();
+      const parsed = await parseQualityLdFile(file);
+      additions.push({ file, meta: parsed.meta, records: parsed.records });
+      await yieldFrame();
     }
-    state.ld = saved.ld;
-    if (saved.pw) state.pw = saved.pw;
-    state.history = await Core().loadHistory();
-    await rebuildModelAsync();
-    renderFromModel(true);
-    if (saved.pw) window.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard-ld" } }));
-    notify(`LD da Qualidade atualizada: ${fmt(Number(parsed.meta.uniqueDocumentCount) || 0)} códigos N-1710 no universo válido.`, "success");
+    const candidateLd = buildReferenceBase(state.ld, additions, document => Core().documentIdentity(document));
+    if (candidateLd.meta) candidateLd.meta.localContext = importContext();
+    await persistReferenceBase(candidateLd, "Referências documentais atualizadas");
   } catch (error) {
-    console.error("[SIGEM×PW] LD:", error);
-    notify(messageOf(error, "Não foi possível atualizar a LD da Qualidade."), "error");
+    console.error("[SIGEM×PW] Referências documentais:", error);
+    notify(messageOf(error, "Não foi possível consolidar as referências. As bases anteriores foram preservadas."), "error");
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function toggleLdSource(id: string, active: boolean): Promise<void> {
+  if (state.busy) return;
+  setBusy(true, "Atualizando fontes de referência…");
+  try {
+    const candidate = buildReferenceBase(state.ld, [], document => Core().documentIdentity(document), id, active);
+    if (candidate.meta) candidate.meta.localContext = importContext();
+    await persistReferenceBase(candidate, "Seleção de fontes atualizada");
+  } catch (error) {
+    console.error("[SIGEM×PW] Ativação da referência:", error);
+    notify(messageOf(error, "Não foi possível atualizar a fonte documental."), "error");
   } finally {
     setBusy(false);
   }
@@ -1061,6 +1103,7 @@ export const sigemPwDashboardAdapter = {
   importPw,
   publishPw,
   importLd,
+  toggleLdSource,
   setQuery,
   setRevision,
   setSigemStatus,
