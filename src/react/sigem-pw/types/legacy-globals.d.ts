@@ -52,6 +52,7 @@ interface SigemPwDashboardCoreApi {
   revisionKey(value: unknown): string; normalizeRevisionScope(value: unknown): SigemPwRevisionScope;
   parsePwCsv(source: string, meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   parseLdMatrix(matrix: string[][], meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
+  parseReferenceSheets(sheets: Array<{ name: string; matrix: string[][] }>, meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   sanitizePwBase(base: SigemPwBase, ld: SigemPwBase | SigemPwRecord[]): SigemPwBase;
   createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[], settings?: { requireN1710Ld?: boolean; requireDocumentReference?: boolean; ldAvailable?: boolean; sigemAvailable?: boolean; pwAvailable?: boolean }): SigemPwModel;
   aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }, options?: { revisionScope?: SigemPwRevisionScope }): SigemPwResult;
