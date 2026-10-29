@@ -848,6 +848,13 @@
   }
 
   root.addEventListener("grcon:shared-sigem-updated", () => { if (state.ready && !state.busy) void adoptSharedBase(); });
+  root.addEventListener("grcon:shared-sigem-retry", event => {
+    if (!state.busy) return;
+    const message = `Banco temporariamente ocupado. Retomando o envio (tentativa ${event.detail.attempt + 1}/4)…`;
+    currentOperation?.update(message);
+    const label = el("pc-progress")?.querySelector("span");
+    if (label) label.textContent = message;
+  });
   root.addEventListener("grcon:shared-sigem-date-updated", async event => {
     const base = root.GrconSharedSigemQuery.current();
     if (!base || !state.ready || event.detail?.meta?.snapshotId !== base.meta.snapshotId) return;

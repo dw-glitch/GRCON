@@ -37,11 +37,30 @@
       const action = {begin:"import-begin",chunk:"import-chunk",publish:"import-publish"}[name];
       const input = name === "begin" ? {fileName:args.source_file,count:args.expected_count,metadata:args.source_metadata,expectedActive:args.expected_active}
         : name === "chunk" ? {snapshot:args.upload_id,first:args.first_row,rows:args.rows} : {snapshot:args.upload_id};
-      const response = await root.fetch("/api/sigem-storage/" + action, {method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},
-        body:JSON.stringify({workspace:args.target_workspace,...input}),signal:AbortSignal.timeout(60000)});
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error("A publicação no Turso não foi confirmada. A base anterior continua disponível. " + (result.error || ""));
-      return name === "chunk" ? result.count : result.id;
+      // Begin, chunks and publish are idempotent. Replay exactly the same
+      // payload after transient failures; never retry access/integrity errors.
+      const body = JSON.stringify({workspace:args.target_workspace,...input});
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (cloud()?.state?.membership?.workspace_id !== args.target_workspace) throw new Error("A área de trabalho mudou durante o envio. A base anterior permanece ativa.");
+        let response, result;
+        try {
+          response = await root.fetch("/api/sigem-storage/" + action, {method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},
+            body,signal:AbortSignal.timeout(60000)});
+          result = await response.json().catch(() => null);
+        } catch (_) { /* A lost response may be safely replayed. */ }
+        if (response?.ok && result?.ok) return name === "chunk" ? result.count : result.id;
+        const transient = !response || [429, 502, 503, 504].includes(response.status);
+        if (!transient || attempt === 3) {
+          const error = new Error(response?.status === 401
+            ? "Sua sessão expirou. Entre novamente para retomar a publicação. A base anterior permanece disponível."
+            : transient ? "O banco continua ocupado. Aguarde alguns instantes e clique em Publicar novamente para retomar os mesmos lotes. A base anterior permanece disponível."
+              : "A publicação no Turso não foi confirmada. A base anterior continua disponível. " + (result?.error || "Falha na validação do envio."));
+          error.code = result?.error || "SIGEM_IMPORT_TRANSPORT_FAILED";
+          throw error;
+        }
+        root.dispatchEvent(new CustomEvent("grcon:shared-sigem-retry", { detail: { action, attempt: attempt + 1, firstRow: args.first_row } }));
+        await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt));
+      }
     }
     if (name === "page" && token && typeof root.fetch === "function") {
       const response = await root.fetch("/api/sigem-storage/page", {

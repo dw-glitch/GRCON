@@ -40,3 +40,13 @@ Os testes cobrem importação, persistência, recarga, atualização da mesma pu
 ## Uso após a publicação
 
 Reabrir o GRCON, importar a Consulta Geral original na Conferência e executar uma nova análise. Para disponibilizar a mesma base à equipe, usar “Publicar Consulta Geral compartilhada”. Resultados antigos não são provas de status atual; o identificador local exclusivo invalida análises associadas à fonte anterior. Nenhuma base corporativa é substituída pela execução dos testes.
+
+## Falha ao publicar uma nova Consulta Geral
+
+O erro `SIGEM_CONTROL_BUSY` foi confirmado nos logs como cancelamento SQL `57014` durante `grcon_sigem_project_rows`. A projeção de cada lote recalculava a normalização dentro de junções devido à expansão de CTEs. A migração `20261029193355_sigem_projection_materialized.sql` calcula os valores e seus digests uma vez por lote, materializa as junções e mantém as verificações de conteúdo, posição, contrato e repetição.
+
+A migração foi aplicada e um lote real de 250 registros já recebidos foi repetido em 346 ms. A contagem permaneceu em 4.750 registros e a base ativa não mudou. Os papéis anon e authenticated continuam sem permissão direta de executar a função privada.
+
+O navegador repete falhas de rede e HTTP 429/502/503/504 até quatro tentativas, com espera crescente e aviso visível. Cada tentativa mantém o identificador e os bytes originais. Erros de autorização ou integridade não são repetidos. Ao esgotar as tentativas, a tela orienta clicar em Publicar novamente para retomar; a base anterior segue disponível. O aviso de duração deixa de dizer “Em processamento” depois de uma falha.
+
+Os testes exercitam ocupação temporária seguida de sucesso, esgotamento, 401, 409, troca de contrato, ausência de duplicação e drenagem das requisições antes de falhar. O teste SQL usa o caminho completo de importação, consulta e publicação com a função otimizada.
