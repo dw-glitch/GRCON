@@ -139,6 +139,7 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  await pg.exec(fs.readFileSync('supabase/migrations/20261029143100_sigem_release_receipt_parity.sql','utf8'));
  await pg.exec(fs.readFileSync('supabase/migrations/20261029180000_sigem_bounded_release_validation.sql','utf8'));
  await pg.exec(fs.readFileSync('supabase/migrations/20261029180100_sigem_release_batch_size.sql','utf8'));
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029180200_sigem_validation_batch_size.sql','utf8'));
  await claims();
  const staged=id(31),stagedRows=Array.from({length:2501},(_,i)=>({...legacyRows[i%legacyRows.length],snapshot_id:staged,row_number:i+1}));
  await pg.query("insert into private.grcon_sigem_query_snapshots(id,workspace_id,contract_id,file_name,expected_count,record_count,status,created_by,metadata) values($1,$2,$3,'Batch.xlsx',2501,2501,'archived',$4,'{}')",[staged,id(1),id(2),id(9)]);
@@ -151,12 +152,12 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'do not delete old rows in an incomplete projection');
  assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'readers never see partial projection');
  phase=await step(stagedProof);
- assert.equal(phase.phase,'validating');assert.equal(phase.processed,500);
- const correctContent=(await pg.query('select content_id from private.grcon_sigem_projection_map where snapshot_id=$1 and row_number=501',[staged])).rows[0].content_id;
- await pg.query('update private.grcon_sigem_projection_map set content_id=(select content_id from private.grcon_sigem_projection_map where snapshot_id=$1 and row_number=1) where snapshot_id=$1 and row_number=501',[staged]);
+ assert.equal(phase.phase,'validating');assert.equal(phase.processed,2000);
+ const correctContent=(await pg.query('select content_id from private.grcon_sigem_projection_map where snapshot_id=$1 and row_number=2001',[staged])).rows[0].content_id;
+ await pg.query('update private.grcon_sigem_projection_map set content_id=(select content_id from private.grcon_sigem_projection_map where snapshot_id=$1 and row_number=1) where snapshot_id=$1 and row_number=2001',[staged]);
  await assert.rejects(step(stagedProof),/PROJECTION_MISMATCH/,'a corrupt later page cannot advance validation or cleanup');
- assert.equal((await pg.query('select validated_through from private.grcon_sigem_release_validation where snapshot_id=$1',[staged])).rows[0].validated_through,500);
- await pg.query('update private.grcon_sigem_projection_map set content_id=$2 where snapshot_id=$1 and row_number=501',[staged,correctContent]);
+ assert.equal((await pg.query('select validated_through from private.grcon_sigem_release_validation where snapshot_id=$1',[staged])).rows[0].validated_through,2000);
+ await pg.query('update private.grcon_sigem_projection_map set content_id=$2 where snapshot_id=$1 and row_number=2001',[staged,correctContent]);
 
  while(phase.phase==='validating'){
   assert.equal((await pg.query('select count(*) n from private.grcon_sigem_query_rows where snapshot_id=$1',[staged])).rows[0].n,2501,'validation never erases the source');
