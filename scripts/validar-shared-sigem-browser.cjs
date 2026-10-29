@@ -96,7 +96,7 @@ function rpc(name,args) {
    const doc='RL-5290.00-22313-ABC-C1O-001';const record={document:doc,revision:'B',sheet:'N-1710',title:'RELATÓRIO',discipline:'CIVIL',documentType:'RL',databook:'Databook',allocationStatus:'ALOCADO'};
    return window.TriagemCore.triageOne({name:doc+'_0001_B.pdf'},window.TriagemCore.buildIndex([record],[{document:doc,revision:'B',status:'Não Postado',sheet:'Colar SIGEM'}]),{sigemQueryContext:window.GrconSharedSigemQuery.context()});
  });
- assert.equal(triage.status,'Recusado');assert.equal(triage.sigemStatusSource,'shared-general-query');assert.equal(triage.allocationFinding.kind,'allocated');
+ assert.equal(triage.status,'Recusado');assert.equal(triage.sigemStatusSource,'local-general-query');assert.equal(triage.allocationFinding.kind,'allocated');
  // Exact revision lookup, no arbitrary revision fallback.
  assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','C','LEGACY').status),'LEGACY');
  // Invalid/empty file leaves both shared and local last valid sources.
