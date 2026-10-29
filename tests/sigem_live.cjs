@@ -109,7 +109,7 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  // Regression for SQLSTATE 42702 and monitored-document statement timeout.
  await pg.exec('reset role');
  await pg.exec([
-   "create function private.grcon_is_member(w uuid) returns boolean language sql security definer set search_path='' as $ select exists(select 1 from public.grcon_memberships where workspace_id=w and user_id=auth.uid() and active) $;",
+   "create function private.grcon_is_member(w uuid) returns boolean language sql security definer set search_path='' as $member$ select exists(select 1 from public.grcon_memberships where workspace_id=w and user_id=auth.uid() and active) $member$;",
    "alter table private.grcon_sigem_comparisons add column compared_at timestamptz default now();",
    "create table private.grcon_sigem_status_changes(workspace_id uuid,contract_id uuid,document_key text,previous_status text,comparison_id uuid,created_at timestamptz default now());",
    "create table private.grcon_monitored_documents(id uuid primary key,workspace_id uuid,contract_id uuid,document_key text,document_code text,description text,note text,priority text,active boolean);"
