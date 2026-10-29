@@ -150,7 +150,7 @@ revoke execute on function private.grcon_sigem_query_begin(uuid,text,integer,jso
 -- Reject jobs created by obsolete frontends before they can call legacy writers.
 do $$ declare f record;definition text;begin
  for f in select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.prokind='f' and p.proname='grcon_operations_service' loop
-  definition:=replace(pg_get_functiondef(f.oid),"elsif operation like 'import_%' and j.kind='sigem_import' then", "elsif operation like 'import_%' and j.kind='sigem_import' then raise exception 'SIGEM_USE_TURSO_IMPORT';");
+  definition:=replace(pg_get_functiondef(f.oid),'elsif operation like ''import_%'' and j.kind=''sigem_import'' then', 'elsif operation like ''import_%'' and j.kind=''sigem_import'' then raise exception ''SIGEM_USE_TURSO_IMPORT'';');
   execute definition;
  end loop;
 end $$;
