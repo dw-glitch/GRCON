@@ -66,6 +66,34 @@ const {PGlite}=require('@electric-sql/pglite');
    assert.equal(rejected.status,403);assert.equal(probeBudgetCalls,2,'wrong source cannot reach the service budget');
   }
  }finally{global.fetch=originalFetch;}
+
+ // The retirement endpoint accepts only the protected deployment identity.
+ const prefix='workspaces/'+w+'/documents/',objects=new Map([[prefix+'one',100],[prefix+'two',200],['sigem-backups/v1/keep',300]]);
+ let retirementCatalog=2,retirementFinishes=0,retirementLists=0;
+ const retirementEnv={SUPABASE_URL:'https://qa.test',SUPABASE_SECRET_KEY:'sb_secret_qa',GRCON_DOCUMENTS:{
+  list:async({prefix})=>{retirementLists++;return {objects:[...objects].filter(([k])=>k.startsWith(prefix)).map(([key,size])=>({key,size})),truncated:false};},
+  delete:async keys=>{for(const key of keys)objects.delete(key);}
+ }};
+ global.fetch=async(url,options)=>{
+  if(String(url).includes('token.actions.githubusercontent.com'))return Response.json({keys:[jwk]});
+  assert.ok(String(url).endsWith('/grcon_document_retirement_service'));
+  const input=JSON.parse(options.body);assert.equal(input.target_workspace,w);
+  if(input.operation==='document-finish'){retirementCatalog=0;retirementFinishes++;}
+  return Response.json({prefix,records:retirementCatalog,multipart:[]});
+ };
+ const retireRequest=token=>new Request('https://qa.test/api/document-vault/retire-legacy-storage',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({workspace:w})});
+ try{
+  for(const change of [{aud:'wrong'},{repository:'attacker/GRCON'},{actor_id:'other'},{repository_visibility:'private'},{ref:'refs/heads/other'},{workflow_ref:'other'},{event_name:'pull_request'}]){
+   const response=await worker.fetch(retireRequest(await sign({aud:'grcon-document-retirement',...change})),retirementEnv,{});
+   assert.equal(response.status,403);assert.equal(retirementLists,0,'invalid deployment identity cannot inspect or delete R2');
+  }
+  const response=await worker.fetch(retireRequest(await sign({aud:'grcon-document-retirement'})),retirementEnv,{});
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,deleted:2,bytes:300,complete:true});
+  assert.equal(retirementFinishes,1);assert.equal(objects.has('sigem-backups/v1/keep'),true);
+  assert.equal((await worker.fetch(retireRequest(await sign({aud:'grcon-document-retirement'})),retirementEnv,{})).status,200);
+  assert.equal(retirementFinishes,1,'a completed retirement is a no-op on later deployments');
+ }finally{global.fetch=originalFetch;}
+
  const env={SUPABASE_URL:'https://qa.test',SUPABASE_SECRET_KEY:'sb_secret_qa',GRCON_DOCUMENT_AI_ENABLED:'true',AI:{run:async(...args)=>{modelCalls++;return fixture.run(...args);}}};
  const view={...data,pages:Object.fromEntries(['sigem','pw','history','vault','requests'].map(k=>[k,{revision:'v1',after:0}]))};
  global.fetch=async(url,options)=>{

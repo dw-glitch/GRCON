@@ -1,4 +1,5 @@
 import {handleSigemStorage} from './sigem-storage.mjs';
+import {purgeDocumentBatch} from './storage-retirement.mjs';
 import {liveRpc,externalRowsByNumber} from './sigem-live.mjs';
 import {canonical,sha256} from './sigem-turso.mjs';
 import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
@@ -823,9 +824,22 @@ async function handleDelete(request, env) {
   }
 }
 
+
+async function handleDocumentRetirement(request,env){
+ if(request.method!=='POST')return apiError('Método inválido.',405,'METHOD_NOT_ALLOWED');
+ await verifyGithubToken(bearerToken(request),{repository:'dw-glitch/GRCON',repositoryId:'1322072089',ownerId:'202873892',audience:'grcon-document-retirement',visibility:'public',workflow:'dw-glitch/GRCON/.github/workflows/deploy-cloudflare.yml@refs/heads/main',allowedEvents:['push','workflow_dispatch']});
+ const input=await parseJson(request),workspace=safeUuid(input.workspace);
+ if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
+ const scope=await rpc(env,'grcon_document_retirement_service',{target_workspace:workspace,operation:'document-scope'});
+ const result=await purgeDocumentBatch(requireBucket(env),scope);
+ if(result.complete&&scope.records>0)await rpc(env,'grcon_document_retirement_service',{target_workspace:workspace,operation:'document-finish'});
+ return json({ok:true,...result});
+}
+
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if(action==="retire-legacy-storage")return handleDocumentRetirement(request,env);
   if (RETIRED_DOCUMENT_ACTIONS.has(action)) return apiError("Armazenamento de documentos desativado por decisão corporativa.", 410, "DOCUMENT_STORAGE_RETIRED");
   if (STORAGE_WRITE_ACTIONS.has(action) && !storageWritesEnabled(env)) {
     return apiError("Armazenamento documental suspenso até autorização corporativa.", 403, "STORAGE_WRITES_DISABLED");

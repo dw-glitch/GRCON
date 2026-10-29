@@ -68,6 +68,8 @@ const jobsAnonymous=await fetch(new URL('/api/background-jobs/list?workspace=000
 assert.equal(jobsAnonymous.status,401,'Tarefas devem exigir sessão.');
 const auditorAnonymous=await fetch(new URL('/api/document-vault/allocation-audit-ai',base),{method:'POST',headers:{'content-type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});
 assert.equal(auditorAnonymous.status,401,'Auditor semântico deve exigir sessão.');
+const retirementAnonymous=await fetch(new URL('/api/document-vault/retire-legacy-storage',base),{method:'POST',body:'{}',signal:AbortSignal.timeout(20000)});
+assert.equal(retirementAnonymous.status,401,'Limpeza R2 exige identidade assinada do workflow protegido.');
 const githubAnonymous = await fetch(new URL('/api/egrdt-teams/github', base), {method:'POST',body:'{}',signal:AbortSignal.timeout(20000)});
 assert.equal(githubAnonymous.status,401,'Retorno GitHub deve exigir OIDC assinado.');
 console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, verifiedAssets, documentStorageRetired: true, anonymousCatalogStatus: anonymous.status }));

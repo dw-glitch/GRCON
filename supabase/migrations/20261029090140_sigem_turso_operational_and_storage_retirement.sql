@@ -247,4 +247,24 @@ do $$ declare definition text;begin
   execute definition;
  end if;
 end $$;
+
+-- Only the protected deployment workflow can ask the Worker to call this RPC.
+create function private.grcon_document_retirement_service(target_workspace uuid,operation text) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare master_id uuid;old_claims text;old_sub text;result jsonb;
+begin
+ if coalesce(auth.jwt()->>'role','')<>'service_role' or operation not in('document-scope','document-finish') then raise exception 'Somente API de servidor.' using errcode='42501';end if;
+ select g.user_id into master_id from private.grcon_master_owner g join public.grcon_memberships m on m.user_id=g.user_id and m.active and m.role='owner'
+ join public.grcon_contracts ct on ct.id=m.contract_id and ct.workspace_id=m.workspace_id and ct.active where m.workspace_id=target_workspace;
+ if master_id is null then raise exception 'Sem autorização Master para esta área.' using errcode='42501';end if;
+ old_claims:=current_setting('request.jwt.claims',true);old_sub:=current_setting('request.jwt.claim.sub',true);
+ perform set_config('request.jwt.claim.sub',master_id::text,true);perform set_config('request.jwt.claims',jsonb_build_object('sub',master_id,'role','authenticated')::text,true);
+ result:=private.grcon_storage_admin(target_workspace,operation,'{}');
+ perform set_config('request.jwt.claims',coalesce(old_claims,''),true);perform set_config('request.jwt.claim.sub',coalesce(old_sub,''),true);
+ return result;
+end $$;
+create function public.grcon_document_retirement_service(target_workspace uuid,operation text) returns jsonb language sql security invoker set search_path='' as $$select private.grcon_document_retirement_service(target_workspace,operation)$$;
+revoke all on function private.grcon_document_retirement_service(uuid,text),public.grcon_document_retirement_service(uuid,text) from public,anon,authenticated;
+grant execute on function private.grcon_document_retirement_service(uuid,text),public.grcon_document_retirement_service(uuid,text) to service_role;
+
 commit;

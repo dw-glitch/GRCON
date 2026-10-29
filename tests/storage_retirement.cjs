@@ -21,5 +21,14 @@ const assert=require('node:assert/strict');
  await purgeSigemBase(db,bucket,{workspace_id:w,contract_id:c,id:s});
  assert.ok(sql.filter(q=>q.statement.startsWith('DELETE')).every(q=>q.args.join('/')===[w,c,s].join('/')),'base removal is scoped to all three identity fields');
  assert.ok(!objects.has(preserved[0]));assert.ok(objects.has(preserved[1]));
+
+ const {retireDocuments}=await import('../scripts/retire-document-storage.mjs');
+ let rounds=0;
+ const retired=await retireDocuments({token:'synthetic',fetcher:async(url,options)=>{
+  assert.equal(new URL(url).pathname,'/api/document-vault/retire-legacy-storage');assert.equal(options.headers.authorization,'Bearer synthetic');rounds++;
+  return Response.json({ok:true,deleted:rounds===1?1000:607,bytes:rounds===1?100000:60700,complete:rounds===2});
+ }});
+ assert.deepEqual(retired,{ok:true,complete:true,deletedObjects:1607,deletedBytes:160700});
+ await assert.rejects(retireDocuments({token:'synthetic',fetcher:async()=>Response.json({ok:false},{status:403})}),/R2_RETIREMENT_FAILED/);
  console.log('storage_retirement: 2607 objects, exact prefix boundaries, backup preservation, multipart retries, failure handling and scoped base removal passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

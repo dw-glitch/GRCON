@@ -98,6 +98,11 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  await pg.exec(`set request.jwt.claim.sub='${id(9)}';set role authenticated;`);
  await pg.query('select public.grcon_storage_admin($1,$2,$3)',[id(1),'document-finish','{}']);
  await pg.exec('reset role');assert.equal((await pg.query('select count(*) n from private.grcon_document_files')).rows[0].n,0);assert.equal((await pg.query('select count(*) n from private.grcon_vault_emission_links')).rows[0].n,0,'retiring documents removes restrictive file links without touching GRDT history');
+
+ await claims();const retiredScope=(await pg.query('select public.grcon_document_retirement_service($1,$2) r',[id(1),'document-scope'])).rows[0].r;
+ assert.equal(retiredScope.prefix,'workspaces/'+id(1)+'/documents/');assert.equal(retiredScope.records,0);
+ await assert.rejects(pg.query('select public.grcon_document_retirement_service($1,$2)',[id(1),'delete-base-finish']),/API de servidor/);
+ await pg.exec('set role authenticated');await assert.rejects(pg.query('select public.grcon_document_retirement_service($1,$2)',[id(1),'document-scope']),/permission denied/);await pg.exec('reset role');
  console.log('sigem_live: full import/read fidelity, minimal Postgres storage, SQL publication gate, replay, conflicts, outage, tenant isolation, active-base protection and blocked legacy writes passed.');
  }finally{global.fetch=originalFetch;sqlite.close();await pg.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
