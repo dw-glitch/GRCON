@@ -7,7 +7,7 @@ function fmt(value: number | null): string {
 }
 
 export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
-  const [filter, setFilter] = useState("Com pendência");
+  const [filter, setFilter] = useState("Pendências");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [selectedCode, setSelectedCode] = useState("");
@@ -16,11 +16,11 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
     { label: "Documentos ativos", value: report.summary.active, tip: "Códigos únicos vigentes nas referências documentais." },
     { label: "Cadastrados no PW", value: report.summary.registered, tip: "Código localizado no ProjectWise das empresas CSG e QTM, inclusive Previsto." },
     { label: "Emitidos no PW", value: report.summary.emitted, tip: "Código com evidência de emissão atual (Última emissão: Sim)." },
-    { label: "Postados no SIGEM", value: report.summary.posted, tip: "Documento com situação de postagem reconhecida na Consulta Geral." },
+    { label: "Postados no SIGEM", value: report.summary.posted, tip: "Documento presente na Consulta Geral, inclusive quando em análise ou recusado." },
     { label: "Em conformidade", value: report.summary.compliant, tip: "Emissão e postagem correspondentes à revisão de referência, sem recusa comprovada." },
-    { label: "Com pendências", value: report.summary.pending, tip: "Documentos com providência documental necessária, sem contar itens em preparação." },
+    { label: "Com pendências", value: report.summary.pending, tip: "Inclui pendências e emissões em andamento; exclui itens ainda em preparação." },
   ];
-  const filtered = report.rows.filter(row => row.situation === filter && (!query || row.code.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR"))));
+  const filtered = report.rows.filter(row => (filter === "Pendências" ? row.situation === "Com pendência" || row.situation === "Em andamento" : row.situation === filter) && (!query || row.code.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR"))));
   const pageCount = Math.max(1, Math.ceil(filtered.length / 25));
   const visible = filtered.slice((Math.min(page, pageCount) - 1) * 25, Math.min(page, pageCount) * 25);
   const selected = report.rows.find(row => row.code === selectedCode);
@@ -48,7 +48,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
       <div className="spw-managerial-filter">
         <label htmlFor="spw-managerial-status">Situação</label>
         <select id="spw-managerial-status" value={filter} onChange={event => { setFilter(event.target.value); setPage(1); }}>
-          {["Com pendência","Em andamento","Em preparação","Em conformidade","Dados insuficientes","Cancelado"].map(value =>
+          {["Pendências","Com pendência","Em andamento","Em preparação","Em conformidade","Dados insuficientes","Cancelado"].map(value =>
             <option key={value} value={value}>{value}</option>)}
         </select>
         <label htmlFor="spw-managerial-search">Documento</label>
