@@ -67,6 +67,11 @@ function fromIndex(records: SigemPwRecord[]): Map<string, SigemPwRecord[]> {
   }
   return index;
 }
+function isFavorableReview(record: SigemPwRecord): boolean {
+  const value = norm(status(record));
+  return /^(?:APROVAD|ACEIT|LIBERAD|SEM COMENTAR|SEM COMENTARIO)/.test(value)
+    && !/COM COMENTARIO|COM RESSALVA|CONDICION|RESSALVA/.test(value);
+}
 function isRejected(record: SigemPwRecord): boolean {
   return /RECUSAD|REPROVAD/.test(norm(status(record)));
 }
@@ -114,6 +119,7 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     const sigemAligned = Boolean(referenceRevision && sigem.some(record =>
       revision(record) === referenceRevision));
     const rejected = sigem.some(record => isRejected(record) && revision(record) === referenceRevision);
+    const favorableReview = sigem.some(record => isFavorableReview(record) && revision(record) === referenceRevision);
     const preparing = /EM EMISSAO|EM ELABORACAO|EM PREPARACAO/.test(norm(referenceStatus));
     let situation: ManagerialDocument["situation"];
     let action: string;
@@ -127,6 +133,7 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     else if (!posted) { situation = "Com pendência"; action = "Postar no SIGEM"; }
     else if (!sigemAligned) { situation = "Com pendência"; action = "Conferir revisão postada no SIGEM"; }
     else if (rejected) { situation = "Com pendência"; action = "Analisar recusa da fiscalização"; }
+    else if (!favorableReview) { situation = "Em andamento"; action = "Aguardar avaliação favorável da Consulta Geral"; }
     else { situation = "Em conformidade"; action = "Sem ação necessária"; }
 
     if (!cancelled) {
