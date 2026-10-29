@@ -358,7 +358,7 @@
     sheet.getRow(2).height = 31;
     const dates = rows.map(row => row[0]).filter(date => date instanceof Date);
     if (dates.length) {
-      sheet.getCell("C1").value = new Date(Math.max(...dates.map(date => date.getTime())));
+      sheet.getCell("C1").value = new Date(dates.reduce((latest, date) => Math.max(latest, date.getTime()), 0));
       sheet.getCell("C1").numFmt = "dd/mm/yyyy";
     }
     sheet.getCell("A1").font = {name:"Aptos Narrow",size:17,bold:true,color:{argb:"FF0E2841"}};
