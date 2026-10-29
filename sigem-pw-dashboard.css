@@ -1254,3 +1254,21 @@
 #sigem-pw-dashboard-module .spw-table-wrap .spw-duplicates-table td:nth-child(3) { min-width:96px; }
 #sigem-pw-dashboard-module .spw-table-wrap .spw-duplicates-table .spw-status { white-space:normal;overflow:visible; }
 #sigem-pw-dashboard-module .spw-pw-revision-note { display:block;margin-top:5px;color:var(--spw-muted);font-size:.68rem; }
+
+/* SIGEM × PW: executive indicators derived from the active source universe */
+.spw-managerial{margin:12px 0 18px}
+.spw-managerial-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin:14px 0}
+.spw-managerial-card{display:flex;flex-direction:column;gap:5px;border:1px solid var(--border,#dce4eb);border-radius:13px;padding:15px;background:var(--surface,#fff);min-width:0}
+.spw-managerial-card span{font-weight:700;color:var(--text-strong,#17324a);font-size:.82rem}
+.spw-managerial-card strong{font-size:1.8rem;font-variant-numeric:tabular-nums;color:var(--text-strong,#17324a)}
+.spw-managerial-card small{font-size:.68rem;color:var(--text-muted,#66798a);line-height:1.4}
+.spw-managerial-card:nth-child(5){border-left:4px solid var(--success-500,#3f8f68)}
+.spw-managerial-card:nth-child(6){border-left:4px solid var(--danger-500,#c74b43)}
+.spw-managerial-details{border:1px solid var(--border,#dce4eb);border-radius:12px;padding:12px;background:var(--surface-soft,#f7fafc)}
+.spw-managerial-details summary{font-weight:700;cursor:pointer}
+.spw-managerial-filter{display:flex;gap:10px;align-items:center;margin:12px 0}
+.spw-managerial-table-wrap{overflow:auto;max-height:380px}
+.spw-managerial-table-wrap table{width:100%;border-collapse:collapse;font-size:.78rem}
+.spw-managerial-table-wrap th,.spw-managerial-table-wrap td{padding:9px;border-bottom:1px solid var(--border,#dce4eb);text-align:left;white-space:nowrap}
+@media(max-width:850px){.spw-managerial-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.spw-managerial-grid{grid-template-columns:minmax(0,1fr)}}
