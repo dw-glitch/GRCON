@@ -168,10 +168,11 @@ begin
  if operation='bases' then
   select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'version',s.version,'fileName',s.file_name,'records',s.record_count,'date',coalesce(s.metadata->>'referenceDate',s.published_at::text),'status',s.status,'deletedAt',s.deleted_at,'deletionPending',r.snapshot_id is not null and not r.finished,'storage',e.storage_kind) order by s.version desc),'[]') into result
   from private.grcon_sigem_query_snapshots s left join private.grcon_sigem_external_snapshots e on e.snapshot_id=s.id left join private.grcon_sigem_retirements r on r.snapshot_id=s.id
-  where s.workspace_id=target_workspace and s.contract_id=c and s.status in('active','archived') and (s.deleted_at is null or r.finished=false);
+  where s.workspace_id=target_workspace and s.contract_id=c and s.status in('active','archived') and not coalesce(r.finished,false);
   return jsonb_build_object('bases',result);
  elsif operation in('document-scope','document-finish') then
   if operation='document-finish' then
+   delete from private.grcon_vault_emission_links l using private.grcon_document_files f where l.file_id=f.id and f.workspace_id=target_workspace;
    delete from private.grcon_document_files where workspace_id=target_workspace;
    get diagnostics n=row_count;
    insert into public.grcon_audit_events(workspace_id,contract_id,actor_id,action,entity_type,entity_id,metadata) values(target_workspace,c,auth.uid(),'document_storage_retired','storage',target_workspace::text,jsonb_build_object('catalogRowsRemoved',n));
@@ -239,6 +240,8 @@ grant execute on function private.grcon_sigem_release_service(uuid,uuid,uuid,jso
 do $$ declare definition text;begin
  select pg_get_functiondef(p.oid) into definition from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='grcon_sigem_storage_control';
  if definition is not null then
+  definition:=replace(definition,'from private.grcon_sigem_query_snapshots t where workspace_id=target_workspace and contract_id=c and status in(''active'',''archived'')', 'from private.grcon_sigem_query_snapshots t where workspace_id=target_workspace and contract_id=c and status in(''active'',''archived'') and not exists(select 1 from private.grcon_sigem_retirements rt where rt.snapshot_id=t.id) and not exists(select 1 from private.grcon_sigem_external_snapshots es where es.snapshot_id=t.id and es.storage_kind=''live'')');
+  definition:=replace(definition,'if operation=''source'' then','if exists(select 1 from private.grcon_sigem_retirements rt where rt.snapshot_id=s.id) then raise exception ''SIGEM_BASE_RETIRED'';end if; if operation=''source'' then');
   definition:=replace(definition,'return result;',E'return result||case when operation=''status'' then jsonb_build_object(''newImportsTarget'',''turso'',''payloadSource'',case when exists(select 1 from private.grcon_sigem_query_snapshots qs left join private.grcon_sigem_external_snapshots e on e.snapshot_id=qs.id where qs.workspace_id=target_workspace and qs.contract_id=c and qs.status in(''active'',''archived'') and qs.deleted_at is null and not coalesce(e.ready,false)) then ''hybrid'' else ''turso'' end) else ''{}''::jsonb end;');
   definition:=replace(definition,'pg_total_relation_size(''private.grcon_sigem_query_rows'')','(pg_total_relation_size(''private.grcon_sigem_query_rows'')+pg_total_relation_size(''private.grcon_sigem_projection_map'')+pg_total_relation_size(''private.grcon_sigem_projection_contents''))');
   execute definition;

@@ -126,6 +126,7 @@ async function vaultOperation(env, workspaceId, actorId, operation, input = {}) 
     const queryInput={...input};if(queryInput.source==='sigem')delete queryInput.revision;
     const result=await rpc(env, "grcon_master_query", { target_workspace: workspaceId, actor_id: actorId, input: queryInput });
     result.vault=[];if(result.sources)result.sources.vault={available:false,reason:'Armazenamento documental desativado.'};
+    if(result.pages)result.pages.vault={after:0,next:0,hasMore:false,revision:'retired'};
     const snapshot=result.sources?.sigem?.snapshotId;
     if(snapshot&&env.GRCON_SIGEM_DIRECT_IMPORTS_ENABLED==='true'&&(!input.source||input.source==='sigem')){
       const info=await liveRpc(env,actorId,workspaceId,'metadata',{snapshot});
@@ -142,6 +143,7 @@ async function vaultOperation(env, workspaceId, actorId, operation, input = {}) 
   }
   const result=await rpc(env, "grcon_vault_operations", { target_workspace: workspaceId, actor_id: actorId, operation, input });
   if(result&&typeof result==='object')delete result.vault;
+  if(Array.isArray(result?.results))result.results=result.results.filter(r=>r.source!=='cofre');
   return result;
 }
 export async function hashStoredObject(object) {

@@ -17,7 +17,7 @@ const assert=require('node:assert/strict');
  let result,total=0;do{result=await purgeDocumentBatch(bucket,scope);total+=result.deleted;}while(!result.complete);
  assert.equal(total,2607);assert.deepEqual([...objects.keys()],preserved,'purging document storage cannot touch migration backups or unrelated namespaces');
  assert.equal((await purgeDocumentBatch(bucket,scope)).complete,true,'a successful purge can be retried');
- const sql=[];const db={execute:async(statement,args)=>{sql.push({statement,args});return {rows:statement.startsWith('SELECT name')?[{name:args[0]}]:[]};}};
+ const sql=[];const db={execute:async(statement,args=[])=>{sql.push({statement,args});return {rows:statement.startsWith('SELECT name')?[{name:args[0]||'sigem_live_uploads'}]:[]};}};
  await purgeSigemBase(db,bucket,{workspace_id:w,contract_id:c,id:s});
  assert.ok(sql.filter(q=>q.statement.startsWith('DELETE')).every(q=>q.args.join('/')===[w,c,s].join('/')),'base removal is scoped to all three identity fields');
  assert.ok(!objects.has(preserved[0]));assert.ok(objects.has(preserved[1]));

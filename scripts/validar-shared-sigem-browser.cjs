@@ -13,6 +13,7 @@ const backend={active:null,uploads:new Map(),fail:false,offline:false,serial:0};
 function rpc(name,args) {
  if(backend.offline) return {data:null,error:{message:'QA offline'}};
  if(name==='grcon_egrdt_sequence_status') return {data:{last_generated:1984,next_available:1985,active_reservations:0,year:2026},error:null};
+ if(name==='grcon_is_master_owner')return {data:false,error:null};
  if(name==='grcon_document_tasks') return {data:[],error:null};
  if(name==='grcon_pw_base') return {data:{versions:[]},error:null};
  if(name==='versions') return {data:[],error:null};

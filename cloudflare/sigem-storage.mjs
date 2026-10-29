@@ -117,6 +117,10 @@ export async function handleSigemStorage(request, env) {
             consent(env); // connection probe sends no corporate identifiers
             turso.databaseBytes = (await db.execute('PRAGMA page_count')).rows[0]?.page_count * (await db.execute('PRAGMA page_size')).rows[0]?.page_size;
             turso.snapshots = (await db.execute(`SELECT id,state,expected_count,checksum,verified_at FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? ORDER BY id`, [input.workspace, status.contractId])).rows;
+            if(env.GRCON_SIGEM_DIRECT_IMPORTS_ENABLED==='true'&&(await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sigem_live_uploads'")).rows.length){
+              const live=(await db.execute("SELECT id,CASE WHEN state='sealed' THEN 'verified' ELSE state END state,expected_count,checksum,NULL verified_at FROM sigem_live_uploads WHERE workspace_id=? AND contract_id=? AND state<>'retired'",[input.workspace,status.contractId])).rows;
+              turso.snapshots.push(...live);
+            }
             turso.initialized = true;
           } catch { turso.initialized = false; }
         } catch (error) {

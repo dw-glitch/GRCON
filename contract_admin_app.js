@@ -241,7 +241,10 @@
         try{await api("background-copy",{});backgroundProgress.textContent="Cópia iniciada no servidor. Conferindo progresso…";await monitor();}
         catch(error){if(valid()){backgroundProgress.textContent=error.message;backgroundButton.disabled=false;host.querySelector("[data-storage-copy]").disabled=false;}}
       });
-      void monitor();
+      if(status.payloadSource==='turso'){
+        backgroundButton.hidden=true;host.querySelector('[data-storage-copy]').hidden=true;
+        backgroundProgress.textContent='Migração concluída. As bases completas e as novas importações são consultadas no Turso.';
+      }else void monitor();
       host.querySelector("[data-storage-refresh]").addEventListener("click", () => void loadStorage());
       host.querySelector("[data-storage-report]").addEventListener("click", async () => {
         const refreshed = await api("status").catch(() => status); if (!valid()) return;

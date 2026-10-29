@@ -28,6 +28,8 @@ export async function purgeDocumentBatch(bucket,scope){
 }
 export async function purgeSigemBase(db,bucket,source){
  const args=[source.workspace_id,source.contract_id,source.id];
+ const live=(await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sigem_live_uploads'")).rows.length;
+ if(live)await db.execute("UPDATE sigem_live_uploads SET state='retired' WHERE workspace_id=? AND contract_id=? AND id=?",args);
  // All stores are idempotently removed after Postgres has tombstoned the base.
  // The active-base guard lives inside the serialized Postgres operation.
  for(const [table,idColumn] of [['sigem_rows','snapshot_id'],['sigem_import_jobs','snapshot_id'],['sigem_snapshots','id'],['sigem_live_rows','snapshot_id'],['sigem_live_batches','snapshot_id'],['sigem_live_uploads','id']]){

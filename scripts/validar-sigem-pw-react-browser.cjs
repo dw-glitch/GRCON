@@ -507,7 +507,7 @@ async function waitEvolutionReady(page) {
     await page.addScriptTag({url:baseUrl+'/import_review.js'});
     await page.evaluate(()=>{GrconImportReview.saveProfile('Perfil anterior',{columns:{document:'NumeroDocumentoCliente',revision:'RevisaoCompleta',state:'o_statename',lastEmission:'Última emissão',documentType:'TipoDocumento'}});GrconImportReview.selectProfile('Perfil anterior');});
     const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
-    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-FORA-ESCOPO;0;ABC');
+    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-C1O-FORA-ESCOPO;0;ABC');
     await importFile(page,'#spw-pw-file',codeOnlyPath);
     const importReview = page.locator('#grcon-import-review');
     if (await importReview.isVisible().catch(() => false)) {
