@@ -4,7 +4,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 (async()=>{
  const {handleSigemStorage:route}=await import('../cloudflare/sigem-storage.mjs');
  const original=global.fetch;
- let role='master',calls=[],mode='supabase',tursoFailure=null,statements=[];
+ let role='master',calls=[],mode='supabase',tursoFailure=null,statements=[],migrated=false;
  const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_SECRET_KEY:'secret',TURSO_DATABASE_URL:'libsql://db-org.turso.io',TURSO_AUTH_TOKEN:'never-log'};
  const source={id:uuid(3),workspace_id:uuid(1),contract_id:uuid(2),record_count:1};
  const rows=[{row_number:1,payload:{document:'DOC-122',revision:'0',status:'Em workflow'}}];
@@ -24,13 +24,16 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
    if(tursoFailure==='protocol')return Response.json({results:[{type:'error',error:{message:'never-log upstream secret',code:'never-log'}}]});
    if(typeof tursoFailure==='number')return new Response('never-log upstream secret',{status:tursoFailure});
    if(sql.includes('SELECT state,checksum'))return httpResult({state:'verified',checksum:'hash',expected_count:1});
+   if(mode==='missing'&&sql.includes('SELECT row_number,row_json'))return Response.json({results:[{type:'ok',response:{type:'execute',result:{cols:[{name:'row_number'},{name:'row_json'}],rows:[],affected_row_count:0}}},{type:'ok',response:{type:'close'}}]});
    if(sql.includes('SELECT row_number,row_json'))return httpResult({row_number:1,row_json:JSON.stringify({...rows[0],payload:{...rows[0].payload,document:mode==='diverge'?'DOC-121':'DOC-122'}})});
    return httpResult({connected:1});
   }
   const p=JSON.parse(opts.body);
-  assert.equal(opts.headers.authorization,'Bearer session','RPC must retain user authorization');
+  if(p.operation==='metadata'){assert.equal(opts.headers.authorization,'Bearer secret','server-only metadata RPC uses service credentials');assert.equal(p.actor_id,uuid(10),'actor is server-authenticated');}
+  else assert.equal(opts.headers.authorization,'Bearer session','RPC must retain user authorization');
   if(String(url).endsWith('grcon_sigem_query_page'))return Response.json(rows);
   if(p.operation==='authorize-page')return Response.json(source);
+  if(p.operation==='metadata')return role==='none'?Response.json({code:'42501'},{status:403}):Response.json({snapshot:source,kind:migrated?'legacy':null,ready:migrated});
   if(role!=='master')return Response.json({code:'42501'},{status:403});
   if(p.operation==='status')return Response.json({contractId:uuid(2),snapshots:1,records:1});
   if(p.operation==='inventory')return Response.json({snapshots:[source]});
@@ -69,6 +72,30 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   assert.equal((await (await route(req('page',input),env)).json()).shadow,'matched');
   mode='diverge';const shadow=await (await route(req('page',input),env)).json();assert.equal(shadow.shadow,'diverged');assert.deepEqual(shadow.rows,rows,'a shadow discrepancy never replaces official data');
   env.GRCON_SIGEM_STORAGE_MODE='turso';calls=[];assert.equal((await route(req('page',input),env)).status,503);assert.ok(!calls.some(x=>x.includes('turso.io')));
+
+  // Once a verified legacy snapshot is released, the public GRCON API must
+  // continue returning the exact old page contract from Turso, irrespective
+  // of the global storage mode, including for ordinary contract members.
+  env.GRCON_SIGEM_STORAGE_MODE='supabase';
+  env.GRCON_SIGEM_DIRECT_IMPORTS_ENABLED='true';
+  migrated=true;role='operator';mode='supabase';calls=[];
+  const external=await route(req('page',input),env),externalJson=await external.json();
+  assert.equal(external.status,200);assert.equal(externalJson.source,'turso');
+  assert.deepEqual(externalJson.rows,rows,'legacy Turso pages have identical row_number/payload shape');
+  assert.ok(calls.some(url=>url.includes('turso.io')),'migrated bases actually read full rows from Turso');
+  assert.ok(!calls.some(url=>url.endsWith('grcon_sigem_query_page')),'must not read deleted Supabase payloads');
+  role='none';calls=[];
+  assert.equal((await route(req('page',input),env)).status,403,'migrated pages still enforce membership');
+  assert.ok(!calls.some(url=>url.includes('turso.io')),'unauthorized users never fetch Turso rows');
+  role='operator';mode='missing';calls=[];
+  const incomplete=await route(req('page',input),env);
+  assert.notEqual(incomplete.status,200,'never return an incomplete migrated snapshot');
+  assert.equal((await incomplete.json()).error,'SIGEM_IMPORT_INCOMPLETE');
+  mode='supabase';tursoFailure='timeout';
+  const outage=await route(req('page',input),env);
+  assert.notEqual(outage.status,200,'Turso outage must fail safely, not return fabricated/stale data');
+  tursoFailure=null;
+  migrated=false;
   env.GRCON_SIGEM_STORAGE_MODE='invalid';assert.equal((await route(req('status'),env)).status,503);
   assert.equal(await route(new Request('https://grcon.test/other'),env),null);
  }finally{global.fetch=original;}
