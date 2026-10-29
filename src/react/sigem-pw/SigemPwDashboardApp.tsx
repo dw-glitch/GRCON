@@ -39,6 +39,7 @@ export function SigemPwDashboardApp() {
         onEvolution={() => { void adapter.openEvolution(); }}
         onHistory={() => { void adapter.openHistory(); }}
         onExport={() => { void adapter.exportCurrentList(); }}
+        onCoordinatorExport={() => { void adapter.exportCoordinatorWorkbook(); }}
       />
 
       <div className="spw-progress" id="spw-progress" hidden={!state.busy} role="status" aria-live="polite">
