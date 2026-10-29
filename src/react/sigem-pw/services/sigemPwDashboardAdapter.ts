@@ -14,6 +14,7 @@ import type {
 
 import { ensureSharedSigemHistoryCompatibility } from "./sharedSigemHistoryCompatibility";
 import { buildReferenceBase } from "./sigemPwReferenceSources";
+import { downloadCoordinatorWorkbook } from "./sigemPwCoordinatorWorkbook";
 
 const PRE_STAGE7_RESET_KEY = "sigem-pw-stage7-preupdate-reset-v1";
 const EMPTY_BASE = (): SigemPwBase => ({ meta: null, records: [] });
@@ -28,6 +29,7 @@ interface XlsxApi {
     decode_range(ref: string): { s: { r: number; c: number }; e: { r: number; c: number } };
     encode_cell(cell: { r: number; c: number }): string;
     json_to_sheet(data: Array<Record<string, unknown>>): Record<string, unknown>;
+    aoa_to_sheet(data: Array<Array<string | number>>): unknown;
     book_new(): unknown;
     book_append_sheet(book: unknown, sheet: unknown, name: string): void;
   };
@@ -1092,6 +1094,22 @@ function installExternalListeners(): () => void {
   };
 }
 
+async function exportCoordinatorWorkbook(): Promise<void> {
+  if (state.busy) return;
+  setBusy(true, "Gerando Excel do controle documental…");
+  try {
+    if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos indisponível.");
+    await window.GRCONModuleLoader.ensure("xlsx");
+    downloadCoordinatorWorkbook(state, xlsx());
+    notify("Relatório de controle documental exportado.", "success");
+  } catch (error) {
+    console.error("[SIGEM×PW] Exportação do coordenador:", error);
+    notify(messageOf(error, "Não foi possível exportar o relatório gerencial."), "error");
+  } finally {
+    setBusy(false);
+  }
+}
+
 export const sigemPwDashboardAdapter = {
   state,
   subscribe(listener: Subscriber): () => void { subscribers.add(listener); return () => subscribers.delete(listener); },
@@ -1117,6 +1135,7 @@ export const sigemPwDashboardAdapter = {
   filteredRows,
   pageRows,
   exportCurrentList,
+  exportCoordinatorWorkbook,
   openHistory,
   closeHistory,
   removeSnapshot,
