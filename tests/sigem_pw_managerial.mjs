@@ -55,7 +55,18 @@ report = reconcileManagerial({
   },
 });
 assert.equal(report.summary.posted, 1, "Consulta Geral membership proves posting regardless of review status label");
-assert.equal(report.summary.compliant, 1);
+assert.equal(report.summary.compliant, 0, "unknown status does not prove conformity");
+assert.equal(report.summary.pending, 2, "pending SIGEM evaluation remains actionable");
+
+report = reconcileManagerial({
+  ...state,
+  model: {
+    ...state.model,
+    normalizedSigem: [{ documentKey: main, document: main, revision: "B", status: "Em análise" }],
+  },
+});
+assert.equal(report.summary.posted, 1);
+assert.equal(report.summary.compliant, 0, "Em análise is not favorable SIGEM evaluation");
 
 report = reconcileManagerial({
   ...state,
