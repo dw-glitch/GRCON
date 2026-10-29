@@ -203,6 +203,7 @@ declare global {
     GrconSigemPwDashboardReact?: { mounted: boolean };
     GrconPostingConference?: PostingConferenceApi;
     GrconSharedSigemQuery?: {
+      state?: { stale?: boolean };
       listVersions(): Promise<import("./domain").SigemPwSharedVersion[]>;
       loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
       setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined>;

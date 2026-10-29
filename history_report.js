@@ -273,9 +273,10 @@
   ]);
 
   function conferenceRowKey(conference, record, document, revision) {
+    const timestamp = new Date(record && record.generatedAt);
     return [
       text(record && record.egrdtNumber),
-      text(record && record.generatedAt),
+      Number.isNaN(timestamp.getTime()) ? text(record && record.generatedAt) : timestamp.toISOString(),
       conference.documentIdentity(document),
       conference.normalizeRevision(revision),
     ].join("|");
@@ -286,7 +287,8 @@
   async function colarGrconRowsV3(records, options) {
     const settings = options || {};
     const root = typeof globalThis === "undefined" ? {} : globalThis;
-    const conference = settings.conferenceCore || root.GrconPostingConference;
+    const conference = settings.conferenceCore || root.GrconPostingConference
+      || (typeof module === "object" && module.exports ? require("./posting_conference_core.js") : null);
     const source = (records || []);
     const fallback = (status = "NÃO VERIFICADO") => source.flatMap(record =>
       (record.files || []).map(file => [
@@ -338,13 +340,24 @@
       return [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber), text(file.document),
         rev, text(file.ldPrazo), pasteAllocation(file.allocation),
-        text(match && labels[match.status]) || "NÃO VERIFICADO",
+        confirmed && /^(EM ANALISE|EM WORKFLOW|RECUSADO|RECUSADA)$/.test(norm(match.sigemStatus))
+          ? `POSTADO — ${text(match.sigemStatus).toUpperCase()}`
+          : text(match && labels[match.status]) || "NÃO VERIFICADO",
         confirmed ? "SIM" : "INDETERMINADO",
         match ? text(match.revisionFound) : "",
-        text(meta.referenceDate),
+        conferenceReferenceDate(meta.referenceDate),
         text(meta.snapshotId),
       ];
     }));
+  }
+
+  function conferenceReferenceDate(value) {
+    // A source date is a calendar date, not the time of export or a UTC instant.
+    const raw = text(value);
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+    if (!match) return raw;
+    const date = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]));
+    return date.toISOString().slice(0, 10) === match[0].slice(0, 10) ? date : raw;
   }
 
   function addColarGrconSheetV3(workbook, rows) {
@@ -353,7 +366,12 @@
       views: [{ state: "frozen", ySplit: 2, activeCell: "A3", showGridLines: false, zoomScale: 85 }],
     });
     sheet.columns = [24,42,49,28,31,33,31,22,27,28,37].map(width => ({width}));
-    sheet.getCell("A1").value = "COLAR GRCON V3 — CONFERÊNCIA SIGEM";
+    sheet.getCell("A1").value = "COLAR GRCON V3";
+    // Pasted with A:K. The receiving workbook ignores the previous paste's tail,
+    // even when this export has fewer rows. L remains the calculated key.
+    sheet.getCell("I1").value = "REGISTROS ATIVOS";
+    sheet.getCell("J1").value = rows.length;
+    sheet.getCell("K1").value = "GRCON_V3";
     sheet.getRow(1).height = 29.25;
     sheet.getRow(2).height = 31;
     const dates = rows.map(row => row[0]).filter(date => date instanceof Date);
@@ -371,10 +389,10 @@
     });
     for (let i = 0; i < rows.length; i++) {
       const row = sheet.getRow(i + 3);
-      row.values = [null, ...rows[i].map(v => v === "" ? null : v)];
+      row.values = rows[i].map(v => v === "" ? null : v);
       row.height = 16;
       row.getCell(1).numFmt = "dd/mm/yyyy hh:mm:ss";
-      row.getCell(10).numFmt = "@";
+      row.getCell(10).numFmt = "dd/mm/yyyy";
       for (let j = 1; j <= COLAR_GRCON_HEADERS_V3.length; j++) {
         const cell = row.getCell(j);
         cell.font = {name:"Aptos Narrow",size:10,color:{argb:"FF172B3B"}};
@@ -583,7 +601,8 @@
     if (!pasteV2 || COLAR_GRCON_HEADERS_V2.some((header, i) => pasteV2.getCell(2, i + 1).value !== header)
       || pasteV2.columnCount !== 6) throw new Error("Contrato fixo v2 da aba Colar GRCON inválido.");
     const pasteV3 = check.getWorksheet("Colar GRCON v3");
-    if (!pasteV3 || COLAR_GRCON_HEADERS_V3.some((header, i) => pasteV3.getCell(2, i + 1).value !== header))
+    if (!pasteV3 || pasteV3.columnCount !== 11
+      || COLAR_GRCON_HEADERS_V3.some((header, i) => pasteV3.getCell(2, i + 1).value !== header))
       throw new Error("Contrato de conferência v3 inválido.");
     return buffer;
   }

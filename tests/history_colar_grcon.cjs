@@ -55,7 +55,7 @@ const HEADERS = [
   const buffer = await Report.buildWorkbook(source);
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(buffer);
-  assert.deepEqual(book.worksheets.map(sheet => sheet.name), ["Resumo", "eGRDTs", "Documentos", "Colar GRCON v2"]);
+  assert.deepEqual(book.worksheets.map(sheet => sheet.name), ["Resumo", "eGRDTs", "Documentos", "Colar GRCON v2", "Colar GRCON v3"]);
   assert.equal(book.getWorksheet("Colar GRCON"), undefined, "não gerar a aba antiga de cinco colunas");
   const sheet = book.getWorksheet("Colar GRCON v2");
   assert.equal(sheet.getCell("A1").value, "COLAR GRCON");

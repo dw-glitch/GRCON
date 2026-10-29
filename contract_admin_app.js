@@ -208,6 +208,7 @@
       <section class="grcon-storage-diagnostics" aria-label="Diagnóstico dos serviços">
         <h4>Diagnóstico dos serviços</h4>
         <p>${status.turso.connected ? "Supabase: medição disponível. Turso: conexão confirmada." : "Turso: " + escape(connectionMessages[connectionError]) + " Código: " + escape(connectionError) + "."}</p>
+        <p>Neon: ${status.neon?.connected ? (status.neon.ready ? "conexão e estrutura auxiliar confirmadas" : "conectado; estrutura auxiliar pendente") : status.neon?.configured ? "conexão não confirmada" : "configuração da conexão pendente"}. A divisão de módulos será definida separadamente.</p>
         <small>${status.newImportsTarget ? "Novas planilhas são publicadas diretamente no Turso. O Supabase mantém permissões, metadados e o índice operacional." : "Uma conexão confirmada não comprova conclusão da migração. A fonte oficial permanece no Supabase."}</small>
       </section>
       <details class="grcon-storage-technical"><summary>Ver detalhes de infraestrutura e migração</summary><dl class="grcon-admin-storage-metrics"><div><dt>Dados completos da Consulta Geral</dt><dd>${status.payloadSource === "turso" ? "Turso" : status.newImportsTarget ? "Turso (bases novas) e Supabase (bases antigas)" : "Supabase"}</dd></div><div><dt>Modo do servidor</dt><dd>${escape(status.mode)}</dd></div><div><dt>Banco Supabase completo</dt><dd>${escape(mib(status.databaseBytes))}</dd></div><div><dt>Tabela da Consulta Geral completa</dt><dd>${escape(mib(status.sourceBytes))}</dd></div><div><dt>Snapshots deste contrato</dt><dd>${escape(Number(status.snapshots || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Registros deste contrato</dt><dd>${escape(Number(status.records || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Turso</dt><dd>${status.turso.connected ? "Conexão confirmada" : status.turso.configured ? "Conexão não confirmada" : "Configuração pendente"}</dd></div><div><dt>Banco Turso completo</dt><dd>${escape(mib(status.turso.databaseBytes))}</dd></div><div><dt>Cópias validadas neste contrato</dt><dd>${copied.length}</dd></div></dl></details><p>${status.payloadSource === "turso" ? "As bases completas são consultadas no Turso. O índice operacional no Supabase não armazena as planilhas completas." : status.newImportsTarget ? "As bases antigas continuam no Supabase até a liberação das cópias verificadas." : "A fonte oficial permanece no Supabase. A ativação do Turso depende da conclusão dos testes de migração e recuperação."}</p><div class="grcon-admin-row-actions"><button type="button" data-storage-refresh>Atualizar métricas</button><button type="button" data-storage-report>Baixar relatório</button><button type="button" data-storage-copy ${status.turso.connected && status.externalStorageAuthorized && status.preflightApproved ? "" : "disabled"}>Iniciar / retomar cópia</button></div><p data-storage-progress role="status" aria-live="polite"></p>`;
@@ -331,7 +332,21 @@
             if(!valid())break;
             progress.textContent='Verificando e liberando '+(released+1)+' de '+releasable.length+' base(s): versão '+base.version+'.';
             try{
-              const result=await api("release-base",{snapshot:base.id,confirm:base.id});
+              let result=null,steps=0;
+              do{
+                if(!valid())break;
+                if(++steps>650)throw new Error("SIGEM_RELEASE_PROGRESS_LIMIT");
+                result=await api("release-base",{snapshot:base.id,confirm:base.id});
+                if(!result||result.ok!==true||typeof result.released!=="boolean")throw new Error("SIGEM_RELEASE_RESPONSE_INVALID");
+                if(!result.released){
+                  const expected=Number(result.expected)||base.records||0;
+                  const processed=Number(result.processed)||0;
+                  const percent=expected?Math.min(100,Math.round(100*processed/expected)):0;
+                  const phase=result.phase==="projecting"?"Preparando e verificando a projeção operacional":result.phase==="cleaning"?"Removendo os registros antigos já protegidos pelo Turso":"Verificando";
+                  progress.textContent=phase+" — versão "+base.version+" ("+percent+"%; etapa "+steps+"). "+(released)+" de "+releasable.length+" bases liberadas. Pode sair da tela e retomar depois.";
+                }
+              }while(valid()&&result?.released!==true);
+              if(!valid())break;
               if(result?.released!==true)throw new Error("SIGEM_RELEASE_NOT_CONFIRMED");
               released++;
             }catch(error){failed='Versão '+base.version+': '+error.message;break;}

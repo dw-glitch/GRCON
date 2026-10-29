@@ -1,37 +1,53 @@
-# Controle de Solicitações — Colar GRCON v3 e Conferência SIGEM
+# Colar GRCON v3 e Controle de Solicitações
 
-## Compatibilidade
+A exportação mantém as abas Resumo, eGRDTs, Documentos e Colar GRCON v2. A nova aba Colar GRCON v3 tem onze colunas A:K. A data da geração permanece numérica; a referência da Consulta Geral também é uma data numérica.
 
-A aba **Colar GRCON v2** permanece **inalterada** em A:F. A aba **Colar GRCON v3** contém as mesmas seis colunas iniciais, seguidas de:
-
-| Coluna | Campo |
+| Coluna | Conteúdo |
 | --- | --- |
-| G | STATUS DA CONFERÊNCIA |
-| H | POSTADO NO SIGEM? |
-| I | REVISÃO VERIFICADA NO SIGEM |
-| J | DATA DE REFERÊNCIA DA CONSULTA GERAL |
-| K | SNAPSHOT DA CONSULTA GERAL |
+| A:F | Contrato legado, sem mudanças |
+| G | Status oficial da Conferência |
+| H | SIM apenas com evidência atual de código e revisão exatos; demais casos INDETERMINADO |
+| I | Revisão verificada |
+| J | Data de referência da Consulta Geral |
+| K | Identificador do snapshot |
 
-**SIM** na coluna H somente quando o motor oficial da Conferência localiza código e revisão exatos em Consulta Geral válida. Todos os demais cenários são **INDETERMINADO**, pois ausência não demonstra que nunca houve postagem. O status descritivo utiliza a classificação calculada pelo motor da Conferência, sem deduções paralelas.
+Presença no SIGEM não é aprovação. Nos casos Em análise, Em workflow e Recusado, G conserva o estado da evidência junto de POSTADO. A confirmação H continua sendo a presença da revisão. Revisão divergente não recebe SIM. Base indisponível ou marcada como desatualizada não confirma postagem.
 
-A comparação usa índice da Consulta Geral em lote, sem chamada ao banco por documento. Base ausente/desatualizada: **NÃO VERIFICADO**. A data e o snapshot da Consulta Geral acompanham a exportação para rastreabilidade.
+O adaptador passa a base ativa e seu indicador de desatualização explicitamente ao worker. O worker carrega o motor oficial e suas dependências. Não consulta outra cópia de contrato pelo armazenamento local. A chave de vínculo dos eventos normaliza o instante para ISO, evitando falhas por representações equivalentes de data.
 
-## Limitação do arquivo operacional de 29/10/2026
+## Modelo operacional atualizado
 
-A aba **Colar GRCON** da planilha de Controle de Solicitações possui a coluna **G** reservada à **Chave documento e envio (não colar)**. Não colar diretamente A:K da nova exportação nessa planilha, porque isso sobrescreveria a chave e quebraria as fórmulas atuais.
+Executar o migrador apenas sobre o modelo original de 29/10/2026:
 
-Para migrar o modelo e permitir **uma colagem v3 de A:K**:
+```sh
+python scripts/upgrade-requests-grcon-v3.py ORIGINAL.xlsx ATUALIZADO.xlsx AUDITORIA.json
+```
 
-1. Mover a chave auxiliar da coluna G para a coluna L da aba Colar GRCON e atualizar a tabela GRCON_Envios para A:L, corrigindo referências estruturadas.
-2. Reservar G:K para os novos campos. Manter título na linha 1, cabeçalhos na 2 e dados a partir da 3.
-3. Acrescentar em Solicitações as colunas de status e confirmação com referências INDEX aos campos de GRCON_Envios, protegidas por IF quando a posição Y estiver vazia.
-4. Validar o vínculo entre documento, revisão, última eGRDT pertinente e data de recebimento, principalmente quando houver solicitações repetidas.
-5. **Não** preencher automaticamente Solicitações!S (Data prevista de Submissão no SIGEM) com a data de geração da eGRDT. A data real já aparece em Solicitações!X (Último envio GRCON). Para previsão verdadeira, usar fonte comprovada de planejamento, como Data Prevista da Central de Alocação, desde que o vínculo seja inequívoco.
+O script conserva todas as partes OOXML não afetadas byte a byte e cria um backup antes de editar. Não regrava a Central, as bases, comentários, relacionamentos externos ou o histórico usando uma biblioteca de conversão. São preservadas seis abas, 1.441 solicitações e 9.126 envios do arquivo fornecido.
 
-**Antes da migração efetiva do arquivo:** continuar colando a aba v2 somente em A:F, nunca sobre G. A nova aba v3 pode ser consultada separadamente para verificação dos status, mas ainda não está conectada ao modelo Excel legado.
+Na aba Colar GRCON, a chave é movida de G para L. A tabela GRCON_Envios passa a A:L, incluindo as mil linhas de fórmulas vazias já reservadas no original. As novas colunas de Solicitações são X:AA; os auxiliares existentes são deslocados quatro colunas e suas referências acompanham a mudança.
 
-## Testes
+O título exportado inclui J1, quantidade de registros ativos, e K1, contrato GRCON_V3. Após copiar A:K e colar em A1, a chave L ignora as linhas remanescentes abaixo da nova quantidade. Assim uma exportação menor não reativa o final da colagem anterior. As linhas cruas históricas continuam preservadas.
 
-Executar: node tests/colar_grcon_v3.cjs
+Para um documento repetido, o envio vinculado fica entre a data de recebimento da solicitação e o próximo recebimento do mesmo documento. A última emissão nessa janela é a referência da solicitação. Os 48 grupos existentes de múltiplos documentos preservam seus 524 registros auxiliares e agregam a confirmação de todos os componentes. Novos grupos escritos em texto livre não são separados automaticamente por fórmulas; um código sem correspondência permanece não verificado. Envios com a mesma chave de documento e segundo ficam em análise, sem confirmação automática ambígua.
 
-Cobertura: preservação do contrato v2, confirmação exata de revisão, revisão divergente, ausência de base e base desatualizada. A atualização do Excel operacional e a verificação no navegador de produção ainda são etapas obrigatórias antes de anunciar a colagem única v3.
+## Previsão de submissão
+
+A exportação A:K não contém previsão real de submissão. O arquivo contém Data Prevista da alocação, que não comprova planejamento de submissão SIGEM. As 775 datas numéricas manuais são preservadas. As 74 fórmulas que copiavam a geração da eGRDT para a previsão são retiradas. Quando não há fonte comprovada, S fica vazia. Não criar preenchimento automático usando data de geração ou data da alocação.
+
+## Uso
+
+1. Exportar a relação no Histórico de eGRDTs com a Consulta Geral ativa e atualizada.
+2. Na aba Colar GRCON v3, copiar A:K, incluindo linhas 1 e 2.
+3. Colar em A1 da aba Colar GRCON do modelo atualizado. Não colar em L.
+4. As colunas X:AA de Solicitações recalculam no Excel, inclusive offline.
+
+O arquivo de relatório entregue neste trabalho foi reconstruído dos 9.126 envios da planilha fornecida, com o exportador oficial. Não contém uma Consulta Geral autenticada nova. Por isso todos os seus registros ficam NÃO VERIFICADO / INDETERMINADO, sem inventar evidências.
+
+## Validação
+
+`node tests/colar_grcon_v3.cjs` valida a lógica oficial, revisão exata e divergente, bases vazias/desatualizadas, repostagem, estados da evidência, 12 mil documentos e a execução real do worker via importScripts. O XLSX é aberto novamente e confere os tipos, as posições das onze colunas, a data e o contador do lote.
+
+`node tests/history_colar_grcon.cjs` preserva a aba v2. A suíte npm test, build, typecheck e as verificações de sintaxe, referências, versões, dependências e workers complementam os testes.
+
+A preservação do XLSX operacional é verificada por comparação dos registros e das partes do pacote. A inspeção visual usa recortes seletivos da planilha. O motor de cálculo disponível neste ambiente não reproduz corretamente MAXIFS com curingas; não se declara recálculo integral no Microsoft Excel. O arquivo solicita recálculo completo ao abrir no Excel. A colagem e a expansão das tabelas precisam de homologação nesse aplicativo antes de considerar a integração integralmente homologada.

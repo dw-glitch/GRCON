@@ -159,7 +159,16 @@ export async function verifySnapshot(db, bucket, source) {
 export async function verifiedPage(db, source, after, size) {
   const s = (await db.execute(`SELECT state,checksum,expected_count FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`, scopeArgs(source))).rows[0];
   if (s?.state !== 'verified' || s.expected_count !== source.record_count) throw fail('SIGEM_SNAPSHOT_NOT_VERIFIED');
-  return (await readRows(db, source, after, size)).map(r => ({row_number: r.row_number, payload: r.payload}));
+  const pages = await readRows(db, source, after, size);
+  const expected = Math.min(size, Math.max(0, source.record_count - after));
+  // The checksum is validated during migration. At runtime, also reject
+  // missing/duplicated or out-of-order pages instead of serving partial data.
+  if (pages.length !== expected ||
+      pages.some((r, i) => r.row_number !== after + i + 1 ||
+        !r.payload || typeof r.payload !== 'object' || Array.isArray(r.payload))) {
+    throw fail('SIGEM_IMPORT_INCOMPLETE');
+  }
+  return pages.map(r => ({row_number: r.row_number, payload: r.payload}));
 }
 // Independent, bounded second pass: checkpoint, current source, destination and
 // backup must all agree. This must run after sealing; a count alone is insufficient.
