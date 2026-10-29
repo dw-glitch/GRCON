@@ -55,6 +55,7 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   catch(error){return Response.json({code:error.code,message:error.message},{status:error.code==='42501'?403:409});}
  };
  const env={SUPABASE_URL:'https://qa.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_qa',TURSO_DATABASE_URL:'libsql://qa.turso.io',TURSO_AUTH_TOKEN:'qa',GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'true'};
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029143000_sigem_projection_bulk.sql','utf8'));
  const records=Array.from({length:1001},(_,i)=>({document:'DOC-'+i,revision:'0',status:'Em análise',title:"Título O'Brien 漢字 "+i,discipline:'CV',observation:'FULL_PAYLOAD_ONLY_IN_TURSO',extra:{array:[null,false,0,'ç']}}));
  const begin=()=>M.handleLiveImport(env,{id:id(9)},id(1),'import-begin',{fileName:'CG.xlsx',count:records.length,metadata:{checksum:'source'},expectedActive:null});
  const {id:snapshot}=await begin();assert.equal((await begin()).id,snapshot,'a repeated begin does not duplicate the upload');
@@ -134,6 +135,8 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  // source row until full projection and destination proof have passed.
  await pg.exec("reset role;alter table private.grcon_master_owner add column singleton boolean default true;");
  await pg.exec(fs.readFileSync('supabase/migrations/20261029121000_sigem_resumable_release.sql','utf8'));
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029143000_sigem_projection_bulk.sql','utf8'));
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029143100_sigem_release_receipt_parity.sql','utf8'));
  await claims();
  const staged=id(31),stagedRows=legacyRows.map(r=>({...r,snapshot_id:staged}));
  await pg.query("insert into private.grcon_sigem_query_snapshots(id,workspace_id,contract_id,file_name,expected_count,record_count,status,created_by,metadata) values($1,$2,$3,'Batch.xlsx',501,501,'archived',$4,'{}')",[staged,id(1),id(2),id(9)]);
@@ -155,6 +158,8 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  phase=await step(stagedProof);
  assert.equal(phase.released,true);assert.equal(phase.remaining,0);assert.equal(phase.removed,501);
  assert.equal((await step(stagedProof)).removed,0,'a completed release is idempotent');
+ await pg.query("update private.grcon_sigem_external_snapshots set receipt=receipt||'{\"ok\":true}'::jsonb where snapshot_id=$1",[staged]);
+ assert.equal((await step(stagedProof)).released,true,'transport envelope differences preserve the verified receipt');
  assert.equal((await pg.query('select count(*) n from private.grcon_sigem_operational_rows where snapshot_id=$1',[staged])).rows[0].n,501,'operational view retains rows after raw cleanup');
 
  console.log('sigem_live: full import/read fidelity, minimal Postgres storage, SQL publication gate, replay, conflicts, outage, tenant isolation, active-base protection and blocked legacy writes passed.');

@@ -243,11 +243,29 @@
       const ensureWorkspace = () => {
         if (cloud()?.state?.membership?.workspace_id !== target_workspace) throw new Error("A área de trabalho mudou durante o envio. A base anterior permanece ativa.");
       };
-      for (let offset = 0; offset < base.records.length; offset += 250) {
+      const started = performance.now();
+      let uploaded = 0;
+      for (let offset = 0; offset < base.records.length; offset += 1000) {
         ensureWorkspace();
-        await request("chunk", { target_workspace, upload_id, first_row: offset + 1, rows: base.records.slice(offset, offset + 250) });
-        root.dispatchEvent(new CustomEvent("grcon:shared-sigem-progress", { detail: { done: Math.min(offset + 250, base.records.length), total: base.records.length } }));
+        const jobs = [];
+        for (let first = offset; first < Math.min(offset + 1000, base.records.length); first += 250) {
+          const rows = base.records.slice(first, first + 250);
+          jobs.push((async () => {
+            await request("chunk", { target_workspace, upload_id, first_row: first + 1, rows });
+            ensureWorkspace();
+            uploaded += rows.length;
+            root.dispatchEvent(new CustomEvent("grcon:shared-sigem-progress", { detail: { done: uploaded, total: base.records.length } }));
+          })());
+        }
+        // Drain the complete wave before failing: an earlier request must never
+        // keep writing after another publication has started.
+        const results = await Promise.allSettled(jobs);
+        const failed = results.find(result => result.status === "rejected");
+        if (failed) throw failed.reason;
       }
+      root.dispatchEvent(new CustomEvent("grcon:performance-metrics", { detail: {
+        stage: "shared-sigem-upload", durationMs: performance.now() - started, records: uploaded, concurrency: 4,
+      } }));
       ensureWorkspace();
       await request("publish", { target_workspace, upload_id });
       await refreshLatest();
