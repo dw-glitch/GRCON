@@ -105,16 +105,14 @@ export function SigemPwDashboardApp() {
         </section> : null}
         {!state.ld.meta && state.sigem.meta ? <div className="spw-empty" role="alert"><strong>Referências documentais necessárias para os totais oficiais</strong><span>Sem referências válidas, o painel oficial não calcula cadastro, emissão ou postagem. Inclua as fontes do contrato antes de comparar.</span></div> : null}
         {state.result?.quality?.ldAvailable ? <div className="spw-pw-audit" role="status">
-          <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> N-1710 SIGEM fora da LD</span>
+          <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> SIGEM fora das referências</span>
           <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("sigemN1710OutsideLd")}>Conferir na lista</button>
-          <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> N-1710 PW fora da LD</span>
+          <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> PW fora das referências</span>
           <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwN1710OutsideLd")}>Conferir PW</button>
         </div> : null}
-        <SigemPwSituationCards
-          state={state}
-          activeList={state.activeList}
-          onSelect={(list) => adapter.setActiveList(list)}
-        />
+        <details className="spw-import-options"><summary>Comparativos operacionais e situações por revisão</summary>
+          <SigemPwSituationCards state={state} activeList={state.activeList} onSelect={(list) => adapter.setActiveList(list)} />
+        </details>
       </UiPanel>
 
       <UiPanel className="spw-list-card" labelledBy="spw-list-title">
