@@ -14,7 +14,9 @@ arithmetically interchangeable with document-level reporting.
 
 ## Importing multiple sources
 
-Choose several Excel files in the `REFERÊNCIAS DOCUMENTAIS` card. Sources are
+Choose several Excel files in the `REFERÊNCIAS DOCUMENTAIS` card.
+The import reads recognizable document sheets, including ET-only workbooks.
+Sheet names and original rows are retained; instruction sheets are ignored. Sources are
 identified by normalized filenames. Re-importing the same filename replaces only
 that source, while all other sources remain intact. The collapsed manager lists
 active state, import timestamp and record count; toggling an entry excludes or
