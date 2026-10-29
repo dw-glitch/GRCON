@@ -85,7 +85,7 @@ const {PGlite}=require('@electric-sql/pglite');
  try{
   for(const change of [{aud:'wrong'},{repository:'attacker/GRCON'},{actor_id:'other'},{repository_visibility:'private'},{ref:'refs/heads/other'},{workflow_ref:'other'},{event_name:'pull_request'}]){
    const response=await worker.fetch(retireRequest(await sign({aud:'grcon-document-retirement',...change})),retirementEnv,{});
-   assert.equal(response.status,403);assert.equal(retirementLists,0,'invalid deployment identity cannot inspect or delete R2');
+   assert.equal(response.status,change.aud?401:403);assert.equal(retirementLists,0,'invalid deployment identity cannot inspect or delete R2');
   }
   const response=await worker.fetch(retireRequest(await sign({aud:'grcon-document-retirement'})),retirementEnv,{});
   assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,deleted:2,bytes:300,complete:true});
