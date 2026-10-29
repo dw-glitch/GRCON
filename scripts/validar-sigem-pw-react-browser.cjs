@@ -25,6 +25,15 @@ function writeFixtures() {
     ["ITEM", "DOCUMENTO \r\nN-1710 ", "REVISÃO", "TÍTULO"],
     ["1", n1710, "0", "Documento N-1710 de teste"],
   ]), "N-1710");
+  // Official comparison requires the document to belong to a reference LD.
+  // Seed an ET sheet with every synthetic RIR document in the main fixtures,
+  // including PW-only codes; otherwise all but one are correctly excluded.
+  XLSX.utils.book_append_sheet(ldBook, XLSX.utils.aoa_to_sheet([
+    ["DOCUMENTO", "REVISÃO", "TÍTULO"],
+    [revisionDoc, "B", "RIR de teste"],
+    ...Array.from({length:247},(_,i)=>[et(String(100000+i).padStart(6,"0")), "0", "RIR de teste"]),
+    ...["200001","200002","200003","200004"].map(id=>[et(id), "0", "RIR de teste"]),
+  ]), "ET");
   fs.writeFileSync(ldFile, XLSX.write(ldBook, { type: "buffer", bookType: "xlsx" }));
 
   const sigemRows = [
