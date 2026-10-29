@@ -29,7 +29,8 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
    return httpResult({connected:1});
   }
   const p=JSON.parse(opts.body);
-  assert.equal(opts.headers.authorization,'Bearer session','RPC must retain user authorization');
+  if(p.operation==='metadata'){assert.equal(opts.headers.authorization,'Bearer secret','server-only metadata RPC uses service credentials');assert.equal(p.actor_id,uuid(10),'actor is server-authenticated');}
+  else assert.equal(opts.headers.authorization,'Bearer session','RPC must retain user authorization');
   if(String(url).endsWith('grcon_sigem_query_page'))return Response.json(rows);
   if(p.operation==='authorize-page')return Response.json(source);
   if(p.operation==='metadata')return role==='none'?Response.json({code:'42501'},{status:403}):Response.json({snapshot:source,kind:migrated?'legacy':null,ready:migrated});
