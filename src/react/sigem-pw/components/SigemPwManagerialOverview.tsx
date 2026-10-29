@@ -17,7 +17,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
     { label: "Cadastrados no PW", value: report.summary.registered, tip: "Código localizado no ProjectWise das empresas CSG e QTM, inclusive Previsto." },
     { label: "Emitidos no PW", value: report.summary.emitted, tip: "Código com evidência de emissão atual (Última emissão: Sim)." },
     { label: "Postados no SIGEM", value: report.summary.posted, tip: "Documento presente na Consulta Geral, inclusive quando em análise ou recusado." },
-    { label: "Em conformidade", value: report.summary.compliant, tip: "Emissão e postagem correspondentes à revisão de referência, sem recusa comprovada." },
+    { label: "Em conformidade", value: report.summary.compliant, tip: "Revisão alinhada, emitida no PW e com avaliação favorável sem ressalvas no SIGEM." },
     { label: "Com pendências", value: report.summary.pending, tip: "Inclui pendências e emissões em andamento; exclui itens ainda em preparação." },
   ];
   const filtered = report.rows.filter(row => (filter === "Pendências" ? row.situation === "Com pendência" || row.situation === "Em andamento" : row.situation === filter) && (!query || row.code.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR"))));
