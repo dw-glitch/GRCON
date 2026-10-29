@@ -576,6 +576,47 @@
     };
   }
 
+  /** Read every recognizable document sheet, not only a tab literally named N-1710.
+   * Non-document/instruction sheets are skipped; invalid ambiguous headers stop import.
+   * Source sheet and row remain attached to each record for traceability. */
+  function parseReferenceSheets(sheets, fileMeta) {
+    const recognized = [];
+    const records = [];
+    for (const source of Array.isArray(sheets) ? sheets : []) {
+      const sheetName = text(source && source.name);
+      if (!sheetName || !Array.isArray(source.matrix)) continue;
+      try {
+        const parsed = parseLdMatrix(source.matrix, { ...fileMeta, sheetName });
+        recognized.push(sheetName);
+        records.push(...parsed.records);
+      } catch (error) {
+        const message = String(error && error.message || error);
+        if (/mais de uma coluna DOCUMENTO/.test(message)) {
+          throw new Error(sheetName + ": " + message);
+        }
+        if (!/cabeçalho DOCUMENTO não localizado|nenhum código documental reconhecido/.test(message)) throw error;
+      }
+    }
+    if (!records.length) {
+      throw new Error("Referência inválida: nenhuma aba com códigos documentais reconhecidos foi localizada.");
+    }
+    return {
+      ok: true, records,
+      meta: {
+        version: 1,
+        fileName: text(fileMeta && fileMeta.fileName),
+        fileSize: Number(fileMeta && fileMeta.fileSize) || 0,
+        lastModified: Number(fileMeta && fileMeta.lastModified) || 0,
+        importedAt: text(fileMeta && fileMeta.importedAt) || new Date().toISOString(),
+        sheetName: recognized.join(", "),
+        sheetNames: recognized,
+        recordCount: records.length,
+        uniqueDocumentCount: new Set(records.map(record => record.documentKey)).size,
+      },
+      errors: [],
+    };
+  }
+
   function buildLdUniverse(records) {
     return new Map((records || []).map((record) => {
       const identity = documentIdentity(record && record.document);
@@ -1540,7 +1581,7 @@
     text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords,
     PW_COMPANIES, PW_COMPANY_COLUMN_INDEX, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass, n1710DocumentType, isN1710Candidate,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
-    parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
+    parsePwCsv, parseLdMatrix, parseReferenceSheets, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
     openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
     saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, updateSnapshotMetadata, deleteSnapshot, migrateLegacyBases, loadBases,
