@@ -22,8 +22,8 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
     <div className="spw-heading-shell">
       <UiPageHeader
         eyebrow="Controle documental integrado"
-        title="Dashboard SIGEM × ProjectWise"
-        description="Compare somente o PW com sigla CSG ou QTM na coluna C, preservando os critérios de cadastro, emissão e revisão."
+        title="SIGEM × PW — Controle Documental"
+        description="Acompanhe o cadastro no PW, emissões, postagens SIGEM, revisões e pendências do controle documental."
         meta={(
           <>
             <UiMetaPill><strong>PW: CSG + QTM · coluna C</strong></UiMetaPill>
