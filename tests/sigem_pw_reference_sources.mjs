@@ -9,7 +9,13 @@ const output = ts.transpileModule(readFileSync(sourceFile, "utf8"), {
 }).outputText;
 const module = { exports: {} };
 new Function("exports", "module", "require", output)(module.exports, module, require);
-const { buildReferenceBase, listedSources } = module.exports;
+const { buildReferenceBase, listedSources, isExcelReferenceFile } = module.exports;
+for (const name of ["LD-001.xlsx", "LD-001.XLS", "controle final.xlsm", "  referência.xlsx  "]) {
+  assert.equal(isExcelReferenceFile(name), true, "valid Excel reference rejected: " + name);
+}
+for (const name of ["controle.csv", "arquivo.xlsx.exe", "controle.pdf", "sem-extensão"]) {
+  assert.equal(isExcelReferenceFile(name), false, "invalid Excel reference accepted: " + name);
+}
 
 const codeA = "CR-5290.00-22313-911-C1O-001";
 const codeB = "PR-5290.00-22313-122-C1O-002";
