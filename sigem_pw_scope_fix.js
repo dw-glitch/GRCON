@@ -157,8 +157,9 @@
       .filter((record) => record.documentKey);
   }
 
-  function createModel(sigemRecords, pwRecords, ldRecords) {
-    return Base.createModel(sigemRecords || [], pwRecords || [], ldRecords || []);
+  function createModel(sigemRecords, pwRecords, ldRecords, settings) {
+    // Forward the live-dashboard scope contract. Dropping settings silently bypasses LD validation.
+    return Base.createModel(sigemRecords || [], pwRecords || [], ldRecords || [], settings);
   }
 
   async function loadPwBase() {
