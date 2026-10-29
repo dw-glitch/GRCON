@@ -42,10 +42,30 @@ assert.equal(report.summary.registered, 2);
 assert.equal(report.summary.emitted, 1);
 assert.equal(report.summary.posted, 1);
 assert.equal(report.summary.compliant, 1);
-assert.equal(report.summary.pending, 0);
+assert.equal(report.summary.pending, 1, "awaiting PW emission is an actionable pending item");
 assert.equal(report.summary.cancelled, 1);
 assert.equal(report.rows.find(r => r.code === planned)?.situation, "Em andamento");
 assert.equal(report.rows.find(r => r.code === main)?.pwRevision, "B");
+
+report = reconcileManagerial({
+  ...state,
+  model: {
+    ...state.model,
+    normalizedSigem: [{ documentKey: main, document: main, revision: "B", status: "Situação não mapeada" }],
+  },
+});
+assert.equal(report.summary.posted, 1, "Consulta Geral membership proves posting regardless of review status label");
+assert.equal(report.summary.compliant, 1);
+
+report = reconcileManagerial({
+  ...state,
+  model: {
+    ...state.model,
+    normalizedSigem: [{ documentKey: main, document: main, revision: "B", status: "Recusado" }],
+  },
+});
+assert.equal(report.summary.posted, 1, "refused documents are still posted");
+assert.equal(report.summary.compliant, 0, "refused revisions are not compliant");
 
 report = reconcileManagerial({ ...state, sigem: { meta: null, records: [] } });
 assert.equal(report.ready, false);
