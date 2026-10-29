@@ -67,12 +67,6 @@ function fromIndex(records: SigemPwRecord[]): Map<string, SigemPwRecord[]> {
   }
   return index;
 }
-function isPostedOnSigem(record: SigemPwRecord): boolean {
-  // A Consulta Geral is the only evidence source; a status in a reference spreadsheet is never accepted.
-  const value = norm(status(record));
-  return /POSTAD|EM ANALISE|APROVAD|ACEIT|RECUSAD|REPROVAD|SEM COMENTAR|SEM COMENTARIO|EMITID/.test(value)
-    && !/NAO POSTAD|NAO EMITID|NAO LOCALIZAD/.test(value);
-}
 function isRejected(record: SigemPwRecord): boolean {
   return /RECUSAD|REPROVAD/.test(norm(status(record)));
 }
@@ -106,15 +100,16 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     const sigem = sigemIndex.get(key) || [];
     const emittedRows = pw.filter(record => norm(record.lastEmission) === "SIM");
     const pwCurrent = mostRecent(emittedRows) || mostRecent(pw);
-    const sigemCurrent = mostRecent(sigem.filter(isPostedOnSigem)) || mostRecent(sigem);
+    const sigemCurrent = mostRecent(sigem);
     const registered = pw.length > 0;
     const emitted = emittedRows.length > 0;
-    const posted = sigem.some(isPostedOnSigem);
+    // A record in the authoritative Consulta Geral is posting evidence, even if refused.
+    const posted = sigem.length > 0;
     const pwRevision = pwCurrent ? revision(pwCurrent) : "";
     const sigemRevision = sigemCurrent ? revision(sigemCurrent) : "";
     const revisionAligned = Boolean(referenceRevision && emittedRows.some(record => revision(record) === referenceRevision));
     const sigemAligned = Boolean(referenceRevision && sigem.some(record =>
-      isPostedOnSigem(record) && revision(record) === referenceRevision));
+      revision(record) === referenceRevision));
     const rejected = sigem.some(record => isRejected(record) && revision(record) === referenceRevision);
     const preparing = /EM EMISSAO|EM ELABORACAO|EM PREPARACAO/.test(norm(referenceStatus));
     let situation: ManagerialDocument["situation"];
@@ -138,7 +133,7 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
         if (emitted) summary.emitted!++;
         if (posted) summary.posted!++;
         if (situation === "Em conformidade") summary.compliant!++;
-        if (situation === "Com pendência") summary.pending!++;
+        if (situation === "Com pendência" || situation === "Em andamento") summary.pending!++;
       }
     }
     rows.push({
