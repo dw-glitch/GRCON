@@ -146,7 +146,7 @@ function rpc(name,args) {
  await a.page.locator('#grdt-reissue-documents').fill(documentCode);await a.page.locator('#grdt-reissue-find').click();
  assert.match(await a.page.locator('#grdt-reissue-results').innerText(),/Status SIGEM: Recusado/);
  await a.page.locator('[data-field="revision"]').fill('C');await a.page.locator('[data-field="revision"]').press('Tab');
- assert.match(await a.page.locator('#grdt-reissue-results').innerText(),/Status SIGEM: —/);
+ assert.match(await a.page.locator('#grdt-reissue-results').innerText(),/Status SIGEM: Não Postado/, 'a revisão C ausente em snapshot autoritativo não herda B nem status de origem antiga');
  await a.page.screenshot({path:path.join(output,'reissue-shared.png'),fullPage:true});
  // Normal control: real file inputs, actual analysis Worker, manual revision/purpose and XLS output.
  const ldBook=XLSX.utils.book_new();
