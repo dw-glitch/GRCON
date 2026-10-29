@@ -70,6 +70,15 @@ assert.equal(report.summary.compliant, 0, "refused revisions are not compliant")
 report = reconcileManagerial({ ...state, sigem: { meta: null, records: [] } });
 assert.equal(report.ready, false);
 assert.equal(report.summary.posted, null, "missing Consulta Geral must not be mistaken for zero postings");
+assert.equal(report.summary.registered, 2, "PW registration remains known without Consulta Geral");
+assert.equal(report.summary.emitted, 1, "PW emission remains known without Consulta Geral");
+
+report = reconcileManagerial({
+  ...state,
+  ld: { meta: null, records: [] },
+});
+assert.equal(report.summary.active, null, "missing reference cannot yield an invented zero");
+assert.equal(report.summary.registered, null);
 
 report = reconcileManagerial({
   ...state,
