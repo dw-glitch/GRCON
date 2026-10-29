@@ -524,7 +524,8 @@ async function waitEvolutionReady(page) {
       readiness:GrconSigemPwDashboardUi.state.readiness?.failedChecks,
     }));
     assert.equal(codeOnlyDiagnostics.registered,1,'perfil anterior não exige campos opcionais ausentes: '+JSON.stringify(codeOnlyDiagnostics));
-    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),1,'siglas de outras empresas ficam separadas e não entram na comparação');
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeExcludedCount),1,'a importação registra a empresa divergente na auditoria da fonte');
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),0,'a empresa divergente foi separada antes de construir o modelo de comparação');
     await page.evaluate(()=>GrconImportReview.selectProfile(''));
     await importFile(page,'#spw-pw-file',presencePw);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
