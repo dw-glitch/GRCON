@@ -331,7 +331,21 @@
             if(!valid())break;
             progress.textContent='Verificando e liberando '+(released+1)+' de '+releasable.length+' base(s): versão '+base.version+'.';
             try{
-              const result=await api("release-base",{snapshot:base.id,confirm:base.id});
+              let result=null,steps=0;
+              do{
+                if(!valid())break;
+                if(++steps>650)throw new Error("SIGEM_RELEASE_PROGRESS_LIMIT");
+                result=await api("release-base",{snapshot:base.id,confirm:base.id});
+                if(!result||result.ok!==true||typeof result.released!=="boolean")throw new Error("SIGEM_RELEASE_RESPONSE_INVALID");
+                if(!result.released){
+                  const expected=Number(result.expected)||base.records||0;
+                  const processed=Number(result.processed)||0;
+                  const percent=expected?Math.min(100,Math.round(100*processed/expected)):0;
+                  const phase=result.phase==="projecting"?"Preparando e verificando a projeção operacional":result.phase==="cleaning"?"Removendo os registros antigos já protegidos pelo Turso":"Verificando";
+                  progress.textContent=phase+" — versão "+base.version+" ("+percent+"%; etapa "+steps+"). "+(released)+" de "+releasable.length+" bases liberadas. Pode sair da tela e retomar depois.";
+                }
+              }while(valid()&&result?.released!==true);
+              if(!valid())break;
               if(result?.released!==true)throw new Error("SIGEM_RELEASE_NOT_CONFIRMED");
               released++;
             }catch(error){failed='Versão '+base.version+': '+error.message;break;}
