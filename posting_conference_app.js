@@ -276,7 +276,7 @@
       state.audit = await Conference.loadAudit();
       state.page = 1;
       root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: result.summary, eventSummary: result.eventSummary, consolidation: result.consolidation, changes: result.changes, baseMeta: result.parsed.meta } }));
-      notify(`Consulta Geral atualizada: ${fmt(result.summary.total)} documento(s) único(s) · ${fmt(result.summary.sendCount)} envio(s) conferido(s).`, "success");
+      notify(`Consulta Geral importada em uso na conferência e na análise de arquivos: ${fmt(result.summary.total)} documento(s) único(s) · ${fmt(result.summary.sendCount)} envio(s) conferido(s).`, "success");
       render();
     } catch (error) {
       currentOperation?.fail(error);
@@ -754,7 +754,9 @@
     const query = root.GrconSharedSigemQuery;
     el("pc-publish").hidden = !query?.canPublish() || !query?.state.local;
     el("pc-publish").disabled = state.busy || query?.state.busy;
-    if (query?.state.shared) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.stale ? "Consulta Geral compartilhada em cache; pode estar desatualizada." : "Consulta Geral compartilhada em uso." }));
+    if (query?.current()) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.current() === query.state.local
+      ? "Consulta Geral importada em uso neste navegador, na conferência e na análise de arquivos. Publique para atualizar a equipe."
+      : query.state.stale ? "Consulta Geral compartilhada em cache; pode estar desatualizada." : "Consulta Geral compartilhada em uso." }));
     if (query?.state.error) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.error }));
     el("pc-export").disabled = state.busy || !documentRows().length;
   }

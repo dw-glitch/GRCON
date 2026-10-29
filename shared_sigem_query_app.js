@@ -11,7 +11,7 @@
   const CONFERENCE_WORKSPACE_KEY = "shared-sigem-conference-workspace";
   function cloud() { return root.GrconCloud; }
   function emit() {
-    const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, current()?.meta?.referenceDate, state.stale, state.error].join("|");
+    const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, current()?.meta?.source, current()?.meta?.referenceDate, state.stale, state.error].join("|");
     if (stamp === lastEmission) return;
     lastEmission = stamp;
     if (indexedShared !== state.shared || indexedLocal !== state.local) {
@@ -20,7 +20,7 @@
     }
     root.dispatchEvent(new CustomEvent("grcon:shared-sigem-updated", { detail: { meta: current()?.meta, stale: state.stale, error: state.error } }));
   }
-  function current() { return state.shared || state.local; }
+  function current() { return Core.activeBase(state.shared, state.local); }
   function canPublish() { return cloud()?.state?.membership?.role === "owner"; }
   function canManageHistory() { return Boolean(cloud()?.isMasterOwner?.()); }
   function cacheKey(workspace) { return `shared-sigem-query:${workspace}`; }
@@ -169,7 +169,7 @@
             root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: state.shared.meta } }));
           }
           if (changed || dateChanged) emit();
-          return state.shared;
+          return current();
         }
         const records = await readSnapshotRecords(workspace, meta.snapshot_id, meta.record_count, valid);
         const base = Core.validate({ meta: { ...meta.metadata, snapshotId: meta.snapshot_id, fileName: meta.file_name,
@@ -179,7 +179,7 @@
         try { await cachePut(workspace, base); }
         catch (_) { cacheWarning = "Consulta Geral atual carregada. O cache offline não pôde ser atualizado."; }
         if (!valid()) return null;
-        state.shared = base; state.stale = false; state.error = cacheWarning; emit(); return base;
+        state.shared = base; state.stale = false; state.error = cacheWarning; emit(); return current();
       } catch (error) {
         if (!valid()) return null;
         state.stale = Boolean(state.shared); state.error = String(error.message || error); emit(); return current();
@@ -197,7 +197,8 @@
   }
   async function setLocal(base) {
     Core.validate(base);
-    state.local = { meta: { ...base.meta, source: "local-general-query" }, records: base.records };
+    state.local = { meta: { ...base.meta, snapshotId: `local:${root.crypto.randomUUID()}`, importedAt: new Date().toISOString(),
+      localOverrideSnapshotId: state.shared?.meta?.snapshotId || "", source: "local-general-query" }, records: base.records };
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (workspace) {
       try { await (await runtime()).kvSet(`local-sigem-query:${workspace}`, state.local); }
@@ -376,7 +377,7 @@
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (!["owner", "admin"].includes(cloud()?.state?.membership?.role)) throw new Error("Sem permissão para editar a data.");
     const id = targetId || current()?.meta?.snapshotId;
-    const sharedTarget = targetId || state.shared?.meta?.snapshotId;
+    const sharedTarget = targetId || (current() === state.shared ? state.shared?.meta?.snapshotId : "");
     const base = sharedTarget ? await loadSnapshot(id) : current();
     if (!base) throw new Error("Consulta Geral não localizada.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Informe a data da Consulta Geral.");

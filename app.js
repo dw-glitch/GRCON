@@ -1272,7 +1272,7 @@
 
   function currentAnalysisSignature() {
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
-    return [`versao:${APP_VERSION}`, "identity:complete-code-v1", currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
+    return [`versao:${APP_VERSION}`, "identity:complete-code-v1", "sigem-status:active-source-v2", currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
       `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
       `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`,
       `central:${window.GrconAllocationRegistry?.signature() || "sem-base"}`].join("###");
@@ -3144,7 +3144,7 @@
     if (row.allocationFinding && row.allocationFinding.awaitingReturn) return "Aguardando alocação";
     if (row.hardBlock) return "Não incluir";
     if (row.decision === C.READY) return "Incluir";
-    if (row.decision === C.DISCARD) return "Em análise";
+    if (row.decision === C.DISCARD) return "Não incluir";
     return "Conferir";
   }
 
@@ -3198,7 +3198,7 @@
     if (row && row.hardBlock) return "bloqueado";
     if (row && rowStatusPolicy(row).manualOnly) return "revisar";
     if (row && row.decision === C.READY) return "pronto";
-    if (row && row.decision === C.DISCARD) return "descartar";
+    if (row && row.decision === C.DISCARD) return "bloqueado";
     return "revisar";
   }
 
