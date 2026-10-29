@@ -92,7 +92,7 @@ export function SigemPwDashboardApp() {
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
         <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
-        <SigemPwManagerialOverview state={state} onDocument={(code) => { adapter.setActiveList("all"); adapter.setQuery(code); }} />
+        <SigemPwManagerialOverview state={state} />
         <details className="spw-import-options"><summary>Indicadores operacionais por revisão</summary><SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} /></details>
         {state.pw.meta ? <section className="spw-pw-audit" aria-label="Conferência da lista PW" id="spw-pw-audit">
           <div><strong>{fmt(state.result?.quality.pwSourceRows || 0)}</strong><span>linhas PW com código · CSG/QTM</span></div>
