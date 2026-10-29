@@ -38,7 +38,9 @@ assert.equal(check([header, ...source, updated], doc, 'B').sigemStatus, 'Sem Com
 const conflict = [...updated]; conflict[4] = 'Recusado';
 const duplicateStatus = check([header, updated, conflict], doc, 'B');
 assert.equal(duplicateStatus.status, C.STATUSES.CONFIRMED);
-assert.ok(['Sem Comentários', 'Recusado'].includes(duplicateStatus.sigemStatus));
+assert.equal(duplicateStatus.sigemStatus, 'Conflito de status na Consulta Geral');
+assert.equal(duplicateStatus.sigemStatusConflict, true);
+assert.equal(duplicateStatus.sigemSourceRow, null);
 
 assert.equal(check([header, [doc, 'B', '', '', '']], doc, 'B').status, C.STATUSES.CONFIRMED);
 assert.equal(check([header, ...source], doc.replace('3.8.9.1', '3.8.9.2'), 'B').sigemStatus, '');

@@ -17,6 +17,17 @@
     return [...new Set((core?.documentSearchKeys?.(value) || [value]).map(norm).filter(Boolean))];
   }
   function revision(v) { return root.TriagemCore?.normalizeRevision?.(text(v)) || norm(v); }
+  function activeLayer(shared, local) {
+    // An explicit import replaces the snapshot visible when it was imported.
+    // A different team publication supersedes it; clocks and file names do not
+    // decide which source the user selected.
+    if (local && typeof local.meta?.localOverrideSnapshotId === "string"
+      && local.meta.localOverrideSnapshotId === (shared?.meta?.snapshotId || "")) return "local";
+    return shared ? "shared" : local ? "local" : "";
+  }
+  function activeBase(shared, local) {
+    return ({ shared, local })[activeLayer(shared, local)] || null;
+  }
   function timestamp(row) {
     const parse = root.GrconPostingConference?.parseSourceDate || root.GrconPostingConferenceRefinement?.parseSourceDate;
     const dates = [row.modifiedAt, row.includedAt].map((v) => {
@@ -30,7 +41,7 @@
     const result = new Map();
     for (const row of base?.records || []) {
       if (!text(row.document) || !revision(row.revision)) continue;
-      for (const key of keys(row.document)) {
+      for (const key of [`@exact:${canonical(row.document)}`, ...keys(row.document)]) {
         const id = `${key}::${revision(row.revision)}`;
         if (!result.has(id)) result.set(id, []);
         result.get(id).push(row);
@@ -41,7 +52,10 @@
       const newest = Math.max(...rows.map(timestamp));
       const current = rows.filter((row) => timestamp(row) === newest);
       const statuses = new Set(current.map((row) => norm(row.status)).filter(Boolean));
-      result.set(key, statuses.size === 1 && current.every((r) => text(r.status)) ? current[0] : null);
+      result.set(key, statuses.size === 1 && current.every((r) => text(r.status)) ? current[0] : {
+        status: statuses.size > 1 ? "Conflito na Consulta Geral" : "Status vazio na Consulta Geral",
+        conflict: statuses.size > 1, incomplete: current.some(r => !text(r.status)), candidates: current,
+      });
     }
     return result;
   }
@@ -61,23 +75,35 @@
   function context(shared, local) {
     const sharedIndex = shared ? index(shared) : null;
     const localIndex = local ? index(local) : null;
-    return { shared: sharedIndex, local: localIndex,
+    return { shared: sharedIndex, local: localIndex, activeLayer: activeLayer(shared, local),
       sharedRevisions: revisionsByDocument(sharedIndex),
       localRevisions: revisionsByDocument(localIndex),
       sharedId: shared?.meta?.snapshotId || "", localId: local?.meta?.snapshotId || "" };
   }
   function resolve(document, rev, ctx, fallback) {
-    for (const [layer, source] of [["shared", "shared-general-query"], ["local", "local-general-query"]]) {
+    const layer = ctx?.activeLayer || (ctx?.shared ? "shared" : ctx?.local ? "local" : "");
+    if (layer) {
+      const source = `${layer}-general-query`;
       const matches = new Set();
-      for (const key of keys(document)) {
+      const exactKey = `@exact:${canonical(document)}`;
+      const searchKeys = ctx?.[`${layer}Revisions`]?.has(exactKey) ? [exactKey] : keys(document);
+      for (const key of searchKeys) {
         const row = ctx?.[layer]?.get(`${key}::${revision(rev)}`);
         if (row && text(row.status)) matches.add(row);
       }
-      if (matches.size === 1) {
-        const row = [...matches][0];
+      if (matches.size === 1 || [...matches].some(row => row.conflict || row.incomplete)) {
+        const issue = [...matches].find(row => row.conflict) || [...matches].find(row => row.incomplete);
+        const row = issue || [...matches][0];
         return { status: text(row.status), source, revision: revision(rev), item: row,
-          snapshotId: ctx[`${layer}Id`], conflict: false, incomplete: false };
+          snapshotId: ctx[`${layer}Id`], conflict: Boolean(row.conflict), incomplete: Boolean(row.incomplete),
+          candidates: row.candidates };
       }
+      if (matches.size > 1) return { status: "Conflito na Consulta Geral", source, revision: revision(rev),
+        item: null, snapshotId: ctx[`${layer}Id`], conflict: true, incomplete: false, candidates: [...matches] };
+      // A complete snapshot is authoritative even for an absent pair. Mixing
+      // it with an older LD/cache can resurrect a status already superseded.
+      return { status: "Não Postado", source, revision: revision(rev), item: null,
+        snapshotId: ctx[`${layer}Id`], conflict: false, incomplete: false };
     }
     const legacy = typeof fallback === "function" ? fallback() : fallback;
     return { ...(typeof legacy === "object" && legacy ? legacy : { status: text(legacy) }), source: "legacy-fallback", revision: revision(rev) };
@@ -89,10 +115,13 @@
     const core = root.TriagemCore;
     const targetInfo = core?.revisionInfo?.(targetRevision);
     if (!targetInfo?.valid || !Number.isFinite(targetInfo.rank)) return null;
-    const candidates = new Set((legacyRevisions || []).map(item => revision(item?.revision)).filter(Boolean));
-    for (const documentKey of keys(document)) {
-      for (const layer of ["sharedRevisions", "localRevisions"]) {
-        for (const rev of ctx?.[layer]?.get(documentKey) || []) candidates.add(rev);
+    const layer = ctx?.activeLayer || (ctx?.shared ? "shared" : ctx?.local ? "local" : "");
+    const candidates = new Set(layer ? [] : (legacyRevisions || []).map(item => revision(item?.revision)).filter(Boolean));
+    const exactKey = `@exact:${canonical(document)}`;
+    const searchKeys = layer && ctx?.[`${layer}Revisions`]?.has(exactKey) ? [exactKey] : keys(document);
+    for (const documentKey of searchKeys) {
+      for (const revisionLayer of layer ? [`${layer}Revisions`] : []) {
+        for (const rev of ctx?.[revisionLayer]?.get(documentKey) || []) candidates.add(rev);
       }
     }
     const earlier = [...candidates].map(rev => ({ rev, info: core.revisionInfo(rev) }))
@@ -115,5 +144,5 @@
     if (!base.records.some((r) => text(r.status))) throw new Error("A Consulta Geral não contém status SIGEM.");
     return base;
   }
-  return Object.freeze({ text, canonical, keys, revision, index, context, resolve, previousAnalysis, validate });
+  return Object.freeze({ text, canonical, keys, revision, activeLayer, activeBase, index, context, resolve, previousAnalysis, validate });
 });

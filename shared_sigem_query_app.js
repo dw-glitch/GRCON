@@ -11,7 +11,7 @@
   const CONFERENCE_WORKSPACE_KEY = "shared-sigem-conference-workspace";
   function cloud() { return root.GrconCloud; }
   function emit() {
-    const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, current()?.meta?.referenceDate, state.stale, state.error].join("|");
+    const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, current()?.meta?.source, current()?.meta?.referenceDate, state.stale, state.error].join("|");
     if (stamp === lastEmission) return;
     lastEmission = stamp;
     if (indexedShared !== state.shared || indexedLocal !== state.local) {
@@ -20,7 +20,7 @@
     }
     root.dispatchEvent(new CustomEvent("grcon:shared-sigem-updated", { detail: { meta: current()?.meta, stale: state.stale, error: state.error } }));
   }
-  function current() { return state.shared || state.local; }
+  function current() { return Core.activeBase(state.shared, state.local); }
   function canPublish() { return cloud()?.state?.membership?.role === "owner"; }
   function canManageHistory() { return Boolean(cloud()?.isMasterOwner?.()); }
   function cacheKey(workspace) { return `shared-sigem-query:${workspace}`; }
@@ -37,11 +37,30 @@
       const action = {begin:"import-begin",chunk:"import-chunk",publish:"import-publish"}[name];
       const input = name === "begin" ? {fileName:args.source_file,count:args.expected_count,metadata:args.source_metadata,expectedActive:args.expected_active}
         : name === "chunk" ? {snapshot:args.upload_id,first:args.first_row,rows:args.rows} : {snapshot:args.upload_id};
-      const response = await root.fetch("/api/sigem-storage/" + action, {method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},
-        body:JSON.stringify({workspace:args.target_workspace,...input}),signal:AbortSignal.timeout(60000)});
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error("A publicação no Turso não foi confirmada. A base anterior continua disponível. " + (result.error || ""));
-      return name === "chunk" ? result.count : result.id;
+      // Begin, chunks and publish are idempotent. Replay exactly the same
+      // payload after transient failures; never retry access/integrity errors.
+      const body = JSON.stringify({workspace:args.target_workspace,...input});
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (cloud()?.state?.membership?.workspace_id !== args.target_workspace) throw new Error("A área de trabalho mudou durante o envio. A base anterior permanece ativa.");
+        let response, result;
+        try {
+          response = await root.fetch("/api/sigem-storage/" + action, {method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},
+            body,signal:AbortSignal.timeout(60000)});
+          result = await response.json().catch(() => null);
+        } catch (_) { /* A lost response may be safely replayed. */ }
+        if (response?.ok && result?.ok) return name === "chunk" ? result.count : result.id;
+        const transient = !response || [429, 502, 503, 504].includes(response.status);
+        if (!transient || attempt === 3) {
+          const error = new Error(response?.status === 401
+            ? "Sua sessão expirou. Entre novamente para retomar a publicação. A base anterior permanece disponível."
+            : transient ? "O banco continua ocupado. Aguarde alguns instantes e clique em Publicar novamente para retomar os mesmos lotes. A base anterior permanece disponível."
+              : "A publicação no Turso não foi confirmada. A base anterior continua disponível. " + (result?.error || "Falha na validação do envio."));
+          error.code = result?.error || "SIGEM_IMPORT_TRANSPORT_FAILED";
+          throw error;
+        }
+        root.dispatchEvent(new CustomEvent("grcon:shared-sigem-retry", { detail: { action, attempt: attempt + 1, firstRow: args.first_row } }));
+        await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt));
+      }
     }
     if (name === "page" && token && typeof root.fetch === "function") {
       const response = await root.fetch("/api/sigem-storage/page", {
@@ -71,6 +90,18 @@
   async function cachePut(workspace, base) {
     const conference = await runtime();
     await conference.kvSet(cacheKey(workspace), base);
+  }
+  async function revokeLocalOverride(workspace, sharedId, explicit = false) {
+    const local = state.local;
+    if (typeof local?.meta?.localOverrideSnapshotId !== "string"
+      || !explicit && local.meta.localOverrideSnapshotId === (sharedId || "")) return;
+    const conference = await runtime();
+    if (state.local !== local || cloud()?.state?.membership?.workspace_id !== workspace) return;
+    const meta = { ...local.meta };
+    delete meta.localOverrideSnapshotId;
+    state.local = { ...local, meta };
+    try { await conference.kvSet(`local-sigem-query:${workspace}`, state.local); }
+    catch (_) { console.warn("Consulta Geral: não foi possível salvar a troca da fonte local em cache."); }
   }
   async function activateConferenceWorkspace(workspace) {
     const conference = await runtime();
@@ -150,7 +181,7 @@
           }
           if (!state.shared) {
             const cached = await cacheGet(workspace);
-            if (cached && valid()) { Core.validate(cached); state.shared = cached; state.stale = true; emit(); }
+            if (cached && valid()) { Core.validate(cached); state.shared = cached; await revokeLocalOverride(workspace, cached.meta?.snapshotId); if (!valid()) return null; state.stale = true; emit(); }
           }
         } catch (error) { console.warn("Consulta Geral: cache indisponível; consultando o banco", error); }
         if (!cloud()?.state?.online) throw new Error("Sem conexão. Usando a última Consulta Geral válida em cache.");
@@ -159,6 +190,8 @@
         if (!valid()) return null;
         if (!meta?.snapshot_id) { state.shared = null; await cachePut(workspace, null); state.stale = false; state.error = ""; emit(); return current(); }
         if (state.shared?.meta?.snapshotId === meta.snapshot_id) {
+          await revokeLocalOverride(workspace, meta.snapshot_id);
+          if (!valid()) return null;
           const dateChanged = state.shared.meta.referenceDate !== meta.metadata?.referenceDate;
           const changed = state.stale || state.error;
           state.stale = false; state.error = "";
@@ -169,7 +202,7 @@
             root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: state.shared.meta } }));
           }
           if (changed || dateChanged) emit();
-          return state.shared;
+          return current();
         }
         const records = await readSnapshotRecords(workspace, meta.snapshot_id, meta.record_count, valid);
         const base = Core.validate({ meta: { ...meta.metadata, snapshotId: meta.snapshot_id, fileName: meta.file_name,
@@ -179,7 +212,7 @@
         try { await cachePut(workspace, base); }
         catch (_) { cacheWarning = "Consulta Geral atual carregada. O cache offline não pôde ser atualizado."; }
         if (!valid()) return null;
-        state.shared = base; state.stale = false; state.error = cacheWarning; emit(); return base;
+        state.shared = base; await revokeLocalOverride(workspace, meta.snapshot_id); if (!valid()) return null; state.stale = false; state.error = cacheWarning; emit(); return current();
       } catch (error) {
         if (!valid()) return null;
         state.stale = Boolean(state.shared); state.error = String(error.message || error); emit(); return current();
@@ -197,7 +230,8 @@
   }
   async function setLocal(base) {
     Core.validate(base);
-    state.local = { meta: { ...base.meta, source: "local-general-query" }, records: base.records };
+    state.local = { meta: { ...base.meta, snapshotId: `local:${root.crypto.randomUUID()}`, importedAt: new Date().toISOString(),
+      localOverrideSnapshotId: state.shared?.meta?.snapshotId || "", source: "local-general-query" }, records: base.records };
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (workspace) {
       try { await (await runtime()).kvSet(`local-sigem-query:${workspace}`, state.local); }
@@ -351,6 +385,8 @@
     if (!canPublish()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
     if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
     await request("activate", { target_workspace: workspace, target_snapshot: id });
+    await revokeLocalOverride(workspace, id, true);
+    emit();
     return refreshAfterHistoryMutation(workspace);
   }
   async function deleteVersion(id) {
@@ -376,7 +412,7 @@
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (!["owner", "admin"].includes(cloud()?.state?.membership?.role)) throw new Error("Sem permissão para editar a data.");
     const id = targetId || current()?.meta?.snapshotId;
-    const sharedTarget = targetId || state.shared?.meta?.snapshotId;
+    const sharedTarget = targetId || (current() === state.shared ? state.shared?.meta?.snapshotId : "");
     const base = sharedTarget ? await loadSnapshot(id) : current();
     if (!base) throw new Error("Consulta Geral não localizada.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Informe a data da Consulta Geral.");

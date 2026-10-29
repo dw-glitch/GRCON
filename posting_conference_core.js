@@ -417,7 +417,11 @@
   }
 
   function resolvePostingEvidence(historyRow, matchedRecords) {
-    const matched = Array.isArray(matchedRecords) ? matchedRecords : [];
+    const candidates = Array.isArray(matchedRecords) ? matchedRecords : [];
+    // nt- aliases help when only one spelling exists. If both complete codes
+    // exist in SIGEM, their status/revisions must not overwrite each other.
+    const exactDocument = candidates.filter(record => norm(displayDocument(record.document)) === norm(displayDocument(historyRow && historyRow.document)));
+    const matched = exactDocument.length ? exactDocument : candidates;
     const sent = normalizeRevision(historyRow && historyRow.revisionSent);
     const identities = [...new Set(matched.map((item) => item.documentIdentity || documentIdentity(item.document)).filter(Boolean))];
     const revisions = uniqueSortedRevisions(matched.map((item) => item.revision));
@@ -452,15 +456,19 @@
 
     const exact = sortEvidenceRecords(matched.filter((item) => normalizeRevision(item.revision) === sent));
     if (exact.length) {
-      const evidence = exact[0];
+      const statusConflict = sameTimestampStatusConflict(exact);
+      const evidence = statusConflict
+        ? { ...exact[0], status: "Conflito de status na Consulta Geral", sourceRow: null }
+        : exact[0];
       return {
         status: STATUSES.CONFIRMED,
         revisionFound: sent,
         revisionsFound: revisions,
         currentEvidence: true,
         ambiguity: false,
+        statusConflict,
         evidence,
-        note: `Documento e revisão ${sent} localizados na Consulta Geral.`,
+        note: `Documento e revisão ${sent} localizados na Consulta Geral.${statusConflict ? " Existem status divergentes com a mesma data; confira as linhas da fonte antes de decidir sobre uma nova emissão." : ""}`,
       };
     }
 
@@ -571,6 +579,7 @@
       sigemStatus: evidence ? text(evidence.status) : "",
       sigemStatusRevision: evidence ? normalizeRevision(evidence.revision) : "",
       sigemSourceRow: evidence ? Number(evidence.sourceRow) || null : null,
+      sigemStatusConflict: Boolean(resolved.statusConflict),
       title: text(historyRow.title) || (evidence ? text(evidence.title) : ""),
       ambiguity: Boolean(resolved.ambiguity),
     };

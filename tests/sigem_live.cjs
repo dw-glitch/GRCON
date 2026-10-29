@@ -56,6 +56,7 @@ const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  };
  const env={SUPABASE_URL:'https://qa.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_qa',TURSO_DATABASE_URL:'libsql://qa.turso.io',TURSO_AUTH_TOKEN:'qa',GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'true'};
  await pg.exec(fs.readFileSync('supabase/migrations/20261029143000_sigem_projection_bulk.sql','utf8'));
+ await pg.exec(fs.readFileSync('supabase/migrations/20261029193355_sigem_projection_materialized.sql','utf8'));
  const records=Array.from({length:1001},(_,i)=>({document:'DOC-'+i,revision:'0',status:'Em análise',title:"Título O'Brien 漢字 "+i,discipline:'CV',observation:'FULL_PAYLOAD_ONLY_IN_TURSO',extra:{array:[null,false,0,'ç']}}));
  const begin=()=>M.handleLiveImport(env,{id:id(9)},id(1),'import-begin',{fileName:'CG.xlsx',count:records.length,metadata:{checksum:'source'},expectedActive:null});
  const {id:snapshot}=await begin();assert.equal((await begin()).id,snapshot,'a repeated begin does not duplicate the upload');
