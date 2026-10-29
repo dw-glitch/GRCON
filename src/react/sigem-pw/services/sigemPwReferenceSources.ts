@@ -14,6 +14,11 @@ export function sourceId(fileName: string): string {
   return "ld:" + fileName.trim().normalize("NFKC").toLocaleLowerCase("pt-BR");
 }
 
+/** Validate selectable Excel reference files. */
+export function isExcelReferenceFile(fileName: string): boolean {
+  return /\.(?:xlsx|xls|xlsm)$/i.test(fileName.trim());
+}
+
 export function listedSources(base: SigemPwBase): ReferenceSource[] {
   const saved = base.meta?.sources;
   if (Array.isArray(saved)) return saved.filter((s): s is ReferenceSource =>
