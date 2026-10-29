@@ -13,7 +13,7 @@ import type {
 } from "../types/domain";
 
 import { ensureSharedSigemHistoryCompatibility } from "./sharedSigemHistoryCompatibility";
-import { buildReferenceBase } from "./sigemPwReferenceSources";
+import { buildReferenceBase, isExcelReferenceFile } from "./sigemPwReferenceSources";
 import { downloadCoordinatorWorkbook } from "./sigemPwCoordinatorWorkbook";
 
 const PRE_STAGE7_RESET_KEY = "sigem-pw-stage7-preupdate-reset-v1";
@@ -572,7 +572,7 @@ async function importLd(files: File | File[]): Promise<void> {
     const names = new Set<string>();
     const additions: Array<{ file: File; meta: SigemPwBaseMeta; records: SigemPwRecord[] }> = [];
     for (const file of input) {
-      if (!/\\.(?:xlsx|xls|xlsm)$/i.test(file.name)) throw new Error(`Arquivo inválido: ${file.name}. Utilize Excel.`);
+      if (!isExcelReferenceFile(file.name)) throw new Error(`Arquivo inválido: ${file.name}. Utilize Excel.`);
       const key = file.name.trim().toLocaleLowerCase("pt-BR");
       if (names.has(key)) throw new Error(`Arquivo repetido na seleção: ${file.name}.`);
       names.add(key);
