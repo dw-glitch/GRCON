@@ -260,6 +260,131 @@
     return sheet;
   }
 
+
+  // V3 complements the immutable V2 contract. It does not alter the legacy
+  // paste layout (A:F), which existing operational spreadsheets still expect.
+  const COLAR_GRCON_HEADERS_V3 = Object.freeze([
+    ...COLAR_GRCON_HEADERS_V2,
+    "STATUS DA CONFERÊNCIA",
+    "POSTADO NO SIGEM?",
+    "REVISÃO VERIFICADA NO SIGEM",
+    "DATA DE REFERÊNCIA DA CONSULTA GERAL",
+    "SNAPSHOT DA CONSULTA GERAL",
+  ]);
+
+  function conferenceRowKey(conference, record, document, revision) {
+    return [
+      text(record && record.egrdtNumber),
+      text(record && record.generatedAt),
+      conference.documentIdentity(document),
+      conference.normalizeRevision(revision),
+    ].join("|");
+  }
+
+  // Use the same reconciliation engine as the Conferência, not a second status
+  // calculator. No history event or GRDT generation constitutes proof of posting.
+  async function colarGrconRowsV3(records, options) {
+    const settings = options || {};
+    const root = typeof globalThis === "undefined" ? {} : globalThis;
+    const conference = settings.conferenceCore || root.GrconPostingConference;
+    const source = (records || []);
+    const fallback = (status = "NÃO VERIFICADO") => source.flatMap(record =>
+      (record.files || []).map(file => [
+        pasteExcelDate(record.generatedAt), text(record.egrdtNumber),
+        text(file.document), grdtRevision(file), text(file.ldPrazo),
+        pasteAllocation(file.allocation), status, "INDETERMINADO", "", "", "",
+      ]));
+    if (!conference || typeof conference.reconcile !== "function")
+      return fallback();
+
+    let base = settings.conferenceBase || null;
+    let stale = Boolean(settings.conferenceBaseStale);
+    if (!base) {
+      const query = root.GrconSharedSigemQuery;
+      base = query?.current?.() || null;
+      stale = Boolean(base && query?.state?.stale);
+      if (!base && typeof conference.loadBase === "function") {
+        try { base = await conference.loadBase(); }
+        catch (_) { return fallback(); }
+      }
+    }
+    if (!base || !Array.isArray(base.records) || !base.records.length)
+      return fallback();
+    if (stale) return fallback("NÃO VERIFICADO — BASE DESATUALIZADA");
+
+    const meta = base.meta || {};
+    const evaluated = conference.reconcile(source, base.records, null, {
+      baseReferenceDate: text(meta.referenceDate),
+      waitHours: conference.readPreferences?.().waitHours || conference.DEFAULT_WAIT_HOURS,
+      now: settings.now || new Date().toISOString(),
+    });
+    const byEvent = new Map();
+    for (const row of evaluated.rows || []) {
+      byEvent.set(conferenceRowKey(conference, row, row.document, row.revisionSent), row);
+    }
+    const labels = {
+      CONFIRMADO: "POSTADO",
+      AGUARDANDO: "AGUARDANDO CONFIRMAÇÃO",
+      REVISAO_DIVERGENTE: "REVISÃO DIVERGENTE",
+      NAO_ENCONTRADO: "NÃO LOCALIZADO",
+      REQUER_ANALISE: "REQUER ANÁLISE",
+      NAO_VERIFICADO: "NÃO VERIFICADO",
+    };
+    return source.flatMap(record => (record.files || []).map(file => {
+      const rev = grdtRevision(file);
+      const match = byEvent.get(conferenceRowKey(conference, record, file.document, rev));
+      const confirmed = Boolean(match && match.status === conference.STATUSES.CONFIRMED
+        && match.currentEvidence && !match.ambiguity);
+      return [
+        pasteExcelDate(record.generatedAt), text(record.egrdtNumber), text(file.document),
+        rev, text(file.ldPrazo), pasteAllocation(file.allocation),
+        text(match && labels[match.status]) || "NÃO VERIFICADO",
+        confirmed ? "SIM" : "INDETERMINADO",
+        match ? text(match.revisionFound) : "",
+        text(meta.referenceDate),
+        text(meta.snapshotId),
+      ];
+    }));
+  }
+
+  function addColarGrconSheetV3(workbook, rows) {
+    const sheet = workbook.addWorksheet("Colar GRCON v3", {
+      properties: { defaultRowHeight: 16 },
+      views: [{ state: "frozen", ySplit: 2, activeCell: "A3", showGridLines: false, zoomScale: 85 }],
+    });
+    sheet.columns = [24,42,49,28,31,33,31,22,27,28,37].map(width => ({width}));
+    sheet.getCell("A1").value = "COLAR GRCON V3 — CONFERÊNCIA SIGEM";
+    sheet.getRow(1).height = 29.25;
+    sheet.getRow(2).height = 31;
+    const dates = rows.map(row => row[0]).filter(date => date instanceof Date);
+    if (dates.length) {
+      sheet.getCell("C1").value = new Date(Math.max(...dates.map(date => date.getTime())));
+      sheet.getCell("C1").numFmt = "dd/mm/yyyy";
+    }
+    sheet.getCell("A1").font = {name:"Aptos Narrow",size:17,bold:true,color:{argb:"FF0E2841"}};
+    COLAR_GRCON_HEADERS_V3.forEach((header, i) => {
+      const cell = sheet.getCell(2, i + 1);
+      cell.value = header;
+      cell.font = {name:"Aptos Narrow",size:10,bold:true,color:{argb:"FFFFFFFF"}};
+      cell.fill = {type:"pattern",pattern:"solid",fgColor:{argb:i >= 6 ? "FF186A76" : "FF1F4E78"}};
+      cell.alignment = {horizontal:"left",vertical:"middle",wrapText:true};
+    });
+    for (let i = 0; i < rows.length; i++) {
+      const row = sheet.getRow(i + 3);
+      row.values = [null, ...rows[i].map(v => v === "" ? null : v)];
+      row.height = 16;
+      row.getCell(1).numFmt = "dd/mm/yyyy hh:mm:ss";
+      row.getCell(10).numFmt = "@";
+      for (let j = 1; j <= COLAR_GRCON_HEADERS_V3.length; j++) {
+        const cell = row.getCell(j);
+        cell.font = {name:"Aptos Narrow",size:10,color:{argb:"FF172B3B"}};
+        cell.fill = {type:"pattern",pattern:"solid",fgColor:{argb:i % 2 ? "FFF1F5F8" : "FFFFFFFF"}};
+      }
+    }
+    sheet.autoFilter = {from:"A2",to:"K" + Math.max(3, rows.length + 2)};
+    return sheet;
+  }
+
   function summary(records) {
     const source = records || [];
     return {
@@ -448,6 +573,7 @@
     await addDataSheet(workbook, "eGRDTs", "eGRDTs GERADAS / POSTADAS", egrdts, metadata, settings.brandAssets);
     await addDataSheet(workbook, "Documentos", "DOCUMENTOS POR eGRDT", documents, metadata, settings.brandAssets);
     addColarGrconSheetV2(workbook, source);
+    addColarGrconSheetV3(workbook, await colarGrconRowsV3(source, settings));
 
     const buffer = await workbook.xlsx.writeBuffer();
     const check = new ExcelJS.Workbook();
@@ -456,6 +582,9 @@
     const pasteV2 = check.getWorksheet("Colar GRCON v2");
     if (!pasteV2 || COLAR_GRCON_HEADERS_V2.some((header, i) => pasteV2.getCell(2, i + 1).value !== header)
       || pasteV2.columnCount !== 6) throw new Error("Contrato fixo v2 da aba Colar GRCON inválido.");
+    const pasteV3 = check.getWorksheet("Colar GRCON v3");
+    if (!pasteV3 || COLAR_GRCON_HEADERS_V3.some((header, i) => pasteV3.getCell(2, i + 1).value !== header))
+      throw new Error("Contrato de conferência v3 inválido.");
     return buffer;
   }
   function downloadName(records, options) {
@@ -514,5 +643,5 @@
     return `GRCON_Auditoria_Documentos_Removidos_${compactStamp()}.xlsx`;
   }
 
-  return Object.freeze({ COLAR_GRCON_HEADERS_V2, colarGrconRowsV2, formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName, buildRemovedAuditWorkbook, removedAuditDownloadName });
+  return Object.freeze({ COLAR_GRCON_HEADERS_V2, COLAR_GRCON_HEADERS_V3, colarGrconRowsV2, colarGrconRowsV3, formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName, buildRemovedAuditWorkbook, removedAuditDownloadName });
 });
