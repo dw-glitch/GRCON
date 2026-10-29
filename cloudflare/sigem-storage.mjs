@@ -55,7 +55,9 @@ export async function handleSigemStorage(request, env) {
       if(canonical(oldMeta)!==canonical(newMeta)||!(oldStatus===newStatus||(oldStatus==='active'&&newStatus==='archived'))||manifest.checksum!==proof.checksum||manifest.recordCount!==source.record_count)throw fail('SIGEM_RELEASE_SOURCE_CHANGED');
       const target=(await tursoClient(env).execute(`SELECT state,checksum,expected_count FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`,[source.workspace_id,source.contract_id,source.id])).rows[0];
       if(target?.state!=='verified'||target.checksum!==proof.checksum||target.expected_count!==source.record_count)throw fail('SIGEM_RELEASE_DESTINATION_MISMATCH');
-      return reply({ok:true,...await serviceRpc(env,'grcon_sigem_release_service',{target_workspace:input.workspace,actor_id:user.id,target_snapshot:source.id,proof})});
+      // One request performs at most one bounded, durable PostgreSQL stage.
+      // The UI calls again using the same independently verified Turso/R2 proof.
+      return reply({ok:true,...await serviceRpc(env,'grcon_sigem_release_step',{target_workspace:input.workspace,actor_id:user.id,target_snapshot:source.id,proof})});
     }
     if(action==='document-inventory'&&request.method==='GET'){
       const scope=await admin('document-scope');
