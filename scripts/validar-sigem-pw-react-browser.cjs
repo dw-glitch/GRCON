@@ -662,6 +662,9 @@ async function waitEvolutionReady(page) {
     assert.equal(summary.pwOnlyEmitted, 1);
     assert.equal(summary.classifiedTotal, 255);
 
+    // The legacy revision KPIs were deliberately collapsed behind a disclosure.
+    // Expand them before exercising their existing click-to-filter behavior.
+    await page.getByText('Comparativos operacionais e situações por revisão',{exact:true}).click();
     await page.locator('[data-summary-list="bothEmitted"]').click();
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.activeList === "bothEmitted");
     assert.equal(await page.locator("#spw-table tbody tr").count(), 2, "KPI da FASE B deve filtrar a relação detalhada sem recalcular o modelo");
