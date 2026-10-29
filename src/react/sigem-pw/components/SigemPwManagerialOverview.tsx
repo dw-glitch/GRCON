@@ -39,7 +39,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
         <span>{card.label}</span>
         <strong>{fmt(card.value)}</strong>
         <small>{card.tip}</small>
-        {report.ready && index > 0 && index < 4 && report.summary.active > 0
+        {report.ready && index > 0 && index < 4 && report.summary.active !== null && report.summary.active > 0
           ? <small>{Math.round((Number(card.value) / report.summary.active) * 100)}% dos documentos ativos</small> : null}
       </div>)}
     </div>
