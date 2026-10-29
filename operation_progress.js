@@ -71,6 +71,7 @@
       const cancelled = error?.name === "AbortError";
       node.dataset.state = error ? cancelled ? "cancelled" : "failed" : "completed";
       message.textContent = error ? error.message || "Não foi possível concluir." : options.success || "Concluído.";
+      elapsed.textContent = `${Math.floor((performance.now() - started) / 1000)} s`;
       announcement.textContent=message.textContent;
       if (!error) bar.value = 100; else bar.hidden=true;
       if (error) root.QualityTaskCenter?.[cancelled ? "cancel" : "fail"]?.(taskId, error); else root.QualityTaskCenter?.finish(taskId, message.textContent);

@@ -2194,7 +2194,7 @@
       + "enquanto a análise anterior estiver aberta. Só inclua manualmente se houver uma exceção operacional confirmada.";
     return {
       ...official,
-      status: "Em Análise",
+      status: rawStatus,
       revisionStatus: rawStatus,
       revisionStatusSource: official.source || "",
       blockingRevision: blocking.revision,
@@ -2958,15 +2958,16 @@
       // representam uma análise em andamento no SIGEM. O texto original vindo
       // da Consulta Geral permanece em displayStatus; apenas a regra de decisão
       // usa a normalização central para impedir uma nova revisão sobre análise aberta.
+      if (statusInfo.blockingRevision) {
+        // A pending earlier revision blocks selection without changing the
+        // official status of the revision currently being checked.
+        decision = DISCARD;
+        reason = statusInfo.inheritedReason;
+        completed = true;
+        break;
+      }
       if (kind === "analysis") {
         decision = DISCARD;
-        if (statusInfo.blockingRevision) {
-          // A revisão solicitada continua Não Postado na fonte oficial; apenas
-          // a elegibilidade da eGRDT herda a pendência da revisão anterior.
-          reason = statusInfo.inheritedReason;
-          completed = true;
-          break;
-        }
         analysisEvidence = analysisEvidenceForRevision(group, revision, inferredSheet, statusInfo);
         // A revisão parada pela análise pode não ser a mesma da linha técnica
         // inicialmente selecionada (ex.: LD na revisão 0, análise aberta na
