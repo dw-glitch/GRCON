@@ -75,7 +75,7 @@ const {PGlite}=require('@electric-sql/pglite');
   if(String(url).endsWith('/grcon_master_query')){assert.equal(body.actor_id,'actor');assert.equal(body.target_workspace,w);return Response.json({...view,pages:{...view.pages,sigem:{revision:rev}}});}
   throw Error('Unexpected fetch');
  };
- const payload={workspaceId:w,code:'DOC-001',intent:'revision',revisions:Object.fromEntries(Object.keys(view.pages).map(k=>[k,'v1']))};
+ const payload={workspaceId:w,code:'DOC-001',intent:'revision',revisions:Object.fromEntries(Object.keys(view.pages).map(k=>[k,k==='vault'?'retired':'v1']))};
  const request=(body=payload,token='qa')=>new Request('https://grcon.test/api/document-vault/ai-explain',{method:'POST',headers:token?{authorization:'Bearer '+token}:{},body:JSON.stringify(body)});
  try{
   assert.equal((await worker.fetch(request(payload,''),env)).status,401);assert.equal(modelCalls,0);
