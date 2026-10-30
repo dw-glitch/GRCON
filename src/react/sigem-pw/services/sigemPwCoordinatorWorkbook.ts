@@ -183,7 +183,7 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
 export function coordinatorSheets(state: SigemPwState): CoordinatorPlan["sheets"] {
   return coordinatorPlan(state).sheets;
 }
-function formatHeader(cell: ExcelCell, fill = GRCON.navy): void {
+function formatHeader(cell: ExcelCell, fill: string = GRCON.navy): void {
   cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: GRCON.white } };
   cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
   cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
