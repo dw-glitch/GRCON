@@ -38,10 +38,11 @@ async function main() {
   assert.equal(rows[0][10], "unit-test");
 
   const missing = await Report.colarGrconRowsV3(source, {conferenceCore:Conference,conferenceBase:{meta:{},records:[]}});
-  assert(missing.every(row => row[6] === "NÃO VERIFICADO" && row[7] === "INDETERMINADO"));
+  assert(missing.every(row => row[6] === "AGUARDANDO RETORNO DO SIGEM" && row[7] === "INDETERMINADO"),
+    "eGRDT gerada continua pendente se a Consulta Geral não puder ser consultada");
 
   const stale = await Report.colarGrconRowsV3(source, {conferenceCore:Conference,conferenceBase:base,conferenceBaseStale:true});
-  assert(stale.every(row => row[6] === "NÃO VERIFICADO" && row[7] === "INDETERMINADO"));
+  assert(stale.every(row => row[6] === "AGUARDANDO RETORNO DO SIGEM" && row[7] === "INDETERMINADO"));
   // O fluxo operacional nunca deve entregar uma planilha inteira como
   // NÃO VERIFICADO se a fonte de conferência não foi carregada.
   await assert.rejects(
