@@ -71,10 +71,10 @@ assert.ok(adapter.includes("function setRevisionScope("));
 assert.ok(adapter.includes("dashboardRevisionKey("));
 assert.ok(adapter.includes("scopeSnapshot("));
 assert.ok(adapter.includes("scopedSnapshots("));
-assert.match(adapter, /const filters = \\{ \\.\\.\\.state\\.filters, \\.\\.\\.state\\.rawFilters \\}/);
-assert.match(adapter, /fieldValue\\("spw-evo-filter-query", filters\\.query\\)/, "exportação deve ler busca visível antes do debounce");
-assert.match(adapter, /fieldValue\\("spw-evo-filter-tag", filters\\.tag\\)/);
-assert.match(adapter, /fieldValue\\("spw-evo-filter-eap", filters\\.eap\\)/);
+assert.ok(adapter.includes("const filters = { ...state.filters, ...state.rawFilters }"));
+assert.ok(adapter.includes('fieldValue("spw-evo-filter-query", filters.query)'), "exportação deve ler a busca visível antes do debounce");
+assert.ok(adapter.includes('fieldValue("spw-evo-filter-tag", filters.tag)'));
+assert.ok(adapter.includes('fieldValue("spw-evo-filter-eap", filters.eap)'));
 
 for (const label of ["Entraram no SIGEM", "Entraram no PW", "Emitidos no PW", "SIGEM novo sem PW", "Gerenciar histórico"]) {
   assert.ok(app.includes(label), "texto funcional ausente: " + label);
