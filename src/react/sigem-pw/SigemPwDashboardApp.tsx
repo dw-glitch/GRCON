@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { UiMetaPill, UiPanel } from "../core/ui/UiPrimitives";
 import { SigemPwHeader } from "./components/SigemPwHeader";
 import { SigemPwReadiness } from "./components/SigemPwReadiness";
@@ -25,6 +25,9 @@ function fmt(value: number): string {
 export function SigemPwDashboardApp() {
   const { state, adapter } = useSigemPwDashboard();
   const legacyRef = useRef<HTMLDetailsElement>(null);
+  // After an operator opens the source manager, a base refresh must not
+  // silently hide the activate/delete/date controls mid-workflow.
+  const [sourceOpenOverride, setSourceOpenOverride] = useState<boolean | null>(null);
   const openLegacyList = (list: SigemPwListKey) => {
     adapter.setActiveList(list);
     const panel = legacyRef.current;
@@ -96,7 +99,8 @@ export function SigemPwDashboardApp() {
         </details>
       </UiPanel>
 
-      <details className="spw-sources-disclosure" open={loadedBases < 3}>
+      <details className="spw-sources-disclosure" open={sourceOpenOverride ?? loadedBases < 3}
+        onToggle={(event) => setSourceOpenOverride(event.currentTarget.open)}>
         <summary>Gerenciar fontes de comparação · {loadedBases}/3 bases carregadas</summary>
       <UiPanel className="spw-section-panel spw-bases-panel" labelledBy="spw-bases-title">
         <div className="spw-section-heading">
