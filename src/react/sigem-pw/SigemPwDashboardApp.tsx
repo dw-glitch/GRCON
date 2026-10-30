@@ -89,7 +89,7 @@ export function SigemPwDashboardApp() {
       </UiPanel>
 
       <details className="spw-sources-disclosure" open={loadedBases < 3}>
-        <summary>Gerenciar fontes de comparação · ${loadedBases}/3 bases carregadas</summary>
+        <summary>Gerenciar fontes de comparação · {loadedBases}/3 bases carregadas</summary>
       <UiPanel className="spw-section-panel spw-bases-panel" labelledBy="spw-bases-title">
         <div className="spw-section-heading">
           <div>
