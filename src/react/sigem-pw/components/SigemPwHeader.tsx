@@ -36,7 +36,7 @@ export function SigemPwHeader({ busy, ready, onEvolution, onHistory, onCoordinat
         <button className="secondary-button" id="spw-history-open" type="button" disabled={busy} onClick={onHistory}>
           <Icon path="M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4" /><span>Gerenciar histórico</span>
         </button>
-        <button className="primary-button" id="spw-coordinator-export" type="button" disabled={busy || !ready} onClick={onCoordinatorExport}>Exportar controle Excel</button>
+        <button className="primary-button" id="spw-coordinator-export" type="button" disabled={busy || !ready} onClick={onCoordinatorExport}>Exportar relatório GRCON</button>
       </div>
     </div>
   );
