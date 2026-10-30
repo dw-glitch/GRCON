@@ -245,9 +245,9 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
     }
   }
 }
-function stylePw(sheet: ExcelSheet): void {
+function stylePw(sheet: ExcelSheet, dataRows: number): void {
   sheet.views = [{ state: "frozen", xSplit: 3, ySplit: 1, topLeftCell: "D2" }];
-  sheet.autoFilter = "A1:BR1";
+  sheet.autoFilter = `A1:BR${Math.max(2, dataRows)}`;
   sheet.getRow(1).height = 35;
   for (let col = 0; col < 70; col++) {
     const c = sheet.getColumn(col + 1);
@@ -265,7 +265,7 @@ export function buildCoordinatorWorkbook(state: SigemPwState, excel: ExcelJSApi)
   styleMain(main, plan);
   const pw = workbook.addWorksheet("REL. PW");
   plan.sheets["REL. PW"].forEach(row => pw.addRow(row));
-  stylePw(pw);
+  stylePw(pw, plan.sheets["REL. PW"].length);
   // Template SIGEM was blank. Do NOT invent rows or turn it into a second
   // official source; SIGEM comparison comes from the active Consulta Geral.
   workbook.addWorksheet("SIGEM");
