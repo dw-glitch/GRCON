@@ -217,8 +217,14 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  // Keyboard activation is a real user interaction and avoids the nested-scroll
  // viewport race in Chromium; the same buttons remain focusable for operators.
  // Owner can promote a historical shared base, then delete the active base; the backend replacement becomes official.
+ // A capacidade ADM é consultada assincronamente: o teste precisa aguardar
+ // a permissão legítima e a renderização do botão, em vez de supor atualização instantânea.
+ await page.evaluate(async()=>{if(!window.GrconCloud.isMasterOwner())await window.GrconCloud.refreshMasterOwner();});
+ await page.waitForFunction(()=>window.GrconCloud.isMasterOwner()&&window.GrconSigemPwDashboardUi.state.analysisSigemId==='shared-old');
+ const activateOld=page.locator('[data-sigem-history-activate="shared-old"]');
+ await activateOld.waitFor({state:'attached',timeout:10000});
  page.once('dialog',dialog=>dialog.accept());
- await page.getByText('Tornar base atual',{exact:true}).focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
+ await activateOld.focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
  assert.equal(await page.inputValue('#spw-analysis-sigem'),'');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions.find(v=>v.snapshot_id==='shared-old').status),'active');
  page.once('dialog',dialog=>dialog.accept());
@@ -232,7 +238,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
   assert.equal(await page.locator('[data-sigem-history-delete]').count(),0);
   assert.equal(await page.evaluate(async()=>{try{await window.GrconSharedSigemQuery.deleteVersion('shared-current');return false;}catch{return true;}}),true);
  }
- await page.evaluate(async()=>{window.GrconCloud.state.masterOwner=true;window.GrconCloud.state.membership.role='owner';await window.GrconSigemPwDashboardUi.refresh('owner QA');});
+ await page.evaluate(async()=>{window.GrconCloud.state.membership.role='owner';await window.GrconCloud.refreshMasterOwner();await window.GrconSigemPwDashboardUi.refresh('owner QA');});
  page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');
  await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-middle');
  page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');
