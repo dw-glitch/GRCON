@@ -89,13 +89,47 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.ready&&!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.revisionScope),'all','a abertura inclui todas as revisões');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20001);
+ // Fase 6 — verificações de UX reais sobre o painel gerencial, sem forçar o
+ // usuário a atravessar opções técnicas recolhidas.
+ assert.equal(await page.locator('[data-kpi="active"]').isVisible(),true);
+ await page.locator('[data-kpi="active"]').click();
+ assert.equal(await page.locator('[data-kpi="active"]').getAttribute('aria-pressed'),'true');
+ assert.equal(await page.locator('.spw-managerial-table-wrap tbody tr').count(),25,'paginação gerencial não deve renderizar 20 mil linhas');
+ fs.mkdirSync('artifacts/owner-shared-sigem',{recursive:true});
+ await page.screenshot({path:'artifacts/owner-shared-sigem/phase6-manager-desktop.png',fullPage:false});
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.locator('[data-kpi="active"]').isVisible(),true,'indicador deve continuar visível em celular');
+ await page.screenshot({path:'artifacts/owner-shared-sigem/phase6-manager-mobile.png',fullPage:false});
+ await page.setViewportSize({width:1366,height:768});
+ // The manager-first UX keeps revision metrics and source actions collapsed.
+ // Browser QA explicitly expands them before exercising the legacy workflow.
+ await page.evaluate(() => document.querySelectorAll('details.spw-advanced-area, details.spw-legacy-disclosure, details.spw-sources-disclosure').forEach(item => { item.open = true; }));
  await page.locator('[data-revision-scope="revision0"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
+ // Um cartão operacional deve expor a lista correspondente, nunca deixar
+ // apenas os filtros ativos num painel fechado.
+ await page.evaluate(()=>{
+   const advanced=document.querySelector('details.spw-advanced-area');if(advanced)advanced.open=true;
+   const section=[...document.querySelectorAll('details.spw-import-options')].find(item=>
+     item.querySelector('summary')?.textContent?.includes('Comparativos operacionais e situações por revisão'));
+   if(section)section.open=true;
+ });
+ await page.locator('[data-summary-list="bothEmitted"]').evaluate(button=>button.click());
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.activeList),'bothEmitted');
+ assert.equal(await page.evaluate(()=>Boolean(document.querySelector('details.spw-legacy-disclosure')?.open)),true);
+
  // The revision-level KPI is intentionally collapsed under the new
  // managerial panel. Expose it before the legacy click assertions.
- await page.getByText('Indicadores operacionais por revisão',{exact:true}).click();
+ await page.evaluate(() => {
+   const advanced = document.querySelector('details.spw-advanced-area');
+   if (advanced) advanced.open = true;
+   const nested = [...advanced.querySelectorAll('details.spw-import-options')].find(node =>
+     node.querySelector('summary')?.textContent?.includes('Indicadores operacionais por revisão'));
+   if (nested) nested.open = true;
+ });
+ assert.equal(await page.locator('[data-summary-list="sigem"]').isVisible(),true);
  // The SIGEM headline KPI is auditable and its detail list must equal the number shown for the active revision scope.
- await page.locator('[data-summary-list="sigem"]').click();
+ await page.locator('[data-summary-list="sigem"]').evaluate(button=>button.click());
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.activeList),'sigem');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20000);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length===window.GrconSigemPwDashboardUi.state.result.summary.sigem),true);
@@ -106,14 +140,14 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.selectOption('#spw-pw-presence-filter','no');
  await page.selectOption('#spw-sigem-status-filter','Recusado');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),1);
- const filteredDownloadPromise=page.waitForEvent('download');await page.locator('#spw-export').click();
+ const filteredDownloadPromise=page.waitForEvent('download');await page.locator('#spw-export').evaluate(button=>button.click());
  const filteredDownload=await filteredDownloadPromise;const filteredPath=path.join('/tmp','sigem-filtered-qa.xlsx');await filteredDownload.saveAs(filteredPath);
  const filteredBook=XLSX.read(fs.readFileSync(filteredPath),{type:'buffer'});
  const filteredRows=XLSX.utils.sheet_to_json(filteredBook.Sheets['Relação']);
  assert.equal(filteredRows.length,1);assert.equal(filteredRows[0]['Existe no PW'],'NÃO');assert.equal(filteredRows[0]['Status SIGEM'],'Recusado');assert.ok(filteredRows[0]['Data SIGEM']);
  // Clicking the headline clears detail-only filters so its list equals the headline again.
  await page.fill('#spw-query','nonexistent');
- await page.locator('[data-summary-list="sigem"]').click();
+ await page.locator('[data-summary-list="sigem"]').evaluate(button=>button.click());
  await page.waitForTimeout(250);
  assert.equal(await page.inputValue('#spw-query'),'');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20000);
@@ -122,7 +156,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.fill('#spw-revision-filter','A');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),1);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20001);
- await page.locator('[data-summary-list="sigem"]').click();
+ await page.locator('[data-summary-list="sigem"]').evaluate(button=>button.click());
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20001);
  await page.locator('[data-revision-scope="revision0"]').click();
  await page.locator('[data-list="all"]').click();
@@ -148,12 +182,13 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>window.GrconSigemPwDashboardUi.activate());
  assert.equal(await page.inputValue('#spw-analysis-sigem'),'shared-old');
  // Historical edit goes to the shared RPC and preserves upload and official identity.
+ await page.evaluate(() => { const sources = document.querySelector('details.spw-sources-disclosure'); if (sources) sources.open = true; });
  await page.locator('[data-edit-base-date="sigem"]').click();
  await page.fill('#spw-date-input','2026-10-04');await page.locator('#spw-date-save').click();
  await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions[2].metadata.referenceDate),'2026-10-04');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions[2].metadata.importedAt),'2026-10-05T13:00:00Z');
- const downloadPromise=page.waitForEvent('download');await page.locator('#spw-export').click();const download=await downloadPromise;
+ const downloadPromise=page.waitForEvent('download');await page.locator('#spw-export').evaluate(button=>button.click());const download=await downloadPromise;
  const out=path.join('/tmp',download.suggestedFilename());await download.saveAs(out);const wb=XLSX.read(fs.readFileSync(out),{type:'buffer'});
  const meta=XLSX.utils.sheet_to_json(wb.Sheets.Metadados),rows=XLSX.utils.sheet_to_json(wb.Sheets['Relação']);
  assert.equal(meta.find(r=>r.Item==='Consulta Geral ID').Valor,'shared-old');assert.equal(meta.find(r=>r.Item==='Consulta Geral utilizada').Valor,'2026-10-04');assert.equal(meta.find(r=>r.Item==='PW ID').Valor,'pw-b');
@@ -179,13 +214,22 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>window.__sharedQa.unavailable=false);
  await page.getByText('Tentar novamente',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),1);
+ // Keyboard activation is a real user interaction and avoids the nested-scroll
+ // viewport race in Chromium; the same buttons remain focusable for operators.
  // Owner can promote a historical shared base, then delete the active base; the backend replacement becomes official.
+ // A capacidade ADM é consultada assincronamente: o teste precisa aguardar
+ // a permissão legítima e a renderização do botão, em vez de supor atualização instantânea.
+ await page.evaluate(async()=>{if(!window.GrconCloud.isMasterOwner())await window.GrconCloud.refreshMasterOwner();});
+ await page.waitForFunction(()=>window.GrconCloud.isMasterOwner()&&window.GrconSigemPwDashboardUi.state.analysisSigemId==='shared-old');
+ const activateOld=page.locator('[data-sigem-history-activate="shared-old"]');
+ await activateOld.waitFor({state:'attached',timeout:10000});
+ assert.equal(await activateOld.getAttribute('data-sigem-history-activate'),'shared-old','a ativação ADM deve usar a versão histórica selecionada');
  page.once('dialog',dialog=>dialog.accept());
- await page.getByText('Tornar base atual',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
+ await activateOld.focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
  assert.equal(await page.inputValue('#spw-analysis-sigem'),'');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions.find(v=>v.snapshot_id==='shared-old').status),'active');
  page.once('dialog',dialog=>dialog.accept());
- await page.getByText('Excluir base atual',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-current');
+ await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-current');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions.some(v=>v.snapshot_id==='shared-old')),false);
  assert.equal(await page.locator('#spw-analysis-sigem option[value="shared-old"]').count(),0);
  assert.equal(await page.evaluate(()=>window.__sharedQa.calls.includes('grcon_sigem_query_activate')&&window.__sharedQa.calls.includes('grcon_sigem_query_delete')),true);
@@ -195,10 +239,10 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
   assert.equal(await page.locator('[data-sigem-history-delete]').count(),0);
   assert.equal(await page.evaluate(async()=>{try{await window.GrconSharedSigemQuery.deleteVersion('shared-current');return false;}catch{return true;}}),true);
  }
- await page.evaluate(async()=>{window.GrconCloud.state.masterOwner=true;window.GrconCloud.state.membership.role='owner';await window.GrconSigemPwDashboardUi.refresh('owner QA');});
- page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).click();
+ await page.evaluate(async()=>{window.GrconCloud.state.membership.role='owner';await window.GrconCloud.refreshMasterOwner();await window.GrconSigemPwDashboardUi.refresh('owner QA');});
+ page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');
  await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-middle');
- page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).click();
+ page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');
  await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&!window.GrconSigemPwDashboardUi.state.sigem.meta);
  assert.equal(await page.evaluate(()=>window.GrconSharedSigemQuery.current()),null);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),0);

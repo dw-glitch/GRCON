@@ -71,7 +71,10 @@ assert.ok(adapter.includes("function setRevisionScope("));
 assert.ok(adapter.includes("dashboardRevisionKey("));
 assert.ok(adapter.includes("scopeSnapshot("));
 assert.ok(adapter.includes("scopedSnapshots("));
-assert.match(adapter, /return \{ \.\.\.state\.filters, \.\.\.state\.rawFilters \}/);
+assert.ok(adapter.includes("const filters = { ...state.filters, ...state.rawFilters }"));
+assert.ok(adapter.includes('fieldValue("spw-evo-filter-query", filters.query)'), "exportação deve ler a busca visível antes do debounce");
+assert.ok(adapter.includes('fieldValue("spw-evo-filter-tag", filters.tag)'));
+assert.ok(adapter.includes('fieldValue("spw-evo-filter-eap", filters.eap)'));
 
 for (const label of ["Entraram no SIGEM", "Entraram no PW", "Emitidos no PW", "SIGEM novo sem PW", "Gerenciar histórico"]) {
   assert.ok(app.includes(label), "texto funcional ausente: " + label);
@@ -87,6 +90,8 @@ assert.ok(app.includes("Todas as revisões"));
 assert.match(app, /data-evo-select/);
 assert.match(app, /data-evo-row/);
 assert.match(app, /UiDrawer/);
+assert.match(app, /createPortal/);
+assert.equal((app.match(/document\.body,/g) || []).length, 2, "ambos os drawers da Evolução devem ser portalizados fora do scroll do módulo");
 assert.match(app, /data-analysis-id/);
 assert.match(app, /event\.currentTarget\.focus\(\)/);
 assert.match(app, /drawerClassName="spw-evo-drawer"/);

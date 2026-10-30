@@ -1272,3 +1272,137 @@
 .spw-managerial-table-wrap th,.spw-managerial-table-wrap td{padding:9px;border-bottom:1px solid var(--border,#dce4eb);text-align:left;white-space:nowrap}
 @media(max-width:850px){.spw-managerial-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.spw-managerial-grid{grid-template-columns:minmax(0,1fr)}}
+
+
+/* Phase 3: consolidated managerial workspace, with technical tools kept on demand. */
+#sigem-pw-dashboard-module .spw-managerial{margin:8px 0 2px}
+#sigem-pw-dashboard-module .spw-managerial-grid{margin:14px 0 20px}
+#sigem-pw-dashboard-module .spw-managerial-card{
+  appearance:none;text-align:left;font:inherit;cursor:pointer;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+  box-shadow:0 1px 2px rgba(15,23,42,.04);
+}
+#sigem-pw-dashboard-module .spw-managerial-card:not(:disabled):hover{
+  border-color:var(--spw-accent,#177e65);box-shadow:0 4px 14px rgba(15,23,42,.08);transform:translateY(-1px);
+}
+#sigem-pw-dashboard-module .spw-managerial-card[aria-pressed=true]{
+  border-color:var(--spw-accent,#177e65);background:var(--spw-surface,#fff);
+  outline:2px solid var(--spw-accent,#177e65);outline-offset:-2px;
+}
+#sigem-pw-dashboard-module .spw-managerial-card:focus-visible{
+  outline:3px solid var(--spw-accent,#177e65);outline-offset:2px;
+}
+#sigem-pw-dashboard-module .spw-managerial-card:disabled{cursor:not-allowed;opacity:.7}
+#sigem-pw-dashboard-module .spw-managerial-card[data-kpi=compliant]{
+  border-left:4px solid var(--success-500,#398c61);
+}
+#sigem-pw-dashboard-module .spw-managerial-card[data-kpi=pending]{
+  border-left:4px solid var(--danger-500,#c74b43);
+}
+#sigem-pw-dashboard-module .spw-managerial-warning{margin-bottom:12px}
+#sigem-pw-dashboard-module .spw-managerial-workspace{
+  border:1px solid var(--spw-border,#dce4eb);border-radius:14px;
+  background:var(--spw-surface,#fff);overflow:hidden;
+}
+#sigem-pw-dashboard-module .spw-managerial-list-heading{
+  padding:19px 20px 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+}
+#sigem-pw-dashboard-module .spw-managerial-list-heading h3{margin:4px 0;font-size:1.08rem}
+#sigem-pw-dashboard-module .spw-managerial-list-heading p{margin:3px 0;color:var(--spw-muted,#64748b);font-size:.82rem}
+#sigem-pw-dashboard-module .spw-managerial-count{
+  white-space:nowrap;color:var(--spw-muted,#64748b);font-size:.77rem;
+  border:1px solid var(--spw-border,#dce4eb);border-radius:99px;padding:7px 10px;
+}
+#sigem-pw-dashboard-module .spw-managerial-toolbar{
+  display:grid;grid-template-columns:minmax(200px,2fr) repeat(2,minmax(145px,1fr)) auto;
+  align-items:end;gap:10px;padding:10px 20px 16px;
+}
+#sigem-pw-dashboard-module .spw-managerial-toolbar label{
+  min-width:0;display:flex;flex-direction:column;gap:5px;color:var(--spw-text,#17324a);font-size:.74rem;font-weight:650;
+}
+#sigem-pw-dashboard-module .spw-managerial-toolbar input,
+#sigem-pw-dashboard-module .spw-managerial-toolbar select{
+  width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--spw-border,#dce4eb);
+  border-radius:8px;padding:10px;min-height:39px;background:var(--spw-surface,#fff);
+  color:var(--spw-text,#17324a);font:inherit;font-size:.82rem;
+}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap{max-height:510px;overflow:auto}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap table{min-width:1060px;width:100%;font-size:.8rem}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap caption{
+  position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;
+}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap th{
+  position:sticky;top:0;z-index:1;background:var(--spw-surface-soft,#f4f7fa);
+  text-transform:uppercase;letter-spacing:.02em;font-size:.68rem;color:var(--spw-muted,#64748b);
+}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap td{vertical-align:top;white-space:normal}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap tbody tr:hover{background:var(--spw-surface-soft,#f4f7fa)}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap td small{display:block;margin-top:4px;color:var(--spw-muted,#64748b)}
+#sigem-pw-dashboard-module .spw-managerial-code{min-width:200px;max-width:265px;overflow-wrap:anywhere}
+#sigem-pw-dashboard-module .spw-managerial-code button{font-weight:700;text-align:left}
+#sigem-pw-dashboard-module .spw-managerial-title{min-width:180px;max-width:300px}
+#sigem-pw-dashboard-module .spw-managerial-action{min-width:190px;max-width:260px}
+#sigem-pw-dashboard-module .spw-managerial-situation{
+  display:inline-block;padding:5px 9px;border-radius:99px;background:#edf2f7;color:#34455a;
+  font-size:.72rem;font-weight:650;white-space:nowrap;
+}
+#sigem-pw-dashboard-module .spw-managerial-situation[data-situation="Com pendência"]{background:#fdecec;color:#8f3030}
+#sigem-pw-dashboard-module .spw-managerial-situation[data-situation="Em andamento"]{background:#fff3d9;color:#77581b}
+#sigem-pw-dashboard-module .spw-managerial-situation[data-situation="Em conformidade"]{background:#e7f6ef;color:#1c694d}
+#sigem-pw-dashboard-module .spw-managerial-pagination{
+  display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:9px;padding:13px 18px;
+  border-top:1px solid var(--spw-border,#dce4eb);font-size:.78rem;
+}
+#sigem-pw-dashboard-module .spw-managerial-evidence{
+  margin-top:12px;padding:19px 20px;border:1px solid var(--spw-border,#dce4eb);
+  border-left:4px solid var(--spw-accent,#177e65);border-radius:12px;
+  background:var(--spw-surface,#fff);
+}
+#sigem-pw-dashboard-module .spw-managerial-evidence-head{
+  display:flex;justify-content:space-between;align-items:start;gap:12px;
+}
+#sigem-pw-dashboard-module .spw-managerial-evidence h4{margin:5px 0;font-size:1.03rem;overflow-wrap:anywhere}
+#sigem-pw-dashboard-module .spw-managerial-evidence p{font-size:.84rem}
+#sigem-pw-dashboard-module .spw-managerial-evidence dl{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0;
+}
+#sigem-pw-dashboard-module .spw-managerial-evidence dl div{
+  border-radius:8px;background:var(--spw-surface-soft,#f4f7fa);padding:10px 12px;min-width:0;
+}
+#sigem-pw-dashboard-module .spw-managerial-evidence dt{font-size:.69rem;font-weight:700;color:var(--spw-muted,#64748b)}
+#sigem-pw-dashboard-module .spw-managerial-evidence dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:.83rem}
+#sigem-pw-dashboard-module .spw-managerial-conflicts{margin:12px 0;font-weight:650;color:#9b412e}
+#sigem-pw-dashboard-module .spw-advanced-area,
+#sigem-pw-dashboard-module .spw-sources-disclosure,
+#sigem-pw-dashboard-module .spw-legacy-disclosure{
+  margin:14px 0;border:1px solid var(--spw-border,#dce4eb);border-radius:11px;background:var(--spw-surface,#fff);
+}
+#sigem-pw-dashboard-module .spw-advanced-area>summary,
+#sigem-pw-dashboard-module .spw-sources-disclosure>summary,
+#sigem-pw-dashboard-module .spw-legacy-disclosure>summary{
+  cursor:pointer;padding:13px 16px;font-weight:700;font-size:.83rem;color:var(--spw-text,#17324a);
+}
+#sigem-pw-dashboard-module .spw-advanced-area[open]>summary,
+#sigem-pw-dashboard-module .spw-sources-disclosure[open]>summary,
+#sigem-pw-dashboard-module .spw-legacy-disclosure[open]>summary{
+  border-bottom:1px solid var(--spw-border,#dce4eb);
+}
+#sigem-pw-dashboard-module .spw-advanced-area> :not(summary){margin:12px}
+#sigem-pw-dashboard-module .spw-sources-disclosure>.spw-section-panel,
+#sigem-pw-dashboard-module .spw-legacy-disclosure>.spw-list-card{margin:0;border:0;box-shadow:none}
+#sigem-pw-dashboard-module .spw-legacy-disclosure>.spw-section-panel{margin:12px}
+@media(max-width:1020px){
+  #sigem-pw-dashboard-module .spw-managerial-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #sigem-pw-dashboard-module .spw-managerial-toolbar .secondary-button{justify-self:start}
+}
+@media(max-width:600px){
+  #sigem-pw-dashboard-module .spw-managerial-list-heading{flex-direction:column}
+  #sigem-pw-dashboard-module .spw-managerial-toolbar{grid-template-columns:minmax(0,1fr)}
+  #sigem-pw-dashboard-module .spw-managerial-evidence dl{grid-template-columns:minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){
+  #sigem-pw-dashboard-module .spw-managerial-card{transition:none}
+  #sigem-pw-dashboard-module .spw-managerial-card:not(:disabled):hover{transform:none}
+}
+
+#sigem-pw-dashboard-module .spw-legacy-toolbar{display:flex;justify-content:flex-end;padding:12px 16px 0}

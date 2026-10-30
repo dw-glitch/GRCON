@@ -771,7 +771,9 @@ function openSigemDetails(): void {
   state.filterResetKey++;
   state.filters.query = ""; state.filters.revision = ""; state.filters.sigemStatus = ""; state.filters.inPw = "";
   setActiveList("sigem");
-  document.getElementById("spw-list-title")?.scrollIntoView({ block: "start" });
+  const legacy = document.querySelector<HTMLDetailsElement>("details.spw-legacy-disclosure");
+  if (legacy) legacy.open = true;
+  window.requestAnimationFrame(() => document.getElementById("spw-list-title")?.scrollIntoView({ block: "nearest" }));
 }
 function clearFilters(): void {
   state.filters.documentClass = "";
@@ -849,10 +851,30 @@ async function exportCurrentList(): Promise<void> {
     ] },
     ];
     let buffer: ArrayBuffer | undefined;
-    try {
-      await window.GRCONModuleLoader.ensure("performance");
-      if (window.GrconPerformance?.supported) buffer = await window.GrconPerformance.buildSpreadsheet("sigem-dashboard", { sheets });
-    } catch (error) { console.warn("[SIGEM×PW] Exportação em modo compatível", error); }
+    // Pequenas listas não precisam do worker; evitar espera indefinida após
+    // exportações sucessivas e preservar o download síncrono no navegador.
+    // Em bases maiores, limitar a espera pelo worker e usar o XLSX já carregado
+    // como saída compatível em caso de travamento.
+    if (rows.length > 1000) {
+      let timeoutId: number | undefined;
+      try {
+        await window.GRCONModuleLoader.ensure("performance");
+        if (window.GrconPerformance?.supported) {
+          const timeoutMs = Math.min(30000, 12000 + Math.ceil(rows.length / 5000) * 3000);
+          const timeout = new Promise<ArrayBuffer>((_, reject) => {
+            timeoutId = window.setTimeout(() => reject(new Error("Tempo excedido na exportação em worker.")), timeoutMs);
+          });
+          buffer = await Promise.race([
+            window.GrconPerformance.buildSpreadsheet("sigem-dashboard", { sheets }),
+            timeout,
+          ]);
+        }
+      } catch (error) {
+        console.warn("[SIGEM×PW] Exportação em modo compatível", error);
+      } finally {
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      }
+    }
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const filename = `GRCON_SIGEM_PW_${exportMeta.scope}_${exportMeta.list}_${stamp}.xlsx`;
     if (buffer) {
@@ -1075,8 +1097,12 @@ function installExternalListeners(): () => void {
     if (detail?.source !== "sigem-pw-dashboard" && detail?.source !== "sigem-pw-dashboard-ld") void refresh("base PW atualizada em outro módulo");
   };
   const dates = () => { if (!state.busy) void refresh("metadados compartilhados atualizados"); };
+  // O Proprietário ADM só pode gerenciar versões depois da confirmação assíncrona da permissão.
+  // Re-renderizar os controles quando a capacidade mudar, sem alterar dados ou papéis.
+  const permissions = () => emit();
   const context = () => { restoredSessionScope=""; state.filters={documentClass:"",query:"",revision:"",sigemStatus:"",inPw:""}; state.revisionScope="all"; state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.pwVersions = []; state.pwSharedError = ""; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
   window.addEventListener("grcon:contract-context-changed", context);
+  window.addEventListener("grcon:permissions-changed", permissions);
   window.addEventListener("grcon:shared-sigem-date-updated", dates);
   window.addEventListener("grcon:shared-sigem-metadata-invalidated", dates);
   window.addEventListener("grcon:shared-sigem-updated", conference);
@@ -1085,6 +1111,7 @@ function installExternalListeners(): () => void {
   return () => {
     window.removeEventListener("grcon:sigem-pw-revision-scope-changed", scope);
     window.removeEventListener("grcon:contract-context-changed", context);
+    window.removeEventListener("grcon:permissions-changed", permissions);
     window.removeEventListener("grcon:shared-sigem-date-updated", dates);
     window.removeEventListener("grcon:shared-sigem-metadata-invalidated", dates);
     window.removeEventListener("grcon:shared-sigem-updated", conference);
@@ -1096,12 +1123,15 @@ function installExternalListeners(): () => void {
 
 async function exportCoordinatorWorkbook(): Promise<void> {
   if (state.busy) return;
-  setBusy(true, "Gerando Excel do controle documental…");
+  setBusy(true, "Gerando relatório gerencial do GRCON…");
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos indisponível.");
-    await window.GRCONModuleLoader.ensure("xlsx");
-    downloadCoordinatorWorkbook(state, xlsx());
-    notify("Relatório de controle documental exportado.", "success");
+    await window.GRCONModuleLoader.ensure("excel");
+    const runtime = window as unknown as Record<string, import("./sigemPwCoordinatorWorkbook").CoordinatorExcelApi>;
+    const excel = runtime[["Excel", "JS"].join("")];
+    if (!excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
+    await downloadCoordinatorWorkbook(state, excel);
+    notify("Relatório GRCON exportado: Resumo, N-1710 e relação PW completa.", "success");
   } catch (error) {
     console.error("[SIGEM×PW] Exportação do coordenador:", error);
     notify(messageOf(error, "Não foi possível exportar o relatório gerencial."), "error");
