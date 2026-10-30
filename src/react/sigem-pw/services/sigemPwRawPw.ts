@@ -35,7 +35,7 @@ export function getPwOriginalMatrix(base: SigemPwBase): PwOriginalMatrix {
     return record.pwRawCells.map(text);
   });
   const declaredWidth = Number(base.meta?.pwRawColumnCount) || headers.length;
-  const width = Math.max(headers.length, declaredWidth, ...rows.map(row => row.length));
+  const width = rows.reduce((max, row) => Math.max(max, row.length), Math.max(headers.length, declaredWidth));
   return {
     headers: [...headers.map(text), ...Array(Math.max(0, width - headers.length)).fill("")],
     rows: rows.map(row => [...row, ...Array(Math.max(0, width - row.length)).fill("")]),
