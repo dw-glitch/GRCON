@@ -52,7 +52,7 @@ for(const [options,expected] of [
 }
 const unexpectedActions=compareBooks(workbook({invalidAction:true}),workbook());
 assert.equal(unexpectedActions.readyForWorkbookReview,false);
-assert.ok(unexpectedActions.blockers.some(b=>/12 providências/.test(b)));
+assert.ok(unexpectedActions.blockers.some(b=>/textos de AÇÃO/.test(b)));
 const sum=inspectWorkbook(workbook(),"GRCON");
 assert.equal(sum.recordCount,12);
 assert.ok(!JSON.stringify(report).includes("DOC SINTETICO"),"auditoria só pode publicar resumos, nunca linhas documentais");
