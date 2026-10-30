@@ -45,6 +45,7 @@
   if(/\b(baix|pacote|export)/.test(t))return 'package';
   if(/\b(paus|parar|interromp)/.test(t))return 'pause';
   if(/\b(retom|continu)/.test(t))return 'resume';
+  if(/\b(expliq|por\s*que|qual\b|quais\b|justifi|duvida|o\s+que\b|como\b)/.test(t)||/\?/.test(t))return 'help';
   if(allocationReference(text))return 'audit';
   if(/\b(audit|analis|confer|confir|verifi|corrij|corrig)/.test(t))return 'audit';
   if(/\b(penden|exce|detalh)/.test(t))return 'details';

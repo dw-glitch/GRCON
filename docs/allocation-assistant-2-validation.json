@@ -21,6 +21,7 @@
     "realMascotRuntime": true,
     "multiAllocation": true,
     "correctedOfficialCopies": 2,
+    "allocationQualifiedQuestion": true,
     "trainingWithoutJson": true,
     "documents": 2,
     "reportSheets": [
@@ -28,8 +29,9 @@
       "DETALHAMENTO"
     ],
     "closeReopen": true,
-    "checkpointCount": 400,
+    "checkpointCount": 600,
     "checkpointResume": true,
+    "incompleteIssuanceBlocked": true,
     "restoreOutsideHistoryPage": true,
     "contextReset": true,
     "reducedMotion": true,
@@ -71,5 +73,11 @@
     "targetContract": "UHDT-D",
     "featureSetting": "enabledModules.allocationAuditAssistant",
     "rollback": "Disable the contract feature; preserve audit and rule history"
+  },
+  "reviewRegressions": {
+    "incompleteIssuanceBlockedBeforeGenerator": true,
+    "allBatchesCheckedBeforeIssuance": true,
+    "allocationQualifiedQuestionsPreserveReviewDecisions": true,
+    "publicationBrowserUsesExplicitRefreshButton": true
   }
 }

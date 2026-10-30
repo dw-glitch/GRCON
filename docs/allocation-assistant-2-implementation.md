@@ -18,7 +18,7 @@ As cópias de LD são preparadas antes das cópias de alocação. O escritor de 
 
 O modelo oficial continua com 16 colunas. Seu escritor altera somente Workflow, Data Book e N1–N6 aprovados; as outras células são conferidas. As partes OOXML não autorizadas são comparadas, os XLSX são reabertos e os ZIPs têm CRC validado. Campos sem escritor aplicável permanecem como exceções, sem indicação falsa de correção.
 
-**Baixar pacote completo** reúne o relatório com exatamente `RESUMO` e `DETALHAMENTO`, as cópias efetivamente produzidas e o manifesto com hashes e exceções. Dentro de **Nova alocação e linhas da Central**, a ação de geração usa a numeração oficial do Gerador e produz as linhas correspondentes. Não altera a Central compartilhada. Origens distintas são emitidas separadamente; duplicidades ambíguas no mesmo lote bloqueiam a nova emissão. Correções na origem sem uma cópia validada também bloqueiam essa emissão.
+**Baixar pacote completo** reúne o relatório com exatamente `RESUMO` e `DETALHAMENTO`, as cópias efetivamente produzidas e o manifesto com hashes e exceções. Dentro de **Nova alocação e linhas da Central**, a ação de geração usa a numeração oficial do Gerador e produz as linhas correspondentes. Não altera a Central compartilhada. Origens distintas são emitidas separadamente; todos os lotes são conferidos antes da emissão. Auditoria incompleta, fontes ausentes ou duplicidades ambíguas bloqueiam a nova numeração. Correções na origem sem uma cópia validada também bloqueiam essa emissão.
 
 ## Sessões e treinamento
 

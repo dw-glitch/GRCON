@@ -15,6 +15,9 @@ const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes
  assert.equal(A.allocationReference('Confira a alocação 375'),'375');
  assert.equal(A.allocationReference('Auditar C1O-ALOC-CM-0375-2026'),'C1O-ALOC-CM-0375-2026');
  assert.equal(A.allocationReference('Confira os arquivos'),'');
+ assert.equal(A.intent('Explique DOC-121 rev 0 C1O-ALOC-CM-0375-2026'),'help');
+ assert.equal(A.intent('Por que DOC-121 está pendente na alocação 375?'),'help');
+ assert.equal(A.intent('Confira a alocação 375'),'audit');
  assert.equal(A.allocationReference('375'),'375');assert.equal(A.intent('375'),'audit');
  const questions=[{document:'DOC-121',revision:'0',allocation:'C1O-ALOC-CM-0375-2026',findings:[{}]},{document:'DOC-122',revision:'0',findings:[{}]},{document:'DOC-1210',revision:'A',findings:[{}]}];
  assert.equal(A.questionRows(questions,'Explique DOC-1210.')[0].r.document,'DOC-1210');

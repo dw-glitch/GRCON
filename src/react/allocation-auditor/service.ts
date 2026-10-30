@@ -56,6 +56,7 @@ export const service={
   emit({context:{...state.context,sources,ldHashes:Object.fromEntries(sources.filter((x:Data)=>x.kind==='ld').map((x:Data)=>[x.name,x.sha256]))}});
  },
  async assistantPackage(sessionId:string,generateOfficial=false){return task(async()=>{
+  if(!state.rows.length||state.progress!==state.total||state.rows.length!==state.total||state.records.length!==state.total)throw Error('Conclua a auditoria antes de preparar o pacote ou emitir nova alocação.');
   const t=epoch,files:Data[]=[],exceptions:string[]=[];const approved=g.GrconAllocationAuditorCore.approvedChanges(state.events);
   for(const source of [...(state.context.sources||[])].sort((a,b)=>Number(b.kind==='ld')-Number(a.kind==='ld'))){
    const file=sourceFiles.get(source.sha256);if(!file){exceptions.push(source.name+': reanexe a origem para produzir a cópia.');continue;}
@@ -71,10 +72,12 @@ export const service={
   if(generateOfficial){
    if(!state.runId)throw Error('Salve a auditoria antes de gerar uma nova alocação.');
    if(approved.some((e:Data)=>['title','tag','eap','discipline'].includes(e.field)&&!files.some(f=>f.changes?.some((x:Data)=>x.lineage===e.lineage&&x.field===e.field&&x.after===e.after))))throw Error('Há correções na origem sem cópia de LD validada. Reanexe a LD e resolva as exceções antes de emitir nova alocação.');
-   const ui=await generator();const groups=new Map<string,Data[]>();
+   if(exceptions.length)throw Error('Reanexe as fontes e resolva as exceções antes de emitir nova alocação.');
+   const groups=new Map<string,Data[]>();
    for(const row of state.rows){const key=JSON.stringify([row.sourceHash||row.sourceFile||'Gerador',row.allocation||'']);groups.set(key,[...(groups.get(key)||[]),row]);}
+   for(const rows of groups.values())if(new Set(rows.map(r=>JSON.stringify([r.document,r.revision]))).size!==rows.length)throw Error('Há ocorrências repetidas no mesmo lote. Resolva essa exceção antes de gerar nova numeração.');
+   const ui=await generator();
    for(const rows of groups.values()){
-    if(new Set(rows.map(r=>JSON.stringify([r.document,r.revision]))).size!==rows.length)throw Error('Há ocorrências repetidas no mesmo lote. Resolva essa exceção antes de gerar nova numeração.');
     const generated=await ui.generateAudited(rows,state.events,state.context.versions);current(t);
     for(const output of generated.filter((f:Data)=>['allocation','control'].includes(f.kind))){
      const safeName=output.name.replace(/[^a-zA-Z0-9_.-]/g,'_');const binary=atob(output.base64);const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
