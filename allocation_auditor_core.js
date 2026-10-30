@@ -1,9 +1,9 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.1.0';
+ const VERSION='1.2.0';
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
- const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet]);
+ const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet,text(r.sourceFile),text(r.sourceSheet),text(r.sourceRow),text(r.allocation),text(r.sourceHash)]);
  const ET='ET-5290.00-22000-912-1LV-001';
  const STATES=['Aberto','Correção proposta','Corrigido na origem','Reapresentado','Aguardando avaliação','Resolvido com evidência','Aceito com ressalvas','Exceção justificada','Não comprovado'];
  const TAXONOMY=[
@@ -102,9 +102,9 @@
   if(input.contract&&input.contract!==context.contract)throw Error('Documento de outro contrato.');
   const r={...input,contract:context.contract},f=[],p=parts(r.document),add=(...a)=>f.push(finding(...a)),enforced=applicable(context);
   if(r.rawDocument&&r.rawDocument!==r.document)add('SOURCE-CODE-WHITESPACE','code','document','O código de origem contém espaços externos. Confira a fonte; o valor original foi preservado.',[{original:r.rawDocument,matchingKey:r.document}]);
-  const originals=index.ld.get(r.document)||[],compatible=originals.filter(x=>!r.revision||!x.revision||String(x.revision)===r.revision);
+  const originals=index.ld.get(r.document)||[],compatible=originals.filter(x=>!r.revision||!x.revision||String(x.revision)===r.revision).filter(x=>sameLd(r,{ld:x.source||x.sourceFile,ldSheet:x.sheet||x.sourceSheet}));
   const source=compatible.length===1?compatible[0]:null,recommendations=[];
-  if(source){for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k])&&!(r.officialAllocation&&k==='workflow'))r[k]=text(source[k]);r.ld=r.ld||text(source.source);r.ldSheet=r.ldSheet||text(source.sheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
+  if(source){for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k])&&!(r.officialAllocation&&k==='workflow'))r[k]=text(source[k]);r.ld=r.ld||text(source.source);r.ldSheet=r.ldSheet||text(source.sheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={revision:text(source.revision),file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
   if(source&&r.officialAllocation){
    const reference={origin:'LD exata',file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,version:source.ldVersion||''};
    if(text(source.workflow)&&text(source.workflow)!==text(r.workflow))recommendations.push({field:'workflow',before:text(r.workflow),after:text(source.workflow),justification:'Diferença de Workflow frente à linha exata da LD. Verifique a versão e a disciplina antes de aprovar.',evidence:[JSON.stringify(reference)],confidence:'fonte documental exata',humanReview:true});

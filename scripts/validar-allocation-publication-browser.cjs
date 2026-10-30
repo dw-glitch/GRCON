@@ -122,7 +122,7 @@ const server=http.createServer(async(req,res)=>{try{
   // templates before preview/publication and retains the original source path.
   storage.push({id:'config-routing',kind:'config',file_name:'Unidades do contrato',revision:'U32 / U39S',status:'active',record_count:1,version:10,rows:[{prefix:'C1O-ALOC-CM',unit:'UHDT-D',units:['UHDTD GERAL','UHDTD U-32','UHDTD U-39S'],unitRouting:'document-U32-U39S'}]});
   await page.getByRole('button',{name:'Atualizar',exact:true}).click();
-  await page.locator('.ag-heading button:not(:disabled)').waitFor();
+  await page.getByRole('button',{name:'Atualizar',exact:true}).and(page.locator('button:not(:disabled)')).waitFor();
   const routing=XLSX.utils.book_new();XLSX.utils.book_append_sheet(routing,XLSX.utils.aoa_to_sheet([['Descrição','Caminho Databook'],['RIR TUBULAÇÃO','UHDTD U-XX|DATA BOOK C&M|TUBULACAO|RIR TUB E STH'],['RIR TUBULAÇÃO','UHDTD SE-XX00|DATA BOOK C&M|TUBULACAO|RIR TUB E STH'],['PASTA EXCLUSIVA','UHDTD SE-XX00|DATA BOOK C&M|TUBULACAO|PASTA EXCLUSIVA']]),'Caminhos');
   await page.locator('.ag-toolbar input[type=file]').setInputFiles({name:'mapa-unidades.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(XLSX.write(routing,{bookType:'xlsx',type:'buffer'}))});
   await page.getByText('3 caminhos lidos',{exact:false}).waitFor();assert.ok(await page.getByText('0 inconsistências').isVisible());

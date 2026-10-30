@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "5.2.1";
+  const VERSION = "5.2.2";
   const ENGINE = "official-hybrid-media-v5";
   const ASSET_REVISION = "20260926.1";
   const OVERLAY_ID = "grcon-context-mascot";
@@ -253,6 +253,19 @@
     video.addEventListener("error", handleMediaError);
     video.addEventListener("ended", handleEnded);
     return overlay;
+  }
+
+  let presentationHost = null;
+  function presentIn(host) {
+    ensureDom();
+    root.GrconMascotRunner?.stop?.("presentation-host");
+    presentationHost = host?.isConnected ? host : null;
+    const destination = presentationHost || ensureHeaderSlot();
+    destination.appendChild(overlay);
+    destination.appendChild(bubble);
+    hideBubble();
+    applyState("idle", { force: true, source: "presentation-host" });
+    return Boolean(presentationHost);
   }
 
   function activeContext() {
@@ -509,7 +522,7 @@
 
   function applyState(nextInput, options) {
     const config = options || {};
-    const next = normalizeState(nextInput);
+    const next = presentationHost?.isConnected && normalizeState(nextInput) === "running" ? "analyzing" : normalizeState(nextInput);
     ensureDom();
     if (!config.force && Date.now() < warningUntil && PRIORITY[next] < PRIORITY.warning) return currentState;
     if (!config.force && PRIORITY[next] < PRIORITY[currentState] && currentState === "warning") return currentState;
@@ -1023,6 +1036,7 @@
     isEnabled: animationsEnabled,
     refresh: refreshContext,
     diagnostics,
+    presentIn,
   });
 
   root.GrconMascot = api;

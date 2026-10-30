@@ -32,6 +32,7 @@ export interface GrconMascotApi {
   setEnabled(enabled: boolean): boolean;
   isEnabled(): boolean;
   refresh(pose?: string): unknown;
+  presentIn?(host: Element | null): boolean;
   diagnostics(): Record<string, unknown>;
 }
 

@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-29",
+  "scope": "Operational assistant; independent normative homologation is not claimed",
+  "base": "787f9521dfe538a5ddc8124de0d2c6036625fa9e",
+  "cloudflarePackage": {
+    "files": 338,
+    "validated": true
+  },
+  "database": {
+    "localChecks": 27,
+    "remoteApplied": true,
+    "remoteSmoke": "passed; all QA writes rolled back",
+    "rls": true,
+    "directAuthenticatedTableRead": false,
+    "anonymousRpcExecute": false,
+    "realBrowserAuthenticatedSession": false
+  },
+  "browser": {
+    "browser": "153.0.8010.0",
+    "realWorkers": true,
+    "realMascotRuntime": true,
+    "multiAllocation": true,
+    "correctedOfficialCopies": 2,
+    "allocationQualifiedQuestion": true,
+    "trainingWithoutJson": true,
+    "documents": 2,
+    "reportSheets": [
+      "RESUMO",
+      "DETALHAMENTO"
+    ],
+    "closeReopen": true,
+    "checkpointCount": 600,
+    "checkpointResume": true,
+    "incompleteIssuanceBlocked": true,
+    "restoreOutsideHistoryPage": true,
+    "contextReset": true,
+    "reducedMotion": true,
+    "widths": [
+      1280,
+      1440
+    ],
+    "pageErrors": []
+  },
+  "realSources": {
+    "allocationFiles": 2,
+    "documents": 48,
+    "ldFiles": 5,
+    "ldRecords": 28806,
+    "fiscalHistory": 15441,
+    "exactOrigins": 48,
+    "exactRevisions": 48,
+    "reportSheets": [
+      "RESUMO",
+      "DETALHAMENTO"
+    ],
+    "automaticCorrections": 0,
+    "normativeApproval": false,
+    "corporateBytesUploaded": false
+  },
+  "sourceCorrections": {
+    "exactSha": true,
+    "exactDocumentAndRevision": true,
+    "previousValueChecked": true,
+    "formulasAndMergedCellsRejected": true,
+    "fiscalCommentsPreserved": true,
+    "unmodifiedOoxmlPartsVerified": true,
+    "crcAndXlsxReopened": true
+  },
+  "corporateRulesActivated": false,
+  "normativeApproval": false,
+  "release": {
+    "pr": 343,
+    "targetContract": "UHDT-D",
+    "featureSetting": "enabledModules.allocationAuditAssistant",
+    "rollback": "Disable the contract feature; preserve audit and rule history"
+  },
+  "reviewRegressions": {
+    "incompleteIssuanceBlockedBeforeGenerator": true,
+    "allBatchesCheckedBeforeIssuance": true,
+    "allocationQualifiedQuestionsPreserveReviewDecisions": true,
+    "publicationBrowserUsesExplicitRefreshButton": true
+  }
+}

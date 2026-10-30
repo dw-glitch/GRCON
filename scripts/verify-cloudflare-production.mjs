@@ -54,6 +54,7 @@ verifiedAssets.push('background_jobs_app.js','background-jobs.css','client_diagn
 verifiedAssets.push('docx-pdf.css','docx_pdf_layout.js','docx_pdf_core.js','docx_pdf_app.js','assets/vendor/pdfjs/pdf.min.mjs','assets/vendor/pdfjs/pdf.worker.min.mjs');
 verifiedAssets.push('shared_pw_query_app.js','allocation_generator_core.js','allocation_ld_export.js','allocation-generator.css','workers/allocation.worker.js','react-dist/allocation-app.js','vendor/recon/allocation_core.js','vendor/recon/allocation_workbook.js');
 verifiedAssets.push('document_explanations.js','posting_conference_bootstrap.js');
+verifiedAssets.push('allocation_auditor_assistant.js','allocation_auditor_package.js');
 verifiedAssets.push('allocation_auditor_core.js','allocation_auditor_revision.js','allocation-auditor.css','workers/allocation-auditor.worker.js','react-dist/allocation-auditor-app.js');
 verifiedAssets.push('sigem_pw_scope_fix.js','sigem_pw_revision_core.js','sigem_pw_readiness_core.js','sigem_pw_evolution_core.js','sigem_pw_history_core.js','sigem-pw-dashboard.css');
 verifiedAssets.push('egrdt_teams_trace_app.js','egrdt_teams_trace_core.js','history_report.js','grcon_reposting_report.js');

@@ -123,5 +123,52 @@
   }
   return new Uint8Array(await book.xlsx.writeBuffer());
  }
- return {MODEL_HEADERS,DEFAULT_HEADERS,layoutIndex,layoutFor,details,modelRow,field,ldRow,groupRows,build};
+
+ // Corrections in the exact source, using the preserved OOXML cell patcher.
+ async function reviseAudit(file,rows,sourceHash,XLSX,JSZip,Writer,Preservation){
+  if(!/^[a-f0-9]{64}$/.test(sourceHash||''))throw Error('SHA-256 da LD original obrigatório. Reanexe a fonte.');
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(v=>v.toString(16).padStart(2,'0')).join('');
+  if(digest!==sourceHash)throw Error('A LD foi alterada desde a importação. Correção bloqueada.');
+  const zip=await JSZip.loadAsync(bytes,{checkCRC32:true}),originalZip=await JSZip.loadAsync(bytes,{checkCRC32:true});
+  const book=XLSX.read(bytes,{type:'array',cellFormula:true,cellDates:false});
+  const workbook=await zip.file('xl/workbook.xml')?.async('string'),rels=await zip.file('xl/_rels/workbook.xml.rels')?.async('string');
+  if(!workbook||!rels)throw Error('Estrutura da LD indisponível.');
+  const decode=v=>v.replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+  const attrs=tag=>Object.fromEntries([...tag.matchAll(/([\w:]+)="([^"]*)"/g)].map(m=>[m[1],decode(m[2])]));
+  const relations=new Map([...rels.matchAll(/<Relationship\b[^>]*\/?\s*>/g)].map(m=>{const a=attrs(m[0]);return [a.Id,a.Target];}));
+  const paths=new Map([...workbook.matchAll(/<sheet\b[^>]*\/?\s*>/g)].map(m=>{const a=attrs(m[0]),target=relations.get(a['r:id'])||'';return [a.name,target.startsWith('/')?target.slice(1):'xl/'+target.replace(/^\.\//,'')];}));
+  const patch=new Map(),changes=[],unchanged=[],seen=new Map();
+  for(const row of rows){
+   if(!['title','workflow','databook','tag','eap','discipline','N1','N2','N3','N4','N5','N6'].includes(row.field)||row.decision!=='approved'||!row.revision||!row.document||!Number.isInteger(row.row)||row.row<2||!String(row.proposed||'').trim())throw Error('Correção de origem incompleta.');
+   const sheet=book.Sheets[row.sheet];if(!sheet)throw Error('Aba exata da LD não encontrada.');
+   const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:true});
+   const targetKind=/^N[1-6]$/.test(row.field)?'level:'+row.field.slice(1):row.field;
+   const headers=matrix.slice(0,Math.min(35,row.row-1)).map((values,i)=>({values,i})).filter(h=>h.values.some(v=>field(v)==='document')&&h.values.some(v=>field(v)==='revision'));
+   if(headers.length!==1)throw Error('Cabeçalho de documento e revisão não identificado de forma única.');
+   const header=headers[0].values;
+   const column=kind=>{const matches=header.flatMap((v,i)=>field(v)===kind?[i]:[]);if(matches.length!==1)throw Error('Coluna '+kind+' ausente ou ambígua na LD.');return matches[0];};
+   const values=matrix[row.row-1]||[];
+   if(String(values[column('document')]||'').trim()!==row.document||String(values[column('revision')]??'').trim()!==row.revision)throw Error('Código ou revisão diferente na linha de origem da LD.');
+   const actualKind=targetKind==='workflow'&&!header.some(v=>field(v)==='workflow')?'discipline':targetKind;
+   const cell=XLSX.utils.encode_cell({r:row.row-1,c:column(actualKind)}),target=sheet[cell],before=String(target?.v??'');
+   if(target?.f)throw Error('A célula '+cell+' contém fórmula.');
+   const address=XLSX.utils.decode_cell(cell);
+   if((sheet['!merges']||[]).some(m=>address.r>=m.s.r&&address.r<=m.e.r&&address.c>=m.s.c&&address.c<=m.e.c))throw Error('A célula '+cell+' é mesclada.');
+   if(before===row.proposed){unchanged.push({lineage:row.lineage,field:row.field,reason:'LD já contém o valor aprovado'});continue;}
+   if(before!==String(row.current??''))throw Error('O valor da LD difere do valor auditado em '+cell+'.');
+   const part=paths.get(row.sheet);if(!/^xl\/worksheets\/[^/]+\.xml$/.test(part||'')||!zip.file(part))throw Error('Parte OOXML da origem indisponível.');
+   const key=part+'|'+cell;
+   if(seen.has(key)&&seen.get(key)!==row.proposed)throw Error('Correções conflitantes para a mesma célula da LD.');
+   if(!seen.has(key)){const xml=patch.has(part)?patch.get(part):await zip.file(part).async('string');patch.set(part,Writer.patchCellXml(xml,cell,row.row,row.proposed));seen.set(key,row.proposed);}
+   changes.push({cell,sheet:row.sheet,lineage:row.lineage,document:row.document,revision:row.revision,field:row.field,before,after:row.proposed});
+  }
+  for(const [part,xml] of patch)zip.file(part,xml);
+  const output=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'}),final=await JSZip.loadAsync(output,{checkCRC32:true});
+  const preservation=await Preservation.verify(originalZip,final,patch);
+  const reopened=XLSX.read(output,{type:'array',cellFormula:true});
+  for(const change of changes)if(String(reopened.Sheets[change.sheet]?.[change.cell]?.v??'')!==change.after)throw Error('A cópia da LD não confirmou a correção.');
+  return {buffer:output,count:seen.size,changes,unchanged,preservation,fileName:file.name.replace(/\.xlsx$/i,'')+'_CORRIGIDA.xlsx'};
+ }
+ return {MODEL_HEADERS,DEFAULT_HEADERS,layoutIndex,layoutFor,details,modelRow,field,ldRow,groupRows,build,reviseAudit};
 });

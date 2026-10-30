@@ -62,7 +62,7 @@
   const replacements=[],seen=new Set();
   for(const event of approved){
    const row=reviewedByLineage.get(event.lineage);
-   if(!row||!event.humanReview||!Array.isArray(event.evidence)||!event.evidence.some(x=>text(x).trim())||!event.actor||!event.justification)throw Error('A correção não tem aprovação humana e evidência comprovada.');
+   if(!row||(!event.humanReview&&!(event.serverAuthorized===true&&event.ruleId&&event.ruleVersion))||!Array.isArray(event.evidence)||!event.evidence.some(x=>text(x).trim())||!event.actor||!event.justification)throw Error('A correção não tem aprovação humana e evidência comprovada.');
    const original=originalByRow.get(row.sourceRow);
    if(!original||original.document!==row.document||original.sourceRow!==row.sourceRow||original.allocation!==row.allocation && original.allocation)throw Error('Código ou linha diferente da origem auditada.');
    const column=a1col(event.field),cell=column+row.sourceRow;
@@ -71,13 +71,18 @@
    if(book.Sheets.GERAL[cell]?.f)throw Error('A célula '+cell+' contém fórmula. Ajuste na origem.');
    if(!after.trim()||after.length>2000||after===before)throw Error('A correção aprovada em '+cell+' está vazia ou não altera o original.');
    if(seen.has(cell))throw Error('Mais de uma correção para '+cell);seen.add(cell);
-   replacements.push({cell,after,document:row.document,field:event.field,before});
+   replacements.push({cell,after,document:row.document,lineage:row.lineage,field:event.field,before});
   }
   const zip=await JSZip.loadAsync(bytes,{checkCRC32:true}),path=await findSheetPart(zip,'GERAL');
   let xml=await zip.file(path).async('string');
   for(const change of replacements)xml=replaceCell(xml,change.cell,change.after);
   zip.file(path,xml);
   const output=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
+  const verifiedZip=await JSZip.loadAsync(output,{checkCRC32:true});
+  for(const part of Object.keys(zip.files).filter(name=>!zip.files[name].dir&&name!==path)){
+   const [before,after]=await Promise.all([zip.file(part).async('uint8array'),verifiedZip.file(part)?.async('uint8array')]);
+   if(!after||before.length!==after.length||before.some((v,i)=>v!==after[i]))throw Error('Parte OOXML não autorizada modificada: '+part);
+  }
   const verify=XLSX.read(output,{type:'array',cellFormula:true,cellDates:true,bookVBA:false});
   for(const change of replacements)if(text(verify.Sheets.GERAL[change.cell]?.v)!==change.after)throw Error('Falha na verificação da célula '+change.cell);
   const originalSheet=book.Sheets.GERAL,finalSheet=verify.Sheets.GERAL;
@@ -87,7 +92,7 @@
    const a=originalSheet[key],b=finalSheet[key];
    if(text(a?.v)!==text(b?.v)||text(a?.f)!==text(b?.f)||text(a?.t)!==text(b?.t))throw Error('Célula não autorizada modificada: '+key);
   }
-  return {bytes:output,changed:replacements.length,changes:replacements.map(({cell,document,field,before,after})=>({cell,document,field,before,after})),originalHash:hash};
+  return {bytes:output,changed:replacements.length,changes:replacements.map(({cell,document,lineage,field,before,after})=>({cell,document,lineage,field,before,after})),originalHash:hash};
  }
  root.GrconAllocationRevision=Object.freeze({revise});
 })(typeof globalThis!=='undefined'?globalThis:this);

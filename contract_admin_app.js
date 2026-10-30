@@ -30,7 +30,7 @@
     host.insertBefore(button, $("#grcon-cloud-account"));
     document.body.insertAdjacentHTML("beforeend", `<dialog id="grcon-admin-dialog" aria-labelledby="grcon-admin-title">
       <header><div><small>ÁREA EXCLUSIVA</small><h2 id="grcon-admin-title">Administração</h2><p>Controle de usuários, contratos e operações do GRCON.</p></div><button id="grcon-admin-close" type="button" aria-label="Voltar ao GRCON">Voltar ao GRCON</button></header>
-      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="storage">Infraestrutura e armazenamento</button><button type="button" data-admin-section="activity">Registro de atividades</button><small>Exclusivo do Proprietário ADM</small></nav><div class="grcon-admin-main">
+      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="storage">Infraestrutura e armazenamento</button><button type="button" data-admin-section="activity">Registro de atividades</button><button type="button" data-admin-section="intelligence">Inteligência do Robô</button><small>Exclusivo do Proprietário ADM</small></nav><div class="grcon-admin-main">
       <div class="grcon-admin-toolbar"><label>Contrato administrado<select id="grcon-admin-contract"></select></label></div>
       <p id="grcon-admin-feedback" role="status" aria-live="polite"></p>
       <section data-admin-panel="users" aria-labelledby="grcon-admin-users-title"><h3 id="grcon-admin-users-title" tabindex="-1">Usuários e acessos</h3><div class="grcon-admin-toolbar"><label>Buscar colaborador<input id="grcon-admin-search" type="search" placeholder="Nome ou e-mail"></label><button id="admin-user-new" type="button">Novo usuário</button></div>
@@ -38,9 +38,9 @@
       <section id="grcon-admin-editor" hidden><h3 id="grcon-admin-editor-title">Novo usuário</h3><form id="grcon-admin-user-form"><input id="admin-user-id" type="hidden"><div class="grcon-admin-grid"><label>Nome<input id="admin-user-name" required maxlength="160"></label><label>E-mail<input id="admin-user-email" type="email" required></label><label>Função<select id="admin-user-role"><option value="operator">Operador</option><option value="admin">Administrador</option><option value="owner">Proprietário</option></select></label><label><input id="admin-user-active" type="checkbox" checked> Acesso ativo</label></div><div class="egrdt-email-actions"><button type="submit">Salvar usuário</button><button id="admin-user-cancel" type="button">Cancelar</button></div><p id="admin-user-password" hidden></p></form></section>
       <details id="grcon-cloud-invitations-panel"><summary>Convites pendentes</summary><div id="grcon-cloud-invitations"></div></details>
       </section><section data-admin-panel="activity" hidden aria-labelledby="grcon-admin-activity-title"><h3 id="grcon-admin-activity-title" tabindex="-1">Registro de atividades</h3><details id="grcon-cloud-audit-panel" open><summary>Registro de atividades</summary><div id="grcon-cloud-audit"></div></details>
-      </section><section data-admin-panel="contracts" hidden aria-labelledby="grcon-admin-contracts-title"><h3 id="grcon-admin-contracts-title" tabindex="-1">Contratos e configurações</h3><div id="grcon-admin-contract-settings"><form id="grcon-admin-contract-form"><input id="admin-contract-id" type="hidden"><div class="grcon-admin-grid"><label>Código<input id="admin-contract-code" required maxlength="60"></label><label>Nome<input id="admin-contract-name" required maxlength="160"></label><label>Identificação<input id="admin-contract-display" required maxlength="255"></label><label>Empresa<input id="admin-contract-company" maxlength="100"></label><label>Cliente<input id="admin-contract-client" maxlength="100"></label><label>Local<input id="admin-contract-site" maxlength="100"></label><label>Projeto<input id="admin-contract-project" maxlength="100"></label><label>Perfil de regras<input id="admin-contract-profile" maxlength="100"></label><label><input id="admin-contract-active" type="checkbox"> Contrato ativo</label><label><input id="admin-contract-inherit" type="checkbox"> Usar regras documentais da UHDT</label></div><div class="egrdt-email-actions"><button type="submit">Salvar contrato</button><button id="admin-contract-new" type="button">Novo contrato</button></div><small>Desativar preserva os dados e o histórico. Novos contratos começam com suas próprias configurações.</small></form></div></section>
+      </section><section data-admin-panel="contracts" hidden aria-labelledby="grcon-admin-contracts-title"><h3 id="grcon-admin-contracts-title" tabindex="-1">Contratos e configurações</h3><div id="grcon-admin-contract-settings"><form id="grcon-admin-contract-form"><input id="admin-contract-id" type="hidden"><div class="grcon-admin-grid"><label>Código<input id="admin-contract-code" required maxlength="60"></label><label>Nome<input id="admin-contract-name" required maxlength="160"></label><label>Identificação<input id="admin-contract-display" required maxlength="255"></label><label>Empresa<input id="admin-contract-company" maxlength="100"></label><label>Cliente<input id="admin-contract-client" maxlength="100"></label><label>Local<input id="admin-contract-site" maxlength="100"></label><label>Projeto<input id="admin-contract-project" maxlength="100"></label><label>Perfil de regras<input id="admin-contract-profile" maxlength="100"></label><label><input id="admin-contract-active" type="checkbox"> Contrato ativo</label><label><input id="admin-contract-inherit" type="checkbox"> Usar regras documentais da UHDT</label><label><input id="admin-contract-allocation-assistant" type="checkbox"> Assistente de Auditoria no Gerador</label></div><div class="egrdt-email-actions"><button type="submit">Salvar contrato</button><button id="admin-contract-new" type="button">Novo contrato</button></div><small>Desativar preserva os dados e o histórico. Novos contratos começam com suas próprias configurações.</small></form></div></section>
       <section data-admin-panel="technical" hidden aria-labelledby="grcon-admin-technical-title"><h3 id="grcon-admin-technical-title" tabindex="-1">Painel técnico</h3><p>Saúde dos serviços, integrações, falhas e tarefas de todos os contratos.</p><div id="grcon-admin-technical"></div></section>
-      <section data-admin-panel="storage" hidden aria-labelledby="grcon-admin-storage-title"><h3 id="grcon-admin-storage-title" tabindex="-1">Infraestrutura e armazenamento</h3><div id="grcon-admin-storage"></div></section>
+      <section data-admin-panel="intelligence" hidden><h3 tabindex="-1">Inteligência do Robô</h3><div id="grcon-admin-intelligence"></div></section><section data-admin-panel="storage" hidden aria-labelledby="grcon-admin-storage-title"><h3 id="grcon-admin-storage-title" tabindex="-1">Infraestrutura e armazenamento</h3><div id="grcon-admin-storage"></div></section>
       </div></div>
     </dialog>`);
     button.addEventListener("click", () => void open());
@@ -68,6 +68,7 @@
   }
 
   function close() {
+    unmountIntelligence?.(); unmountIntelligence = null;
     state.open = false; state.opening++; state.generation++;
     root.GrconBackgroundJobs?.unmount?.(); clearSecrets();
     if ($("#grcon-admin-editor")) $("#grcon-admin-editor").hidden = true;
@@ -100,6 +101,7 @@
     $("#admin-contract-profile").value = c.settings?.ruleProfile || "UNCONFIGURED";
     $("#admin-contract-active").checked = c.active !== false;
     $("#admin-contract-inherit").checked = c.settings?.inheritLegacyRules === true;
+    $("#admin-contract-allocation-assistant").checked = c.settings?.enabledModules?.allocationAuditAssistant === true;
   }
   function editUser(user) {
     if (!master() || user?.isMaster) return;
@@ -296,6 +298,7 @@
       await loadBaseManagement(host,api,valid);
     } catch (error) { if (valid()) host.textContent = error.message; }
   }
+  let unmountIntelligence = null;
   async function loadBaseManagement(host,api,valid) {
     const panel=document.createElement("section");panel.className="grcon-admin-storage-bases";host.append(panel);
     panel.innerHTML='<h4>Bases da Consulta Geral</h4><p>Exclua versões obsoletas. A base ativa fica protegida. A exclusão permanente também remove a cópia e o backup daquela versão.</p><div data-base-list>Carregando bases…</div><p data-base-message role="status" aria-live="polite"></p>';
@@ -380,7 +383,8 @@
     }catch(error){message.textContent=error.message;}
   }
   async function selectSection(section, focus = true) {
-    if (!master() || !state.open || !["users", "contracts", "technical", "activity", "storage"].includes(section)) return;
+    if (!master() || !state.open || !["users", "contracts", "technical", "activity", "storage", "intelligence"].includes(section)) return;
+    unmountIntelligence?.(); unmountIntelligence = null;
     root.GrconBackgroundJobs?.unmount?.();
     state.section = section; state.generation++; clearSecrets();
     $("#grcon-admin-editor").hidden = true;
@@ -392,7 +396,12 @@
     }
     $("#grcon-admin-contract").closest(".grcon-admin-toolbar").hidden = section === "technical";
     if (focus) document.querySelector(`[data-admin-panel="${section}"] h3`)?.focus();
-    if (section === "storage") await loadStorage();
+    if (section === "intelligence") {
+      const generation = state.generation;
+      await root.GRCONModuleLoader.ensure("allocation-auditor");
+      if (generation === state.generation && state.open && master()) unmountIntelligence = root.GrconAllocationAuditorUi.mountIntelligence($("#grcon-admin-intelligence"),state.workspace);
+    }
+    else if (section === "storage") await loadStorage();
     else if (section === "users") await loadUsers();
     else if (section === "contracts") renderContract();
     else if (section === "activity") { $("#grcon-cloud-audit").textContent = ""; await cloud().loadAuditEvents(state.workspace); }
@@ -410,12 +419,12 @@
     $("#grcon-admin-contract").value = state.workspace;
     $("#grcon-admin-search").value = "";
     renderContract(); if (!$("#grcon-admin-dialog").open) $("#grcon-admin-dialog").showModal();
-    await selectSection(["users", "contracts", "technical", "activity", "storage"].includes(section) ? section : "users");
+    await selectSection(["users", "contracts", "technical", "activity", "storage", "intelligence"].includes(section) ? section : "users");
   }
   async function saveContract(event) {
     event.preventDefault(); if (!master() || state.saving) return;
     const code = $("#admin-contract-code").value.trim().toUpperCase(), inherit = $("#admin-contract-inherit").checked;
-    const input = { id: $("#admin-contract-id").value || null, code, slug: code.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""), name: $("#admin-contract-name").value.trim(), displayName: $("#admin-contract-display").value.trim(), company: $("#admin-contract-company").value.trim(), client: $("#admin-contract-client").value.trim(), site: $("#admin-contract-site").value.trim(), project: $("#admin-contract-project").value.trim(), active: $("#admin-contract-active").checked, settings: { ...(state.editing?.settings || {}), ruleProfile: $("#admin-contract-profile").value.trim() || "UNCONFIGURED", inheritLegacyRules: inherit, enabledModules: { ...(state.editing?.settings?.enabledModules || {}), legacyUhdtRules: inherit } } };
+    const input = { id: $("#admin-contract-id").value || null, code, slug: code.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""), name: $("#admin-contract-name").value.trim(), displayName: $("#admin-contract-display").value.trim(), company: $("#admin-contract-company").value.trim(), client: $("#admin-contract-client").value.trim(), site: $("#admin-contract-site").value.trim(), project: $("#admin-contract-project").value.trim(), active: $("#admin-contract-active").checked, settings: { ...(state.editing?.settings || {}), ruleProfile: $("#admin-contract-profile").value.trim() || "UNCONFIGURED", inheritLegacyRules: inherit, enabledModules: { ...(state.editing?.settings?.enabledModules || {}), legacyUhdtRules: inherit, allocationAuditAssistant: $("#admin-contract-allocation-assistant").checked } } };
     setSaving(true);
     try {
       const { error } = await cloud().state.client.rpc("grcon_contract_save", { input }); if (error) throw error;

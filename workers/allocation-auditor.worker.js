@@ -2,7 +2,7 @@
 importScripts('../xlsx.full.min.js','../jszip.min.js',
  '../vendor/recon/document_title_standard.js','../vendor/recon/document_title_standard_r.js',
  '../vendor/recon/allocation_normative_catalogs.js','../vendor/recon/allocation_normative_rules.js',
- '../allocation_auditor_core.js','../allocation_auditor_revision.js');
+ '../allocation_auditor_core.js','../allocation_auditor_revision.js','../allocation_auditor_assistant.js','../allocation_auditor_package.js');
 const C=self.GrconAllocationAuditorCore;
 let context=null,prepared=null;
 const cache=new Map();
@@ -19,6 +19,8 @@ async function readFile(file){
 const safe=v=>typeof v==='string'&&/^[\s]*[=+\-@\t\r]/.test(v)?"'"+v:v;
 function sheet(book,name,rows){const s=XLSX.utils.aoa_to_sheet(rows.map(row=>row.map(safe)));s['!cols']=rows[0].map(()=>({wch:26}));XLSX.utils.book_append_sheet(book,s,name);}
 async function operation(op,input){
+ if(op==='summarize')return {groups:self.GrconAllocationAssistant.groups(input.rows),summary:C.summary(input.rows)};
+ if(op==='fingerprint'){const {bytes}=await readFile(input.file);return self.GrconAllocationAuditPackage.hash(bytes);}
  if(op==='inspect'){const {book}=await readFile(input.file);return book.SheetNames.map(name=>{
   const ws=book.Sheets[name],range=ws['!ref']||'';
   if(!range)return {name,range,documentCount:0,model:'unknown'};
@@ -40,6 +42,7 @@ async function operation(op,input){
   const result=C.auditRecord(r,context,prepared);cache.set(hash,result);if(cache.size>5000)cache.delete(cache.keys().next().value);return result;
  }));}
  if(op==='revise-allocation'){return self.GrconAllocationRevision.revise(input,{XLSX,JSZip,C});}
+ if(op==='assistant-package')return self.GrconAllocationAuditPackage.build(input,{XLSX,JSZip,C});
  if(op==='export'){
   const book=XLSX.utils.book_new(),rows=input.rows||[],events=input.events||[];
   sheet(book,'Auditoria',[['Documento','Revisão','Título','Situação','Categoria','Gravidade','Apontamento','Fonte','Evidência','Versão regras'],...rows.flatMap(r=>r.findings.length?r.findings.map(f=>[r.document,r.revision,r.title,r.status,f.category,f.severity,f.message,f.source,JSON.stringify(f.evidence),r.ruleVersion]):[[r.document,r.revision,r.title,r.status,'','','Nenhuma não conformidade detectada','','',r.ruleVersion]])]);
