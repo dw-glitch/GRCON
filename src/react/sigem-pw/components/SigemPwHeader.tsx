@@ -6,7 +6,6 @@ interface Props {
   ready: boolean;
   onEvolution(): void;
   onHistory(): void;
-  onExport(): void;
   onCoordinatorExport(): void;
 }
 
@@ -18,7 +17,7 @@ function Icon({ path }: { path: string }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d={path}></path></svg>;
 }
 
-export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHistory, onExport, onCoordinatorExport }: Props) {
+export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHistory, onCoordinatorExport }: Props) {
   return (
     <div className="spw-heading-shell">
       <UiPageHeader
@@ -44,9 +43,6 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
           <Icon path="M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4" /><span>Gerenciar histórico</span>
         </button>
         <button className="primary-button" id="spw-coordinator-export" type="button" disabled={busy || !ready} onClick={onCoordinatorExport}>Exportar controle Excel</button>
-        <button className="secondary-button" id="spw-export" type="button" disabled={busy} onClick={onExport}>
-          <Icon path="M12 3v12M8 11l4 4 4-4M5 19h14" /><span>Exportar lista</span>
-        </button>
       </div>
     </div>
   );
