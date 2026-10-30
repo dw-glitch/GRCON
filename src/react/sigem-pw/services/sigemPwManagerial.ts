@@ -89,10 +89,21 @@ function priorityRevision(value: string): number {
 function mostRecent(rows: SigemPwRecord[]): SigemPwRecord | undefined {
   return [...rows].sort((a, b) => priorityRevision(revision(b)) - priorityRevision(revision(a)))[0];
 }
+/** Use the same complete-document identity as the GRCON core when a base
+ * (e.g. a shared historical LD) was persisted before documentKey enrichment.
+ * Never collapse documents by prefix, title, EAP or partial code. */
+export function managerialDocumentKey(record: SigemPwRecord): string {
+  const existing = String(record.documentKey || "").trim();
+  if (existing) return existing;
+  const fullCode = String(record.canonicalDocument || record.document || "").trim();
+  if (!fullCode) return "";
+  const core = typeof window !== "undefined" ? window.GrconSigemPwDashboard : undefined;
+  return core?.documentIdentity?.(fullCode).key || fullCode.toUpperCase();
+}
 function fromIndex(records: SigemPwRecord[]): Map<string, SigemPwRecord[]> {
   const index = new Map<string, SigemPwRecord[]>();
   for (const record of records) {
-    const key = String(record.documentKey || "");
+    const key = managerialDocumentKey(record);
     if (!key) continue;
     const existing = index.get(key) || [];
     existing.push(record);
@@ -161,7 +172,7 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
   const processed = new Set<string>();
 
   for (const reference of state.ld.records) {
-    const key = String(reference.documentKey || "");
+    const key = managerialDocumentKey(reference);
     if (!key || processed.has(key)) continue;
     processed.add(key);
     const referenceRevision = revisionKey(String(reference.revision || ""));

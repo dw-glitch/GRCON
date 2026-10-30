@@ -31,6 +31,11 @@ const beforeImport=await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.
 const pwFile={name:'PW-Review.csv',mimeType:'text/csv',buffer:Buffer.from('NumeroDocumentoCliente;Revisao;Sigla da Empresa;TipoDocumento;o_statename;Ultima emissao\nRL-5290.00-22313-ABC-C1O-009;0;CSG;RL;Em Workflow;Sim')};
 await page.locator('#spw-pw-file').setInputFiles(pwFile);await page.locator('#grcon-import-review').waitFor();assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.pw.meta.fileName),beforeImport);await page.locator('#grcon-import-review button[value=cancel]').click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.pw.meta.fileName),beforeImport);
 await page.locator('#spw-pw-file').setInputFiles(pwFile);await page.locator('#grcon-import-review button[value=apply]').click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSigemPwDashboardUi.state.pw.meta.fileName==='PW-Review.csv');
+// A Fase 3 passou a ocultar filtros antigos por padrão. O teste do backup
+// precisa abri-los para validar o restabelecimento, sem alterar a UI padrão.
+await page.evaluate(()=>{ const advanced=document.querySelector('details.spw-advanced-area');if(advanced)advanced.open=true;
+  const legacy=document.querySelector('details.spw-legacy-disclosure');if(legacy)legacy.open=true; });
+assert.equal(await page.locator('#spw-query').isVisible(),true);
 await page.locator('#spw-query').fill('RL-5290');await page.waitForFunction(()=>window.GrconSigemPwDashboardUi.state.filters.query==='RL-5290');await page.locator('[data-revision-scope=\"all\"]').first().click();await page.waitForFunction(()=>window.GrconSigemPwDashboardUi.state.revisionScope==='all');
 await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.GrconImportReview&&window.GrconCloud);await page.addStyleTag({content:'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script){visibility:visible!important}#grcon-cloud-auth{display:none!important}'});
 await page.evaluate(async()=>{window.GrconCloud={state:{online:false,session:{user:{id:'qa-account'}},membership:{workspace_id:'qa-workspace',role:'owner'}}};await window.GrconSigemPwDashboardBootstrap.open();});
