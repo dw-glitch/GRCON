@@ -297,20 +297,24 @@
     // Visão gerencial única: os pormenores (Recusado, Em análise, conflito,
     // revisão divergente etc.) permanecem no módulo Conferência e na base.
     // Somente a evidência de documento + revisão CONFIRMADA permite POSTADO.
-    const managerialStatus = (row) => {
-      if (!row || row.status === conference.STATUSES.NOT_VERIFIED
-        || row.status === conference.STATUSES.REVIEW || row.ambiguity)
-        return "NÃO VERIFICADO";
-      if (row.status === conference.STATUSES.CONFIRMED
+    const managerialStatus = (row, record, file) => {
+      // A Consulta Geral pode ser anterior à emissão ou exigir revisão manual.
+      // Isso NÃO desfaz o fato operacional de que a eGRDT foi gerada no GRCON.
+      // "NÃO VERIFICADO" é reservado à ausência de número de GRDT/documento.
+      const hasGeneratedGrdt = Boolean(text(record && record.egrdtNumber)
+        && text(file && file.document));
+      if (!hasGeneratedGrdt) return "NÃO VERIFICADO";
+      if (row && row.status === conference.STATUSES.CONFIRMED
         && row.currentEvidence && !row.ambiguity)
         return "POSTADO";
       return "AGUARDANDO RETORNO DO SIGEM";
     };
-    const fallback = (status = "NÃO VERIFICADO") => source.flatMap(record =>
+    const fallback = () => source.flatMap(record =>
       (record.files || []).map(file => [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber),
         text(file.document), grdtRevision(file), text(file.ldPrazo),
-        pasteAllocation(file.allocation), status, "INDETERMINADO", "", "", "",
+        pasteAllocation(file.allocation), managerialStatus(null, record, file),
+        "INDETERMINADO", "", "", "",
       ]));
     if (!conference || typeof conference.reconcile !== "function")
       return unavailable("O motor oficial da Conferência não foi carregado; relatório de status cancelado.");
@@ -353,7 +357,7 @@
       return [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber), text(file.document),
         rev, text(file.ldPrazo), pasteAllocation(file.allocation),
-        managerialStatus(match),
+        managerialStatus(match, record, file),
         confirmed ? "SIM" : "INDETERMINADO",
         match ? text(match.revisionFound) : "",
         conferenceReferenceDate(meta.referenceDate),
