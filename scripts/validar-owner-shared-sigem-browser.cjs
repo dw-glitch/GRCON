@@ -223,6 +223,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.waitForFunction(()=>window.GrconCloud.isMasterOwner()&&window.GrconSigemPwDashboardUi.state.analysisSigemId==='shared-old');
  const activateOld=page.locator('[data-sigem-history-activate="shared-old"]');
  await activateOld.waitFor({state:'attached',timeout:10000});
+ assert.equal(await activateOld.getAttribute('data-sigem-history-activate'),'shared-old','a ativação ADM deve usar a versão histórica selecionada');
  page.once('dialog',dialog=>dialog.accept());
  await activateOld.focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
  assert.equal(await page.inputValue('#spw-analysis-sigem'),'');
