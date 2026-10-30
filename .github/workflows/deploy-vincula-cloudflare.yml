@@ -1,0 +1,83 @@
+name: Vincula — bootstrap Cloudflare Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-vincula-cloudflare.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vincula-cloudflare-bootstrap
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publicar Vincula sem alterar Worker GRCON
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VINCULA_COMMIT_SHA: f07607ed8377505e38c432a99caf4dc596920f7b
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Obter revisão validada do Vincula
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: dw-glitch/Vincula
+          ref: f07607ed8377505e38c432a99caf4dc596920f7b
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Testes completos do Vincula
+        run: npm test
+
+      - name: Empacotamento seguro e verificação
+        run: |
+          npm run build
+          npm run verify:cloudflare
+
+      - name: Confirmar credenciais da conta já utilizada pelo GRCON
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::CLOUDFLARE_API_TOKEN ausente no GRCON"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::CLOUDFLARE_ACCOUNT_ID ausente no GRCON"; exit 1; }
+
+      - name: Publicar Worker independente vincula-cloudflare
+        run: npx --yes wrangler@4.34.0 deploy --config wrangler.jsonc
+
+      - name: Confirmar versão servida pela Cloudflare
+        run: |
+          node --input-type=module <<'NODE'
+          const base = 'https://vincula-cloudflare.grcon-qualidade.workers.dev';
+          const expected = process.env.VINCULA_COMMIT_SHA;
+          let reason = 'não verificado';
+          for (let attempt = 0; attempt < 12; attempt++) {
+            try {
+              const [meta, home, worker] = await Promise.all([
+                fetch(base + '/deployment-meta.json', { cache: 'no-store' }),
+                fetch(base + '/', { cache: 'no-store' }),
+                fetch(base + '/src/workers/ld-worker.js', { cache: 'no-store' })
+              ]);
+              if (meta.ok && home.ok && worker.ok) {
+                const data = await meta.json();
+                const html = await home.text();
+                if (data.revision === expected && html.includes('Vincula')) {
+                  console.log('Vincula publicado com sucesso em ' + base);
+                  process.exit(0);
+                }
+                reason = 'revisão não corresponde ou interface incompleta';
+              } else reason = 'HTTP ' + [meta.status,home.status,worker.status].join('/');
+            } catch (err) { reason = String(err.message || err); }
+            await new Promise(r => setTimeout(r, 2000));
+          }
+          console.error('Não foi possível confirmar a publicação: ' + reason);
+          process.exit(1);
+          NODE
