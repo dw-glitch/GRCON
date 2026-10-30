@@ -227,3 +227,10 @@
   #spw-evolution-section .spw-evo-current-grid,#spw-evolution-section .spw-evo-diagnostic-grid{grid-template-columns:1fr}
   #spw-evolution-section .spw-evo-diagnostics>header{display:grid}
 }
+
+/* Evolução embutida no Dashboard: a tabela larga nunca deve esticar o módulo no celular. */
+@media(max-width:760px){
+  #grcon-sigem-pw-evolution-root{width:100%;max-width:calc(100vw - 24px);min-width:0}
+  #spw-evolution-section.spw-evo-v2{width:100%;max-width:100%;min-width:0;overflow-x:clip}
+  #spw-evolution-section .spw-evo-table-wrap{display:block;width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain}
+}
