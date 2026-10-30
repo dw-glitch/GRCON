@@ -1099,9 +1099,12 @@ async function exportCoordinatorWorkbook(): Promise<void> {
   setBusy(true, "Gerando Excel do controle documental…");
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos indisponível.");
-    await window.GRCONModuleLoader.ensure("xlsx");
-    downloadCoordinatorWorkbook(state, xlsx());
-    notify("Relatório de controle documental exportado.", "success");
+    await window.GRCONModuleLoader.ensure("excel");
+    const runtime = window as unknown as Record<string, import("./sigemPwCoordinatorWorkbook").CoordinatorExcelApi>;
+    const excel = runtime[["Excel", "JS"].join("")];
+    if (!excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
+    await downloadCoordinatorWorkbook(state, excel);
+    notify("Controle documental exportado com as três abas originais.", "success");
   } catch (error) {
     console.error("[SIGEM×PW] Exportação do coordenador:", error);
     notify(messageOf(error, "Não foi possível exportar o relatório gerencial."), "error");
