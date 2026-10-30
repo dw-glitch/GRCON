@@ -851,10 +851,30 @@ async function exportCurrentList(): Promise<void> {
     ] },
     ];
     let buffer: ArrayBuffer | undefined;
-    try {
-      await window.GRCONModuleLoader.ensure("performance");
-      if (window.GrconPerformance?.supported) buffer = await window.GrconPerformance.buildSpreadsheet("sigem-dashboard", { sheets });
-    } catch (error) { console.warn("[SIGEM×PW] Exportação em modo compatível", error); }
+    // Pequenas listas não precisam do worker; evitar espera indefinida após
+    // exportações sucessivas e preservar o download síncrono no navegador.
+    // Em bases maiores, limitar a espera pelo worker e usar o XLSX já carregado
+    // como saída compatível em caso de travamento.
+    if (rows.length > 1000) {
+      let timeoutId: number | undefined;
+      try {
+        await window.GRCONModuleLoader.ensure("performance");
+        if (window.GrconPerformance?.supported) {
+          const timeoutMs = Math.min(30000, 12000 + Math.ceil(rows.length / 5000) * 3000);
+          const timeout = new Promise<ArrayBuffer>((_, reject) => {
+            timeoutId = window.setTimeout(() => reject(new Error("Tempo excedido na exportação em worker.")), timeoutMs);
+          });
+          buffer = await Promise.race([
+            window.GrconPerformance.buildSpreadsheet("sigem-dashboard", { sheets }),
+            timeout,
+          ]);
+        }
+      } catch (error) {
+        console.warn("[SIGEM×PW] Exportação em modo compatível", error);
+      } finally {
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      }
+    }
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const filename = `GRCON_SIGEM_PW_${exportMeta.scope}_${exportMeta.list}_${stamp}.xlsx`;
     if (buffer) {

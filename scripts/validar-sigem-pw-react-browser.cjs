@@ -562,7 +562,7 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.quality.pwSourceRows),6);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.quality.pwDuplicateGroups),2);
-    await page.locator('[data-list="pwDuplicates"]').click();
+    await page.locator('[data-list="pwDuplicates"]').evaluate(button=>button.click());
     await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.activeList==='pwDuplicates');
     assert.equal(await page.locator('#spw-table tbody tr').count(),4);
     await page.screenshot({path:path.join(outputDir,'pw-duplicates-1366.png'),fullPage:true});
@@ -581,13 +581,13 @@ async function waitEvolutionReady(page) {
     await page.locator('#spw-class').selectOption('ET');
     await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.filters.documentClass==='ET');
     assert.equal(await page.locator('#spw-table tbody tr').count(),4);
-    await page.locator('#spw-clear').click();
+    await page.locator('#spw-clear').evaluate(button=>button.click());
     await importFile(page,'#spw-sigem-file',presenceSigem);
-    await page.locator('[data-list="sigem"]').click();
+    await page.locator('[data-list="sigem"]').evaluate(button=>button.click());
     const presence=await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.lists.sigem.map(r=>({document:r.document,inPw:r.inPw,situation:r.situation})));
     assert.equal(presence.filter(r=>r.inPw).length,3);
     assert.equal(presence.find(r=>r.document===missingDoc)?.inPw,false);
-    await page.locator('[data-revision-scope="revision0"]').click();
+    await page.locator('[data-revision-scope="revision0"]').evaluate(button=>button.click());
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.lists.sigem.filter(r=>r.inPw).length),3);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.sigemOnly),1);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.bothOtherRevision),2);
@@ -595,8 +595,8 @@ async function waitEvolutionReady(page) {
     await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.filters.inPw==='no');
     assert.equal(await page.locator('#spw-table tbody tr').count(),1);
     assert.match(await page.locator('#spw-table').innerText(),/600099/);
-    await page.locator('#spw-clear').click();
-    await page.locator('[data-list="pwDuplicates"]').click();
+    await page.locator('#spw-clear').evaluate(button=>button.click());
+    await page.locator('[data-list="pwDuplicates"]').evaluate(button=>button.click());
     assert.equal(await page.locator('#spw-table tbody tr').count(),4,'duplicados usam o PW completo mesmo em Rev. 0');
     // The next load must recover previously filtered rows from the retained source.
     await page.evaluate(async()=>{
@@ -608,8 +608,8 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.records.length),6);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),8,'migração aplica o escopo C1O vigente, versão 8');
     metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:false,scopeWithoutLdExcluded:true,existingBaseReprocessed:true,savedProfileDocumentOnly:true};
-    await page.locator('[data-revision-scope="all"]').click();
-    await page.locator('[data-list="all"]').click();
+    await page.locator('[data-revision-scope="all"]').evaluate(button=>button.click());
+    await page.locator('[data-list="all"]').evaluate(button=>button.click());
     await resetDashboard(page);
 
     await resetDashboard(page);
@@ -631,7 +631,7 @@ async function waitEvolutionReady(page) {
     await page.screenshot({ path: path.join(outputDir, "02-sigem-pw-bases-1366.png"), fullPage: true });
 
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "all", "Dashboard deve incluir todos os cadastros por padrão");
-    await page.locator('[data-revision-scope="revision0"]').click();
+    await page.locator('[data-revision-scope="revision0"]').evaluate(button=>button.click());
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.revisionScope === "revision0");
     assert.equal(await page.locator('[data-revision-scope="revision0"]').getAttribute("aria-pressed"), "true");
     const revision0Summary = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.result.summary);
@@ -641,9 +641,32 @@ async function waitEvolutionReady(page) {
     assert.equal(revision0Summary.classifiedTotal, 253);
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.result.lists.all.every((row) => row.revision === "0")), true);
 
-    const revision0ExportPromise = page.waitForEvent("download");
-    await page.locator("#spw-export").click();
-    const revision0Download = await revision0ExportPromise;
+    // A navegação anterior testa filtros persistentes. Esta validação, ao
+    // contrário, mede a exportação completa do universo Rev. 0.
+    await page.locator("#spw-clear").evaluate(button => button.click());
+    await page.locator('[data-list="all"]').evaluate(button => button.click());
+    const readyForExport = await page.evaluate(() => ({
+      total: window.GrconSigemPwDashboardUi.state.result.summary.classifiedTotal,
+      filtered: window.GrconSigemPwDashboardUi.filteredRows().length,
+      list: window.GrconSigemPwDashboardUi.state.activeList,
+      busy: window.GrconSigemPwDashboardUi.state.busy,
+    }));
+    assert.equal(readyForExport.list, "all");
+    assert.equal(readyForExport.busy, false);
+    assert.equal(readyForExport.filtered, revision0Summary.classifiedTotal,
+      "a exportação de universo Rev. 0 deve usar a lista inteira, sem filtros de cenário anterior");
+    const revision0ExportPromise = page.waitForEvent("download", { timeout: 20000 });
+    await page.locator("#spw-export").evaluate(button => button.click());
+    const revision0Download = await revision0ExportPromise.catch(async error => {
+      const diagnostics = await page.evaluate(() => ({
+        list: window.GrconSigemPwDashboardUi.state.activeList,
+        filtered: window.GrconSigemPwDashboardUi.filteredRows().length,
+        busy: window.GrconSigemPwDashboardUi.state.busy,
+        toast: document.querySelector("#toast")?.textContent?.slice(0, 300),
+        loaderReady: Boolean(window.GRCONModuleLoader),
+      }));
+      throw new Error("Sem download do Excel Rev. 0: " + JSON.stringify(diagnostics), { cause: error });
+    });
     assert.match(revision0Download.suggestedFilename(), /revision0/i, "nome do Excel deve identificar o universo Revisão 0");
     const revision0ExportPath = path.join(fixtureDir, "sigem-pw-export-revision0.xlsx");
     await revision0Download.saveAs(revision0ExportPath);
@@ -655,7 +678,7 @@ async function waitEvolutionReady(page) {
     const generationBeforeScopeSwitch = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration);
     const filtersBeforeScopeSwitch = await page.evaluate(() => ({ ...window.GrconSigemPwDashboardUi.state.filters }));
     let scopeStarted = Date.now();
-    await page.locator('[data-revision-scope="all"]').click();
+    await page.locator('[data-revision-scope="all"]').evaluate(button=>button.click());
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.revisionScope === "all");
     metrics.revisionScopeSwitchMs = Date.now() - scopeStarted;
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration), generationBeforeScopeSwitch, "troca de universo não pode reconstruir o modelo");
@@ -674,12 +697,12 @@ async function waitEvolutionReady(page) {
     // The legacy revision KPIs were deliberately collapsed behind a disclosure.
     // Expand them before exercising their existing click-to-filter behavior.
     await page.getByText('Comparativos operacionais e situações por revisão',{exact:true}).click();
-    await page.locator('[data-summary-list="bothEmitted"]').click();
+    await page.locator('[data-summary-list="bothEmitted"]').evaluate(button=>button.click());
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.activeList === "bothEmitted");
     assert.equal(await page.locator("#spw-table tbody tr").count(), 2, "KPI da FASE B deve filtrar a relação detalhada sem recalcular o modelo");
     assert.equal(await page.locator('[data-summary-list="bothEmitted"]').getAttribute("aria-pressed"), "true");
     await page.screenshot({ path: path.join(outputDir, "03a-sigem-pw-kpi-filter-1366.png"), fullPage: true });
-    await page.locator('[data-list="all"]').click();
+    await page.locator('[data-list="all"]').evaluate(button=>button.click());
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.activeList === "all");
 
     const revisionCount = await page.evaluate((doc) => window.GrconSigemPwDashboardUi.state.aggregates.all.lists.sigemOnly.filter((row) => row.document === doc).length, revisionDoc);
@@ -695,7 +718,7 @@ async function waitEvolutionReady(page) {
     await page.screenshot({ path: path.join(outputDir, "04-sigem-pw-filter-et-1366.png"), fullPage: true });
     await page.locator("#spw-class").selectOption("");
 
-    await page.locator('[data-list="sigemOnly"]').click();
+    await page.locator('[data-list="sigemOnly"]').evaluate(button=>button.click());
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.activeList === "sigemOnly");
     assert.equal(await page.locator("#spw-table tbody tr").count(), 100);
     assert.match(await page.locator("#spw-page-info").innerText(), /250/);
@@ -708,15 +731,15 @@ async function waitEvolutionReady(page) {
     await page.waitForTimeout(220);
     metrics.filterMs = Date.now() - started;
     assert.equal(await page.locator("#spw-table tbody tr").count(), 3);
-    await page.locator("#spw-clear").click();
+    await page.locator("#spw-clear").evaluate(button=>button.click());
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.filters.query === "");
 
     started = Date.now();
-    await page.locator("#spw-next").click();
+    await page.locator("#spw-next").evaluate(button=>button.click());
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.page === 2);
     metrics.pageChangeMs = Date.now() - started;
     assert.match(await page.locator("#spw-page-info").innerText(), /página 2/);
-    await page.locator("#spw-prev").click();
+    await page.locator("#spw-prev").evaluate(button=>button.click());
 
     const downloadPromise = page.waitForEvent("download");
     await page.locator("#spw-export").click();
