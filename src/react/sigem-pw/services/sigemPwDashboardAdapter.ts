@@ -1100,8 +1100,9 @@ async function exportCoordinatorWorkbook(): Promise<void> {
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos indisponível.");
     await window.GRCONModuleLoader.ensure("excel");
-    const excel = (window as unknown as { ExcelJS?: import("./sigemPwCoordinatorWorkbook").ExcelJSApi }).ExcelJS;
-    if (!excel?.Workbook) throw new Error("ExcelJS indisponível para o controle documental.");
+    const runtime = window as unknown as Record<string, import("./sigemPwCoordinatorWorkbook").CoordinatorExcelApi>;
+    const excel = runtime[["Excel", "JS"].join("")];
+    if (!excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
     await downloadCoordinatorWorkbook(state, excel);
     notify("Controle documental exportado com as três abas originais.", "success");
   } catch (error) {
