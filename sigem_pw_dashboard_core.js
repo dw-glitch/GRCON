@@ -23,7 +23,7 @@
   const PW_BASE_KEY = "sigem-pw-current-pw-v3";
   const LD_BASE_KEY = "sigem-pw-current-quality-ld-v1";
   const HISTORY_KEY = "sigem-pw-base-history-v3";
-  const PW_BASE_VERSION = 7;
+  const PW_BASE_VERSION = 8;
   const HISTORY_VERSION = 3;
   const PW_SCOPE_VERSION = 8;
   const PW_COMPANY_COLUMN_INDEX = 2; // Coluna C (índice zero-based), obrigatória.
@@ -401,9 +401,11 @@
     const mappingProfile = fileMeta?.mappingProfile;
     const delimiter = mappingProfile && [";", ",", "\t"].includes(mappingProfile.delimiter) ? mappingProfile.delimiter : detectDelimiter(source);
     let headers = null;
+    let originalHeaders = null;
     let columns = null;
     const records = [];
     let sourceRowCount = 0;
+    let widestSourceRow = 0;
     let invalidCount = 0;
     let emptyDocumentCount = 0;
     let unknownEmissionCount = 0;
@@ -412,6 +414,9 @@
 
     forEachDelimitedRow(source, delimiter, (row, rowIndex) => {
       if (rowIndex === 0) {
+        // Preservar exatamente os títulos (inclusive duplicados e vazios)
+        // e a posição de cada coluna; o mapeamento semântico é separado.
+        originalHeaders = row.slice();
         headers = row.map(text);
         columns = mapPwColumns(headers);
         if (mappingProfile?.columns) for (const field of Object.keys(PW_HEADER_ALIASES)) {
@@ -431,6 +436,7 @@
       }
       if (!row.some((value) => text(value))) return;
       sourceRowCount += 1;
+      widestSourceRow = Math.max(widestSourceRow, row.length);
       const document = rowValue(row, columns.document);
       if (!document) {
         invalidCount += 1;
@@ -477,6 +483,9 @@
         stateChangedAt: rowValue(row, columns.stateChangedAt),
         emissionSequence: rowValue(row, columns.emissionSequence),
         sourceRow: rowIndex + 1,
+        // Células originais na ordem exata do CSV; dados não mapeados NÃO
+        // desaparecem. O motor de indicadores nunca consulta estas células.
+        pwRawCells: row.slice(),
       });
     });
 
@@ -498,6 +507,12 @@
         companyHeader: headers[columns.company],
         companyColumn: "C",
         headerCount: headers.length,
+        // Os cabeçalhos não são usados como chaves: podem estar repetidos.
+        // O layout de origem pode ter 70 colunas, mais ou menos.
+        pwRawHeaders: originalHeaders,
+        pwRawColumnCount: Math.max(headers.length, widestSourceRow),
+        pwRawValidRowCount: records.length,
+        pwRawInvalidRowCount: invalidCount,
         sourceRowCount,
         recordCount: records.length,
         uniqueDocumentCount: uniqueDocuments.size,
@@ -655,12 +670,15 @@
 
   function normalizeRecords(records, kind, ldUniverse, enforceLd) {
     return (records || []).map((record) => {
+      // Os dados brutos são mantidos apenas em sourceRecords. A visão de
+      // conciliação fica leve e nunca replica as 70 colunas por revisão.
+      const { pwRawCells: _rawCells, ...analysisRecord } = kind === "pw" ? (record || {}) : (record || {});
       const identity = documentIdentity(record && record.document);
       const rawRevision = record && (record.revisionComplete || record.revision);
       const scopedClass = classForRecord(record, identity, ldUniverse, enforceLd);
       const emissionFlag = kind === "pw" ? norm(record && record.lastEmission) : "";
       return {
-        ...record,
+        ...analysisRecord,
         documentKey: identity.key,
         canonicalDocument: identity.canonical,
         documentClass: scopedClass,
@@ -734,7 +752,7 @@
         scopeVersion: PW_SCOPE_VERSION,
         scopeRule: "Somente linhas com Sigla da Empresa CSG/QTM comprovam cadastro no PW do contrato; PREVISTO é cadastrado, não emitido",
         scopeLdSnapshotId: text(ldMeta && ldMeta.snapshotId) || (ldMeta ? snapshotId("ld", ldMeta) : ""),
-        sourceRecordCount: Number(previousMeta.sourceRecordCount) || sourceRecords.length,
+        sourceRecordCount: Number(previousMeta.sourceRecordCount) || Number(previousMeta.sourceRowCount) || sourceRecords.length,
         recordCount: audit.records.length,
         validRevisionRecordCount: entries.size,
         uniqueDocumentCount: documents.size,
@@ -1389,8 +1407,11 @@
   }
 
   function historySnapshot(base) {
+    // PW precisa manter os registros de origem, com suas colunas originais:
+    // sem isso, reativar uma versão antiga destruiria os dados da consulta.
     return { meta: { ...base.meta }, records: base.records,
-      ...(base.meta?.kind === "ld" && Array.isArray(base.sourceRecords) ? { sourceRecords: base.sourceRecords } : {}) };
+      ...(["ld", "pw"].includes(base.meta?.kind) && Array.isArray(base.sourceRecords)
+        ? { sourceRecords: base.sourceRecords } : {}) };
   }
 
   async function loadHistory() {
@@ -1511,7 +1532,7 @@
       const snapshotIndex = snapshots.findIndex((item) => item.meta.snapshotId === normalized.meta.snapshotId);
       const needsScopedSnapshot = kind === "pw" && (Number(snapshots[snapshotIndex]?.meta?.scopeVersion) < PW_SCOPE_VERSION
         || text(snapshots[snapshotIndex]?.meta?.scopeLdSnapshotId) !== text(normalized.meta.scopeLdSnapshotId)
-        || Array.isArray(snapshots[snapshotIndex]?.sourceRecords));
+        || (Array.isArray(normalized.sourceRecords) && !Array.isArray(snapshots[snapshotIndex]?.sourceRecords)));
       if (snapshotIndex < 0) { snapshots.push(compact); historyChanged = true; }
       else if (needsScopedSnapshot) { snapshots[snapshotIndex] = compact; historyChanged = true; }
       const current = kind === "sigem" ? sigemCurrent : kind === "pw" ? pwCurrent : ldCurrent;

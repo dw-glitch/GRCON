@@ -20,6 +20,11 @@ export interface SigemPwBaseMeta {
   validRevisionRecordCount?: number;
   scopeVersion?: number;
   scopeLdSnapshotId?: string;
+  /** Cabeçalhos reais do CSV PW, por índice, inclusive vazios e repetidos. */
+  pwRawHeaders?: string[];
+  pwRawColumnCount?: number;
+  pwRawValidRowCount?: number;
+  pwRawInvalidRowCount?: number;
   sheetName?: string;
   [key: string]: unknown;
 }
@@ -34,6 +39,8 @@ export interface SigemPwRecord {
   company?: string;
   documentClass?: string;
   sourceRow?: number;
+  /** Colunas brutas do PW por posição; disponíveis apenas nos registros de origem. */
+  pwRawCells?: string[];
   [key: string]: unknown;
 }
 
