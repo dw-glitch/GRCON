@@ -50,6 +50,27 @@ for(const [options,expected] of [
   assert.equal(current.readyForWorkbookReview,false);
   assert.match(current.blockers.join("\n"),expected);
 }
+// Estrutura correta não significa fórmulas nem conteúdo iguais: a Fase 8
+// deve bloquear divergências reais, mesmo que contagens e cabeçalhos batam.
+for(const [modify,reason] of [
+  [book=>{book.Sheets["N-1710"].F4.f="IFERROR('REL. PW'!$B$2,\"\")";},/Fórmulas F:I diferentes/],
+  [book=>{book.Sheets["N-1710"].C4.v="Título técnico diferente";},/Conteúdo N-1710 divergente/],
+  [book=>{book.Sheets["REL. PW"].B2.v="Dado original modificado";},/Dados brutos REL. PW divergentes/],
+  [book=>{book.Sheets["N-1710"].A4.v="OUTRO DOCUMENTO";},/Universos documentais divergentes/],
+  [book=>{book.Sheets["N-1710"].A5.v=book.Sheets["N-1710"].A4.v;},/Código\+revisão duplicado/],
+]){
+  const candidate=workbook();
+  modify(candidate);
+  const differences=compareBooks(model,candidate);
+  assert.equal(differences.readyForWorkbookReview,false);
+  assert.match(differences.blockers.join("\n"),reason);
+  assert.equal(differences.approvedForProduction,false);
+}
+const parity=compareBooks(model,workbook()).parityCounts;
+assert.equal(parity.formulaDifferences,0);
+assert.equal(parity.contentDifferences,0);
+assert.equal(parity.pwCellDifferences,0);
+
 const unexpectedActions=compareBooks(workbook({invalidAction:true}),workbook());
 assert.equal(unexpectedActions.readyForWorkbookReview,false);
 assert.ok(unexpectedActions.blockers.some(b=>/textos de AÇÃO/.test(b)));
