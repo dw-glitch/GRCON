@@ -430,7 +430,7 @@ async function installEvolutionFixture(page) {
 
 async function resetEvolutionFilters(page) {
   const clear = page.locator("#spw-evolution-section .spw-evo-clear");
-  if (await clear.count()) await clear.click();
+  if (await clear.count()) await clear.evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Limpeza de filtros indisponível'); element.click(); });
   await page.waitForFunction(() => {
     const state = window.GrconSigemPwEvolutionUi?.state;
     return Boolean(state)
