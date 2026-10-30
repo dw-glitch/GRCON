@@ -309,11 +309,12 @@
         return "POSTADO";
       return "AGUARDANDO RETORNO DO SIGEM";
     };
-    const fallback = (status = "NÃO VERIFICADO") => source.flatMap(record =>
+    const fallback = () => source.flatMap(record =>
       (record.files || []).map(file => [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber),
         text(file.document), grdtRevision(file), text(file.ldPrazo),
-        pasteAllocation(file.allocation), status, "INDETERMINADO", "", "", "",
+        pasteAllocation(file.allocation), managerialStatus(null, record, file),
+        "INDETERMINADO", "", "", "",
       ]));
     if (!conference || typeof conference.reconcile !== "function")
       return unavailable("O motor oficial da Conferência não foi carregado; relatório de status cancelado.");
