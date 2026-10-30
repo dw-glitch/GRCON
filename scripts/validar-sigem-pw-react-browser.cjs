@@ -1478,6 +1478,8 @@ async function waitEvolutionReady(page) {
 
     // Exportação imediata usa rawFilters, mesmo antes do debounce visual.
     await page.locator("#spw-evo-filter-query").fill("400042");
+    await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.rawFilters.query === "400042");
+    assert.equal(await page.locator("#spw-evo-filter-query").inputValue(), "400042", "texto visível deve coincidir com o filtro informado");
     const immediateEvolutionDownloadPromise = page.waitForEvent("download");
     await page.locator("#spw-evo-export").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     const immediateEvolutionDownload = await immediateEvolutionDownloadPromise;
