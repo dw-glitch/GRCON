@@ -150,6 +150,11 @@ async function resetDashboard(page) {
       [core.LEGACY_SIGEM_BASE_KEY, empty],
       [core.LEGACY_PW_BASE_KEY, empty],
     ]);
+    // O QA é isolado: além das bases do Dashboard, descarte a projeção
+    // local sintética criada por GrconSharedSigemQuery.setLocal(). Sem isso,
+    // a próxima análise PW-only restaura a Consulta Geral anterior.
+    // Nunca chamar reset() como ação do operador na produção.
+    window.GrconSharedSigemQuery?.reset?.();
     await window.GrconSigemPwDashboardUi.refresh("browser-reset");
   });
   await waitIdle(page);
@@ -743,9 +748,28 @@ async function waitEvolutionReady(page) {
     assert.match(await page.locator("#spw-page-info").innerText(), /página 2/);
     await page.locator("#spw-prev").evaluate(button=>button.click());
 
-    const downloadPromise = page.waitForEvent("download");
-    await page.locator("#spw-export").click();
-    const download = await downloadPromise;
+    const beforeListExport = await page.evaluate(() => ({
+      list: window.GrconSigemPwDashboardUi.state.activeList,
+      rows: window.GrconSigemPwDashboardUi.filteredRows().length,
+      busy: window.GrconSigemPwDashboardUi.state.busy,
+      disabled: document.querySelector("#spw-export")?.disabled,
+    }));
+    assert.deepEqual(beforeListExport, { list: "sigemOnly", rows: 250, busy: false, disabled: false },
+      "o segundo download deve iniciar com 250 registros e botão habilitado");
+    const downloadPromise = page.waitForEvent("download", { timeout: 20000 });
+    await page.locator("#spw-export").evaluate(button => button.click());
+    const download = await downloadPromise.catch(async error => {
+      const diagnostics = await page.evaluate(() => ({
+        list: window.GrconSigemPwDashboardUi.state.activeList,
+        count: window.GrconSigemPwDashboardUi.filteredRows().length,
+        busy: window.GrconSigemPwDashboardUi.state.busy,
+        disabled: document.querySelector("#spw-export")?.disabled,
+        toast: document.querySelector("#toast")?.textContent?.slice(0, 500),
+        loaderReady: Boolean(window.GRCONModuleLoader),
+        xlsxReady: Boolean(window.XLSX?.writeFile),
+      }));
+      throw new Error("Falha do segundo download SIGEM × PW: " + JSON.stringify(diagnostics), {cause:error});
+    });
     const exportPath = path.join(fixtureDir, "sigem-pw-export.xlsx");
     await download.saveAs(exportPath);
     const exported = XLSX.read(fs.readFileSync(exportPath), { type: "buffer" });
