@@ -206,14 +206,14 @@ async function reportConferenceSource(): Promise<{ base: { meta?: unknown; recor
   const isStaleShared = () => Boolean(query.state?.stale && query.current() !== state?.local);
   // A abertura do Histórico pode ocorrer antes de a Consulta Geral ser hidratada.
   // Não reutilizar automaticamente um snapshot antigo ou de outro contrato.
-  if (!base?.records?.length || isStaleShared() || (workspace && state?.workspace && state.workspace !== workspace)) {
+  if (!base?.records?.length || isStaleShared() || (workspace && state?.workspace !== workspace)) {
     await query.refresh();
     base = query.current();
   }
   if (!base?.records?.length || isStaleShared()) {
     throw new Error("Não foi possível conferir os status: a Consulta Geral ativa está ausente ou desatualizada. Atualize a base na Conferência antes de exportar.");
   }
-  if (workspace && state?.workspace && state.workspace !== workspace) {
+  if (workspace && state?.workspace !== workspace) {
     throw new Error("A Consulta Geral pertence a outra área de trabalho. Atualize a Conferência antes de exportar.");
   }
   const snapshotId = String(base.meta?.snapshotId || "");
