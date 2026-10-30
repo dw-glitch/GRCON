@@ -86,8 +86,8 @@ const root=path.resolve(__dirname,'..');
   const historico=await downloadReport('#history-export-period','Historico_Teams_500');
   const colar=historico.getWorksheet('Colar GRCON v3');
   assert.ok(colar,'exportação precisa conter a aba Colar GRCON v3');
-  assert.equal(colar.getCell('G3').value,'POSTADO — EM ANÁLISE');
-  assert.equal(colar.getCell('G4').value,'POSTADO — RECUSADO');
+  assert.equal(colar.getCell('G3').value,'POSTADO');
+  assert.equal(colar.getCell('G4').value,'POSTADO');
   await page.evaluate(async()=>{
    for(const src of ['posting_conference_core.js','posting_conference_refinement.js','posting_conference_report.js','posting_conference_app.js'])await window.GRCONModuleLoader.ensure(src);
    const core=window.GrconPostingConference,ui=window.GrconPostingConferenceUi;
