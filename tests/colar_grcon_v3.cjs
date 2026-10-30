@@ -90,12 +90,32 @@ async function main() {
   const review = await Report.colarGrconRowsV3([history(document,"")],{
     conferenceBase:base,conferenceCore:Conference,
   });
-  assert.equal(review[0][6],"NÃO VERIFICADO","Sem revisão válida não há status seguro");
+  assert.equal(review[0][6],"AGUARDANDO RETORNO DO SIGEM",
+    "eGRDT gerada deve aguardar retorno mesmo sem revisão interpretável na consulta");
+  // Ausência da eGRDT é o único caminho para NÃO VERIFICADO no histórico.
+  const noGrdt = history(document,"0");
+  noGrdt.egrdtNumber = "";
+  const noGrdtRows = await Report.colarGrconRowsV3([noGrdt],{
+    conferenceBase:base,conferenceCore:Conference,
+  });
+  assert.equal(noGrdtRows[0][6],"NÃO VERIFICADO");
+  const missingDoc = history(document,"0");
+  missingDoc.files[0].document="";
+  const missingDocRows = await Report.colarGrconRowsV3([missingDoc],{
+    conferenceBase:base,conferenceCore:Conference,
+  });
+  assert.equal(missingDocRows[0][6],"NÃO VERIFICADO");
+  // Se a consulta for anterior à geração, o motor pode retornar NAO_VERIFICADO;
+  // a eGRDT existente deve seguir como AGUARDANDO (nunca perder a pendência).
+  const beforeSend = await Report.colarGrconRowsV3([history("SEM-CONSULTA","0","2026-10-30T09:00:00Z")],{
+    conferenceBase:base,conferenceCore:Conference,now:"2026-10-30T10:00:00Z",
+  });
+  assert.equal(beforeSend[0][6],"AGUARDANDO RETORNO DO SIGEM");
   const waiting = await Report.colarGrconRowsV3([history("DOC-AUSENTE","0","2026-10-01T09:00:00Z")],{
     conferenceBase:base,conferenceCore:Conference,now:"2026-10-30T10:00:00Z",
   });
   assert.equal(waiting[0][6],"AGUARDANDO RETORNO DO SIGEM");
-  for (const row of [...rows,...missing,...stale,...conflicted,...waiting,...review,...repost])
+  for (const row of [...rows,...missing,...stale,...conflicted,...waiting,...review,...repost,...noGrdtRows,...missingDocRows,...beforeSend])
     assert(requestedLabels.has(row[6]),"Status fora do contrato de três estados: "+row[6]);
   const volume=Array.from({length:12000},(_,i)=>history(`${document}-${i}`,"0","2026-10-29T09:00:00Z"));
   const bulk=await Report.colarGrconRowsV3(volume,{conferenceBase:{...base,records:volume.map(r=>({document:r.files[0].document,revision:"0"}))}});
