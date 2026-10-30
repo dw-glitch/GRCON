@@ -195,6 +195,32 @@ function buildWorkbookInWorker(records: EgrdtHistoryRecord[], options: Record<st
   });
 }
 
+// A planilha operacional precisa da MESMA Consulta Geral ativa exibida na
+// Conferência. Sem ela, gerar "NÃO VERIFICADO" para todos seria enganoso.
+async function reportConferenceSource(): Promise<{ base: { meta?: unknown; records: unknown[] }; snapshotId: string }> {
+  const query = window.GrconSharedSigemQuery;
+  if (!query) throw new Error("Consulta Geral indisponível. Abra a Conferência, carregue a Consulta Geral e tente exportar novamente.");
+  const state = query.state as { stale?: boolean; local?: unknown; workspace?: string } | undefined;
+  const workspace = window.GrconCloud?.state?.membership?.workspace_id || "";
+  let base = query.current();
+  const isStaleShared = () => Boolean(query.state?.stale && query.current() !== state?.local);
+  // A abertura do Histórico pode ocorrer antes de a Consulta Geral ser hidratada.
+  // Não reutilizar automaticamente um snapshot antigo ou de outro contrato.
+  if (!base?.records?.length || isStaleShared() || (workspace && state?.workspace && state.workspace !== workspace)) {
+    await query.refresh();
+    base = query.current();
+  }
+  if (!base?.records?.length || isStaleShared()) {
+    throw new Error("Não foi possível conferir os status: a Consulta Geral ativa está ausente ou desatualizada. Atualize a base na Conferência antes de exportar.");
+  }
+  if (workspace && state?.workspace && state.workspace !== workspace) {
+    throw new Error("A Consulta Geral pertence a outra área de trabalho. Atualize a Conferência antes de exportar.");
+  }
+  const snapshotId = String(base.meta?.snapshotId || "");
+  if (!snapshotId) throw new Error("A Consulta Geral ativa não possui identificador verificável. Atualize a base na Conferência.");
+  return { base, snapshotId };
+}
+
 async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtHistoryFilters): Promise<void> {
   if (!records.length) return;
   const operation = window.GrconOperations?.begin("history-period-report", "Exportar Histórico de eGRDTs", { host: "#history-module" });
@@ -203,6 +229,9 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
   const HistoryReport = report();
   await window.GRCONModuleLoader?.ensure?.("excel");
   await window.GRCONModuleLoader?.ensure?.("brand");
+  const workspaceAtStart = window.GrconCloud?.state?.membership?.workspace_id || "";
+  const conference = await reportConferenceSource();
+  operation?.assertCurrent();
   const trace = await window.GrconTeamsTrace?.forReport?.().catch(() => ({
     attempts: [], status: "unavailable" as const, lastSuccessfulSync: null, errorCode: "TRACE_UNAVAILABLE",
   }));
@@ -220,12 +249,17 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
     workspaceId: window.GrconCloud?.state?.membership?.workspace_id,
     // Transfer the shared/local active base explicitly: workers do not share
     // window globals, and must not silently read another contract's IDB cache.
-    conferenceBase: window.GrconSharedSigemQuery?.current?.() || { meta: {}, records: [] },
-    conferenceBaseStale: Boolean(window.GrconSharedSigemQuery?.state?.stale),
+    conferenceBase: conference.base,
+    conferenceBaseStale: false,
+    requireConferenceEvidence: true,
   };
   const workerBuffer = await buildWorkbookInWorker(records, options, operation?.update).catch(() => null);
   const buffer = workerBuffer || await HistoryReport.buildWorkbook(records, options);
   operation?.assertCurrent();
+  if (workspaceAtStart !== (window.GrconCloud?.state?.membership?.workspace_id || "")
+    || window.GrconSharedSigemQuery?.current?.()?.meta?.snapshotId !== conference.snapshotId) {
+    throw new Error("A Consulta Geral ou o contrato mudou durante a exportação. Gere o relatório novamente.");
+  }
   downloadBlob(
     new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
     HistoryReport.downloadName(records, options),
