@@ -1,5 +1,5 @@
 import type { SigemPwRecord, SigemPwState } from "../types/domain";
-import { reconcileManagerial, type ManagerialDocument } from "./sigemPwManagerial";
+import { managerialDocumentKey, reconcileManagerial, type ManagerialDocument } from "./sigemPwManagerial";
 import { getPwOriginalMatrix } from "./sigemPwRawPw";
 
 type CellValue = string | number;
@@ -138,7 +138,7 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   const ldByCode = new Map<string, string>();
   for (const reference of state.ld.records) {
     const code = text(reference.canonicalDocument || reference.document || reference.documentKey);
-    if (!ldByCode.has(code)) ldByCode.set(code, text(reference.documentKey));
+    if (!ldByCode.has(code)) ldByCode.set(code, managerialDocumentKey(reference));
   }
   const sourceNumbers = new Map<number, number>();
   pw.sourceRows.forEach((number, index) => {
