@@ -44,6 +44,26 @@ A exportação A:K não contém previsão real de submissão. O arquivo contém 
 
 O arquivo de relatório entregue neste trabalho foi reconstruído dos 9.126 envios da planilha fornecida, com o exportador oficial. Não contém uma Consulta Geral autenticada nova. Por isso todos os seus registros ficam NÃO VERIFICADO / INDETERMINADO, sem inventar evidências.
 
+## Correção da fonte da exportação — 30/10/2026
+
+O botão **Exportar relação** do Histórico agora exige a mesma Consulta Geral ativa
+da Conferência antes de montar as colunas G:K da aba **Colar GRCON v3**.
+Caso a base não esteja carregada, o aplicativo tenta atualizá-la. Se a base
+estiver indisponível/desatualizada ou não possuir identificador do snapshot,
+**a exportação é cancelada com erro explícito** em vez de preencher todos os
+status como NÃO VERIFICADO. Nenhuma postagem é inferida só por existir eGRDT.
+
+A preferência de uma Consulta Geral local importada permanece respeitada.
+Se o contrato ou o snapshot mudar durante a geração, o download é cancelado,
+para não entregar resultados de outra fonte. Se houver status SIGEM divergentes
+no mesmo instante para código e revisão exatos, G informa
+**POSTADO — STATUS SIGEM CONFLITANTE**; H confirma somente presença da revisão,
+não sua aprovação.
+
+Esta alteração exige build e publicação do aplicativo antes de valer em produção;
+a cópia antiga do Excel não se corrige sozinha. A importação da aba Colar GRCON
+deve ser refeita a partir de uma nova exportação do aplicativo atualizado.
+
 ## Validação
 
 `node tests/colar_grcon_v3.cjs` valida a lógica oficial, revisão exata e divergente, bases vazias/desatualizadas, repostagem, estados da evidência, 12 mil documentos e a execução real do worker via importScripts. O XLSX é aberto novamente e confere os tipos, as posições das onze colunas, a data e o contador do lote.
