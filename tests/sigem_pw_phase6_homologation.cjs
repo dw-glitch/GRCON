@@ -111,6 +111,37 @@ assert.equal(plan.sheets["REL. PW"][1][2],"ABC","outras empresas permanecem na f
 const elapsed=Math.round(performance.now()-started);
 const memory=Math.round(process.memoryUsage().heapUsed/1024/1024);
 assert.ok(elapsed<120000,"planejador não pode exceder 2 minutos na amostra sintética");
+// Bases antigas podem conter documento + revisão sem documentKey persistida.
+// A contagem e o vínculo do Excel precisam usar a identidade integral do core.
+const legacyCode="RL-5290.00-22313-955-C1O-99999";
+const legacyCells=Array(70).fill("");
+legacyCells[0]=legacyCode;legacyCells[1]="Liberado";
+legacyCells[2]="CSG";legacyCells[3]="B";legacyCells[4]="Sim";
+const legacy={
+  ld:{meta:{fileName:"Referência histórica"},records:[{
+    document:legacyCode,revision:"B",status:"EMITIDO",title:"Fonte antiga"
+  }]},
+  pw:{meta:{fileName:"PW histórico",companyColumn:"C",pwRawHeaders:headers,pwRawColumnCount:70,
+    columns:{state:"o_statename",revision:"Revisao",lastEmission:"Última emissão"}},
+    records:[{document:legacyCode,revision:"B",state:"Liberado",lastEmission:"Sim",sourceRow:2}],
+    sourceRecords:[{document:legacyCode,revision:"B",sourceRow:2,pwRawCells:legacyCells}]},
+  sigem:{meta:{fileName:"SIGEM histórico"},records:[{document:legacyCode,revision:"B",status:"Sem Comentários"}]},
+  model:{normalizedPw:[{document:legacyCode,revision:"B",state:"Liberado",lastEmission:"Sim",sourceRow:2}],
+    normalizedSigem:[{document:legacyCode,revision:"B",status:"Sem Comentários"}]},
+  result:{lists:{sigemN1710OutsideLd:[],pwN1710OutsideLd:[]}},
+};
+const legacyReport=reconcileManagerial(legacy);
+assert.equal(legacyReport.rows.length,1,"historical LD without documentKey is not an empty universe");
+assert.equal(legacyReport.summary.active,1);
+assert.equal(legacyReport.summary.registered,1);
+assert.equal(legacyReport.summary.emitted,1);
+assert.equal(legacyReport.summary.posted,1);
+assert.equal(legacyReport.summary.compliant,1);
+const legacyPlan=coordinatorPlan(legacy);
+assert.equal(legacyPlan.formulas.length,1);
+assert.match(legacyPlan.formulas[0].f,/'REL\. PW'!\$D\$2/);
+assert.equal(legacyPlan.sheets["N-1710"][3][9],"Sem ação necessária");
+
 console.log(JSON.stringify({suite:"sigem-pw-phase6-volume",passed:true,
   referenceDocuments:DOCUMENTS,pwRawRows:PW_ROWS,pwColumns:70,
   dashboardRows:report.rows.length,wbMainRows:plan.sheets["N-1710"].length,
