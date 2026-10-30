@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import { DocumentClassBadge } from "../../core/ui/DocumentClassBadge";
 import { UiDrawer } from "../../core/ui/UiPrimitives";
 import { useSigemPwEvolution } from "./hooks/useSigemPwEvolution";
@@ -339,7 +340,8 @@ function MetricAuditDrawer({
     formula: fallback?.[1] || "Contagem derivada dos snapshots selecionados.",
     rows: [],
   };
-  return (
+  // O painel é portalizado para não ficar preso ao scroll/stacking do módulo.
+  return createPortal(
     <UiDrawer
       open={Boolean(metric)}
       onClose={onClose}
@@ -368,7 +370,8 @@ function MetricAuditDrawer({
           <small>Versão da análise: {comparison?.analysisVersion || sigem?.analysisVersion || pw?.analysisVersion || "—"}</small>
         </section>
       </div>
-    </UiDrawer>
+    </UiDrawer>,
+    document.body,
   );
 }
 
@@ -425,7 +428,8 @@ function DetailDrawer({
     ["Regra/evidência de emissão", row.matchedPw?.emissionReason || row.emissionReason],
     ["Chave documento + revisão", row.documentRevisionKey],
   ];
-  return (
+  // O painel é portalizado para não ficar preso ao scroll/stacking do módulo.
+  return createPortal(
     <UiDrawer
       open={Boolean(row)}
       onClose={onClose}
@@ -457,7 +461,8 @@ function DetailDrawer({
           </section>
         ))}
       </div>
-    </UiDrawer>
+    </UiDrawer>,
+    document.body,
   );
 }
 
