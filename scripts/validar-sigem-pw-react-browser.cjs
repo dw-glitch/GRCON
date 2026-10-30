@@ -1644,6 +1644,7 @@ async function waitEvolutionReady(page) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       const dimensions = await page.evaluate(() => {
         const table = document.querySelector("#spw-evo-table");
+        const tableWrap = document.querySelector("#spw-evolution-section .spw-evo-table-wrap");
         const section = document.querySelector("#spw-evolution-section");
         return {
           documentScrollWidth: document.documentElement.scrollWidth,
@@ -1653,12 +1654,21 @@ async function waitEvolutionReady(page) {
           evolutionSectionHeight: section?.getBoundingClientRect().height || 0,
           tableScrollWidth: table?.scrollWidth || 0,
           tableClientWidth: table?.clientWidth || 0,
+          tableWrapScrollWidth: tableWrap?.scrollWidth || 0,
+          tableWrapClientWidth: tableWrap?.clientWidth || 0,
         };
       });
       metrics.evolutionWidths[String(width)] = dimensions;
       assert.ok(dimensions.documentScrollWidth <= dimensions.documentClientWidth + 1, "overflow global da Evolução em " + width + "px");
       assert.ok(dimensions.evolutionSectionScrollWidth <= dimensions.evolutionSectionClientWidth + 1, "overflow da seção em " + width + "px");
-      if (width === 390) assert.ok(dimensions.tableScrollWidth > dimensions.tableClientWidth, `tabela deve ter rolagem local no mobile: ${JSON.stringify(dimensions)}`);
+      if (width === 390) {
+        assert.ok(dimensions.evolutionSectionClientWidth <= dimensions.documentClientWidth + 1,
+          `a Evolução não deve crescer além do viewport mobile: ${JSON.stringify(dimensions)}`);
+        assert.ok(dimensions.tableWrapClientWidth <= dimensions.documentClientWidth + 1
+          && dimensions.tableWrapScrollWidth > dimensions.tableWrapClientWidth
+          && dimensions.tableClientWidth > dimensions.tableWrapClientWidth,
+          `a rolagem local deve estar no contêiner da tabela: ${JSON.stringify(dimensions)}`);
+      }
     }
     metrics.evolutionSectionHeight390After = metrics.evolutionWidths["390"].evolutionSectionHeight;
 
