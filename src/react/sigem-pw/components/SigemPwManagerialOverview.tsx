@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SigemPwState } from "../types/domain";
 import { reconcileManagerial, type ManagerialDocument } from "../services/sigemPwManagerial";
 
@@ -39,6 +39,8 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [selectedCode, setSelectedCode] = useState("");
+  const evidenceRef = useRef<HTMLElement>(null);
+  useEffect(() => { if (selectedCode) evidenceRef.current?.scrollIntoView({ block: "nearest" }); }, [selectedCode]);
   const report = useMemo(() => reconcileManagerial(state), [state.ld, state.pw, state.sigem, state.model, state.result]);
   const kpis: { key: KpiKey; label: string; value: number | null; tip: string }[] = [
     { key: "active", label: "Documentos ativos", value: report.summary.active, tip: "Documentos únicos vigentes nas referências." },
@@ -153,7 +155,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
         </nav>
       </div>
       {selected ? (
-        <aside className="spw-managerial-evidence" role="region" aria-label={"Evidências do documento " + selected.code}>
+        <aside ref={evidenceRef} className="spw-managerial-evidence" role="region" aria-label={"Evidências do documento " + selected.code}>
           <div className="spw-managerial-evidence-head"><div><span className="spw-kicker">RASTREABILIDADE</span><h4>{selected.code}</h4></div>
             <button type="button" className="secondary-button" onClick={() => setSelectedCode("")}>Fechar detalhes</button>
           </div>
