@@ -404,6 +404,7 @@
     let originalHeaders = null;
     let columns = null;
     const records = [];
+    const sourceRecords = [];
     let sourceRowCount = 0;
     let widestSourceRow = 0;
     let invalidCount = 0;
@@ -438,14 +439,19 @@
       sourceRowCount += 1;
       widestSourceRow = Math.max(widestSourceRow, row.length);
       const document = rowValue(row, columns.document);
-      if (!document) {
-        invalidCount += 1;
-        emptyDocumentCount += 1;
-        return;
-      }
       const identity = documentIdentity(document);
       if (!identity.key) {
+        // A aba REL. PW reproduz a fonte integral; linhas sem código válido
+        // jamais entram na conciliação, mesmo com CSG/QTM na coluna C.
+        sourceRecords.push({
+          document,
+          company: rowValue(row, columns.company),
+          sourceRow: rowIndex + 1,
+          pwRawCells: row.slice(),
+          pwRawInvalid: true,
+        });
         invalidCount += 1;
+        if (!document) emptyDocumentCount += 1;
         return;
       }
       const revisionComplete = rowValue(row, columns.revisionComplete);
@@ -457,7 +463,7 @@
       if (revisionSeen.has(duplicateKey)) duplicateRevisionCount += 1;
       else revisionSeen.add(duplicateKey);
 
-      records.push({
+      const parsedRecord = {
         document,
         company: rowValue(row, columns.company),
         documentKey: identity.key,
@@ -486,7 +492,9 @@
         // Células originais na ordem exata do CSV; dados não mapeados NÃO
         // desaparecem. O motor de indicadores nunca consulta estas células.
         pwRawCells: row.slice(),
-      });
+      };
+      records.push(parsedRecord);
+      sourceRecords.push(parsedRecord);
     });
 
     if (!headers) throw new Error("Base ProjectWise vazia ou sem cabeçalho legível.");
@@ -497,6 +505,7 @@
     return {
       ok: true,
       records,
+      sourceRecords,
       meta: {
         version: PW_BASE_VERSION,
         fileName: text(fileMeta && fileMeta.fileName),
@@ -702,7 +711,10 @@
   }
 
   function sanitizePwRecords(records, ldRecords) {
-    const sourceRecords = Array.isArray(records) ? records : [];
+    // Os inválidos existem exclusivamente no backup/exportação da fonte.
+    // Nunca contam como cadastro PW nem contaminam os KPIs por empresa.
+    const sourceRecords = (Array.isArray(records) ? records : [])
+      .filter((record) => record && !record.pwRawInvalid && documentIdentity(record.document).key);
     const ldUniverse = buildLdUniverse(ldRecords || []);
     const companyScope = partitionPwCompanyRecords(sourceRecords);
     const accepted = normalizeRecords(companyScope.eligible, "pw", ldUniverse, true);
