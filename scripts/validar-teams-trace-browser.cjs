@@ -29,6 +29,17 @@ const root=path.resolve(__dirname,'..');
    window.dispatchEvent(new CustomEvent('grcon:cloud-ready'));
    await window.GrconTeamsTrace.refresh();
    await window.GRCONModuleLoader.ensure('history');
+   // A relação Colar GRCON v3 exige uma Consulta Geral ativa. O cenário
+   // Teams usa documentos sintéticos, portanto precisa da fonte sintética
+   // correspondente em vez de exportar tudo como NÃO VERIFICADO.
+   const query=window.GrconSharedSigemQuery;
+   if(!query?.setLocal)throw Error('A Consulta Geral não foi carregada no teste de exportação');
+   query.state.workspace=w;
+   await query.setLocal({meta:{fileName:'Consulta Geral QA.xlsx',referenceDate:new Date().toISOString().slice(0,10)},
+     records:[
+       {document:'DOC-001',revision:'0',status:'Em análise',modifiedAt:new Date().toISOString()},
+       {document:'DOC-002',revision:'A',status:'Recusado',modifiedAt:new Date().toISOString()},
+     ]});
   },{w,hid,number:a.egrdt_number});
   console.log('QA: fixture loaded, activating history');
   await page.evaluate(()=>window.GRCONModuleLoader.ensureModule('history'));  
@@ -72,7 +83,11 @@ const root=path.resolve(__dirname,'..');
    assert.ok(values.some(v=>v.includes('Dados do Teams não atualizados')),name+' must flag stale Teams evidence');
    return book;
   }
-  await downloadReport('#history-export-period','Historico_Teams_500');
+  const historico=await downloadReport('#history-export-period','Historico_Teams_500');
+  const colar=historico.getWorksheet('Colar GRCON v3');
+  assert.ok(colar,'exportação precisa conter a aba Colar GRCON v3');
+  assert.equal(colar.getCell('G3').value,'POSTADO — EM ANÁLISE');
+  assert.equal(colar.getCell('G4').value,'POSTADO — RECUSADO');
   await page.evaluate(async()=>{
    for(const src of ['posting_conference_core.js','posting_conference_refinement.js','posting_conference_report.js','posting_conference_app.js'])await window.GRCONModuleLoader.ensure(src);
    const core=window.GrconPostingConference,ui=window.GrconPostingConferenceUi;
