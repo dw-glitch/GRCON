@@ -52,6 +52,44 @@ export function SigemPwDashboardApp() {
         <div className="spw-empty" role="alert"><strong>Reimportação do PW necessária</strong><span>A base atual não comprova a leitura da sigla da empresa pela coluna C. Os indicadores foram suspensos até importar uma consulta PW com essa coluna, evitando contagens incorretas.</span></div>
       ) : null}
 
+      <UiPanel className="spw-section-panel spw-overview-panel" labelledBy="spw-overview-title">
+        <div className="spw-section-heading">
+          <div>
+            <span className="spw-kicker">VISÃO GERENCIAL</span>
+            <h3 id="spw-overview-title">Visão consolidada da conciliação</h3>
+            <p>Somente registros PW com sigla CSG ou QTM na coluna C são considerados. Demais empresas ficam separadas para auditoria.</p>
+          </div>
+          {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
+        </div>
+        <SigemPwManagerialOverview state={state} />
+        <details className="spw-advanced-area">
+          <summary>Conferências técnicas por revisão e indicadores operacionais</summary>
+          <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
+        <details className="spw-import-options"><summary>Indicadores operacionais por revisão</summary><SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} /></details>
+        {state.pw.meta ? <section className="spw-pw-audit" aria-label="Conferência da lista PW" id="spw-pw-audit">
+          <div><strong>{fmt(state.result?.quality.pwSourceRows || 0)}</strong><span>linhas PW com código · CSG/QTM</span></div>
+          <div><strong>{fmt(Number(state.pw.meta?.scopeExcludedCount) || 0)}</strong><span>linhas PW de outras empresas ou sem sigla</span></div>
+          {state.pw.meta?.scopeCompanyColumnMissing ? <small role="alert">A base PW anterior não registra a coluna C. Reimporte a consulta com sigla de empresa para validar os totais.</small> : null}
+          <div><strong>{fmt(state.result?.quality.pwDuplicateGroups || 0)}</strong><span>grupos de código + revisão repetidos</span></div>
+          <div><strong>{fmt(state.result?.quality.pwDuplicateExtraRows || 0)}</strong><span>repetições adicionais</span></div>
+          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwDuplicates")}>Ver duplicados PW</button>
+          <small>A lista de duplicados usa apenas o PW das empresas CSG/QTM. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
+        </section> : null}
+        {!state.ld.meta && state.sigem.meta ? <div className="spw-empty" role="alert"><strong>Referências documentais necessárias para os totais oficiais</strong><span>Sem referências válidas, o painel oficial não calcula cadastro, emissão ou postagem. Inclua as fontes do contrato antes de comparar.</span></div> : null}
+        {state.result?.quality?.ldAvailable ? <div className="spw-pw-audit" role="status">
+          <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> SIGEM fora das referências</span>
+          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("sigemN1710OutsideLd")}>Conferir na lista</button>
+          <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> PW fora das referências</span>
+          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwN1710OutsideLd")}>Conferir PW</button>
+        </div> : null}
+        <details className="spw-import-options"><summary>Comparativos operacionais e situações por revisão</summary>
+          <SigemPwSituationCards state={state} activeList={state.activeList} onSelect={(list) => adapter.setActiveList(list)} />
+        </details>
+        </details>
+      </UiPanel>
+
+      <details className="spw-sources-disclosure" open={loadedBases < 3}>
+        <summary>Gerenciar fontes de comparação · ${loadedBases}/3 bases carregadas</summary>
       <UiPanel className="spw-section-panel spw-bases-panel" labelledBy="spw-bases-title">
         <div className="spw-section-heading">
           <div>
@@ -79,42 +117,10 @@ export function SigemPwDashboardApp() {
         />
       </UiPanel>
 
-      <UiPanel className="spw-section-panel spw-overview-panel" labelledBy="spw-overview-title">
-        <div className="spw-section-heading">
-          <div>
-            <span className="spw-kicker">VISÃO CONSOLIDADA</span>
-            <h3 id="spw-overview-title">Totais e pendências operacionais</h3>
-            <p>Somente registros PW com sigla CSG ou QTM na coluna C são considerados. Demais empresas ficam separadas para auditoria.</p>
-            <p>{state.revisionScope === "revision0"
-              ? "Visão principal do cadastro inicial: ocorrências em revisão 0 e cadastros sem revisão; a existência usa a base PW completa."
-              : "Visão de movimentação documental: cada Documento + Revisão é uma ocorrência independente."}</p>
-          </div>
-          {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
-        </div>
-        <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
-        <SigemPwManagerialOverview state={state} />
-        <details className="spw-import-options"><summary>Indicadores operacionais por revisão</summary><SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} /></details>
-        {state.pw.meta ? <section className="spw-pw-audit" aria-label="Conferência da lista PW" id="spw-pw-audit">
-          <div><strong>{fmt(state.result?.quality.pwSourceRows || 0)}</strong><span>linhas PW com código · CSG/QTM</span></div>
-          <div><strong>{fmt(Number(state.pw.meta?.scopeExcludedCount) || 0)}</strong><span>linhas PW de outras empresas ou sem sigla</span></div>
-          {state.pw.meta?.scopeCompanyColumnMissing ? <small role="alert">A base PW anterior não registra a coluna C. Reimporte a consulta com sigla de empresa para validar os totais.</small> : null}
-          <div><strong>{fmt(state.result?.quality.pwDuplicateGroups || 0)}</strong><span>grupos de código + revisão repetidos</span></div>
-          <div><strong>{fmt(state.result?.quality.pwDuplicateExtraRows || 0)}</strong><span>repetições adicionais</span></div>
-          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwDuplicates")}>Ver duplicados PW</button>
-          <small>A lista de duplicados usa apenas o PW das empresas CSG/QTM. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
-        </section> : null}
-        {!state.ld.meta && state.sigem.meta ? <div className="spw-empty" role="alert"><strong>Referências documentais necessárias para os totais oficiais</strong><span>Sem referências válidas, o painel oficial não calcula cadastro, emissão ou postagem. Inclua as fontes do contrato antes de comparar.</span></div> : null}
-        {state.result?.quality?.ldAvailable ? <div className="spw-pw-audit" role="status">
-          <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> SIGEM fora das referências</span>
-          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("sigemN1710OutsideLd")}>Conferir na lista</button>
-          <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> PW fora das referências</span>
-          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwN1710OutsideLd")}>Conferir PW</button>
-        </div> : null}
-        <details className="spw-import-options"><summary>Comparativos operacionais e situações por revisão</summary>
-          <SigemPwSituationCards state={state} activeList={state.activeList} onSelect={(list) => adapter.setActiveList(list)} />
-        </details>
-      </UiPanel>
+      </details>
 
+      <details className="spw-legacy-disclosure">
+        <summary>Auditoria avançada: listas por revisão, duplicados, histórico e evolução documental</summary>
       <UiPanel className="spw-list-card" labelledBy="spw-list-title">
         <header className="spw-list-head">
           <div>
@@ -172,8 +178,8 @@ export function SigemPwDashboardApp() {
       </UiPanel>
 
       <SigemPwOutOfScope state={state} />
-
-        <SigemPwRevisionSection />
+      <SigemPwRevisionSection />
+      </details>
 
       <SigemPwBaseHistoryDialog
         state={state}
