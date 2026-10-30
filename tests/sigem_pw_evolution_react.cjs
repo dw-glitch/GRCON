@@ -90,6 +90,8 @@ assert.ok(app.includes("Todas as revisões"));
 assert.match(app, /data-evo-select/);
 assert.match(app, /data-evo-row/);
 assert.match(app, /UiDrawer/);
+assert.match(app, /createPortal/);
+assert.equal((app.match(/document\.body,/g) || []).length, 2, "ambos os drawers da Evolução devem ser portalizados fora do scroll do módulo");
 assert.match(app, /data-analysis-id/);
 assert.match(app, /event\.currentTarget\.focus\(\)/);
 assert.match(app, /drawerClassName="spw-evo-drawer"/);
