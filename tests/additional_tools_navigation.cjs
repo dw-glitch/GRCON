@@ -62,4 +62,12 @@ assert.match(css, /\.additional-tool-card/);
 assert.match(css, /@media\(max-width:760px\)/);
 assert.match(css, /prefers-reduced-motion:reduce/);
 
+
+// O atalho Vincula deve acompanhar a implantação do aplicativo em Workers,
+// sem redirecionar usuários de volta à hospedagem antiga.
+const vinculaShortcut = html.match(/<a\\b[^>]*app-shortcut-link-vincula[^>]*>/)?.[0];
+assert.ok(vinculaShortcut, "Atalho Vincula não encontrado na caixa Aplicativos");
+assert.match(vinculaShortcut, /href="https:\\/\\/vincula-cloudflare\\.grcon-qualidade\\.workers\\.dev\\/"/);
+assert.doesNotMatch(html, /vincula-three\\.vercel\\.app/);
+
 console.log("additional_tools_navigation: ok");
