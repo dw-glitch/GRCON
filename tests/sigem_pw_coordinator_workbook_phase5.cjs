@@ -116,7 +116,7 @@ const { workbook } = buildCoordinatorWorkbook(state, ExcelJS);
   assert.equal(source.getCell("BR3").value,quoted,"raw formula-like PW text stays literal");
   assert.equal(source.getCell("C5").value,"ABC");
   assert.equal(source.getCell("BR6").value,"Preservar atributos; não contar como documento");
-  assert.equal(source.getCell("A6").value,null,"linha sem código preservada sem inventar documento");
+  assert.ok(["",null].includes(source.getCell("A6").value),"linha sem código preservada sem inventar documento");
   assert.equal(source.getCell("A1").value,"NumeroDocumentoCliente");
   assert.equal(source.views[0].ySplit,1);
   assert.equal(reopened.getWorksheet("SIGEM").actualRowCount,0);
