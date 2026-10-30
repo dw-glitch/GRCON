@@ -89,6 +89,9 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.ready&&!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.revisionScope),'all','a abertura inclui todas as revisões');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20001);
+ // The manager-first UX keeps revision metrics and source actions collapsed.
+ // Browser QA explicitly expands them before exercising the legacy workflow.
+ await page.evaluate(() => document.querySelectorAll('details.spw-advanced-area, details.spw-legacy-disclosure, details.spw-sources-disclosure').forEach(item => { item.open = true; }));
  await page.locator('[data-revision-scope="revision0"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
  // The revision-level KPI is intentionally collapsed under the new
@@ -148,6 +151,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>window.GrconSigemPwDashboardUi.activate());
  assert.equal(await page.inputValue('#spw-analysis-sigem'),'shared-old');
  // Historical edit goes to the shared RPC and preserves upload and official identity.
+ await page.evaluate(() => { const sources = document.querySelector('details.spw-sources-disclosure'); if (sources) sources.open = true; });
  await page.locator('[data-edit-base-date="sigem"]').click();
  await page.fill('#spw-date-input','2026-10-04');await page.locator('#spw-date-save').click();
  await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);

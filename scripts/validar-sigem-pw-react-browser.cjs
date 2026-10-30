@@ -88,6 +88,13 @@ async function exposeApp(page) {
     "#grcon-cloud-auth { display: none !important; }",
   ].join("\n") });
 }
+async function expandTechnicalViews(page) {
+  // Preserve the manager-first default UI; only browser regression tests
+  // reveal historical revision controls, bases and legacy list exports.
+  await page.evaluate(() => document.querySelectorAll(
+    "details.spw-advanced-area, details.spw-legacy-disclosure, details.spw-sources-disclosure"
+  ).forEach(item => { item.open = true; }));
+}
 async function clickSpw(page) {
   await page.waitForFunction(() => Array.from(document.querySelectorAll("[data-spw-open]")).some((node) => {
     const rect = node.getBoundingClientRect();
@@ -107,6 +114,7 @@ async function clickSpw(page) {
   assert.equal(clicked, true);
   await page.locator("#grcon-sigem-pw-root").waitFor({ state: "visible", timeout: 30000 });
   await page.waitForFunction(() => Boolean(window.GrconSigemPwDashboardUi?.state?.ready) && !window.GrconSigemPwDashboardUi.state.busy, null, { timeout: 30000 });
+  await expandTechnicalViews(page);
 }
 async function openDashboard(page) {
   const started = Date.now();
@@ -118,6 +126,7 @@ async function openDashboard(page) {
 }
 async function waitIdle(page) {
   await page.waitForFunction(() => Boolean(window.GrconSigemPwDashboardUi?.state?.ready) && !window.GrconSigemPwDashboardUi.state.busy, null, { timeout: 30000 });
+  await expandTechnicalViews(page);
 }
 async function importFile(page, selector, file) {
   const started = Date.now();
