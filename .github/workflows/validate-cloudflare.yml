@@ -88,7 +88,7 @@ jobs:
           node scripts/validar-allocation-publication-browser.cjs
           node scripts/validar-allocation-auditor-browser.cjs
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: cloudflare-browser
