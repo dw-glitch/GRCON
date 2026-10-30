@@ -276,7 +276,7 @@
       state.audit = await Conference.loadAudit();
       state.page = 1;
       root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: result.summary, eventSummary: result.eventSummary, consolidation: result.consolidation, changes: result.changes, baseMeta: result.parsed.meta } }));
-      notify(`Consulta Geral atualizada: ${fmt(result.summary.total)} documento(s) único(s) · ${fmt(result.summary.sendCount)} envio(s) conferido(s).`, "success");
+      notify(`Consulta Geral importada em uso na conferência e na análise de arquivos: ${fmt(result.summary.total)} documento(s) único(s) · ${fmt(result.summary.sendCount)} envio(s) conferido(s).`, "success");
       render();
     } catch (error) {
       currentOperation?.fail(error);
@@ -291,10 +291,6 @@
     if (state.busy || !root.GrconSharedSigemQuery.state.local) return;
     setBusy(true, "Publicando Consulta Geral para a equipe…");
     try {
-      if (root.GrconBackgroundJobs?.available?.()) {
-        await root.GrconBackgroundJobs.submit("sigem_import", root.GrconSharedSigemQuery.state.local);
-        return;
-      }
       await root.GrconSharedSigemQuery.publish(root.GrconSharedSigemQuery.state.local);
       await adoptSharedBase();
       notify("Consulta Geral publicada para todos os usuários.", "success");
@@ -758,7 +754,9 @@
     const query = root.GrconSharedSigemQuery;
     el("pc-publish").hidden = !query?.canPublish() || !query?.state.local;
     el("pc-publish").disabled = state.busy || query?.state.busy;
-    if (query?.state.shared) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.stale ? "Consulta Geral compartilhada em cache; pode estar desatualizada." : "Consulta Geral compartilhada em uso." }));
+    if (query?.current()) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.current() === query.state.local
+      ? "Consulta Geral importada em uso neste navegador, na conferência e na análise de arquivos. Publique para atualizar a equipe."
+      : query.state.stale ? "Consulta Geral compartilhada em cache; pode estar desatualizada." : "Consulta Geral compartilhada em uso." }));
     if (query?.state.error) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.error }));
     el("pc-export").disabled = state.busy || !documentRows().length;
   }
@@ -850,6 +848,13 @@
   }
 
   root.addEventListener("grcon:shared-sigem-updated", () => { if (state.ready && !state.busy) void adoptSharedBase(); });
+  root.addEventListener("grcon:shared-sigem-retry", event => {
+    if (!state.busy) return;
+    const message = `Banco temporariamente ocupado. Retomando o envio (tentativa ${event.detail.attempt + 1}/4)…`;
+    currentOperation?.update(message);
+    const label = el("pc-progress")?.querySelector("span");
+    if (label) label.textContent = message;
+  });
   root.addEventListener("grcon:shared-sigem-date-updated", async event => {
     const base = root.GrconSharedSigemQuery.current();
     if (!base || !state.ready || event.detail?.meta?.snapshotId !== base.meta.snapshotId) return;

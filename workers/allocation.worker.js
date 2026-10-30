@@ -124,6 +124,9 @@ async function exportGroup({results,meta,template}){
 self.onmessage=async({data})=>{const {id,operation,input}=data;try{
  let result;
  if(operation==='parse')result=await parseFile(input.kind,input.file);
+ else if(operation==='audit-revise-origin'){
+  result=await self.GrconAllocationLdExport.reviseAudit(input.file,input.rows,input.sourceHash,XLSX,JSZip,self.RECONTitleWriter,self.RECONLdPreservation);
+ }
  else if(operation==='audit-revise-ld'){
   const original=read(new Uint8Array(await input.file.arrayBuffer()));
   for(const row of input.rows){

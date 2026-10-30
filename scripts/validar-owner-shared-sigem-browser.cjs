@@ -66,7 +66,13 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
   }};
   await w.GRCONModuleLoader.ensure('sigem_pw_dashboard_core.js');
   await w.GrconSigemPwDashboard.kvSet('sigem-pw-stage7-preupdate-reset-v1',true);
-  await w.GrconSigemPwDashboard.savePwBase({meta:{companyColumn:'C',fileName:'PW-A.csv',snapshotId:'pw-a',importedAt:'2026-10-05T13:00:00Z'},records:[{document:et(1),revision:'0',state:'Liberado',lastEmission:'Sim',company:'CSG'}]}, {meta:null,records:[]});
+  await w.GrconSigemPwDashboard.saveLdBase({
+    meta:{fileName:'LD-QA-SINTETICA.xlsx',importedAt:'2026-10-07T13:00:00Z',snapshotId:'qa-ld'},
+    records:Array.from({length:20000},(_,i)=>({
+      document:et(i+1),revision:'0',title:'Referência sintética QA',status:'EMITIDO'
+    }))
+   });
+   await w.GrconSigemPwDashboard.savePwBase({meta:{companyColumn:'C',fileName:'PW-A.csv',snapshotId:'pw-a',importedAt:'2026-10-05T13:00:00Z'},records:[{document:et(1),revision:'0',state:'Liberado',lastEmission:'Sim',company:'CSG'}]}, {meta:null,records:[]});
   await w.GrconSigemPwDashboard.savePwBase({meta:{companyColumn:'C',fileName:'PW-B.csv',snapshotId:'pw-b',importedAt:'2026-10-07T13:00:00Z'},records:[{document:et(1),revision:'0',state:'Liberado',lastEmission:'Sim',company:'CSG'},{document:et(3),revision:'0',state:'Liberado',lastEmission:'Sim',company:'CSG'}]}, {meta:null,records:[]});
   w.dispatchEvent(new CustomEvent('grcon:cloud-ready'));
  });
@@ -85,6 +91,9 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20001);
  await page.locator('[data-revision-scope="revision0"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
+ // The revision-level KPI is intentionally collapsed under the new
+ // managerial panel. Expose it before the legacy click assertions.
+ await page.getByText('Indicadores operacionais por revisão',{exact:true}).click();
  // The SIGEM headline KPI is auditable and its detail list must equal the number shown for the active revision scope.
  await page.locator('[data-summary-list="sigem"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.activeList),'sigem');

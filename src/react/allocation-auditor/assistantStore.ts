@@ -19,14 +19,14 @@ export const assistant={
  current(){return execute(async(say)=>{const g=window as unknown as Data;await g.GrconAllocationGeneratorUi.auditCurrent();say('Recebi os documentos selecionados no Gerador.');await audit(false,say);});},
  upload(files:File[],kind:'allocation'|'ld'){return execute(async(say)=>{if(kind==='allocation')await service.importMany(files);else await service.importAssistantLd(files);say('Recebi '+files.length+' '+(kind==='allocation'?'alocação(ões)':'LD(s)')+'. Envie uma instrução para iniciar a conferência.');});},
  send(text:string){return execute(async(say)=>{say(text,'user');const g=window as unknown as Data;switch(g.GrconAllocationAssistant.intent(text)){
- case 'audit':await audit(false,say);break;
+ case 'audit':{const reference=g.GrconAllocationAssistant.allocationReference(text);if(reference){await service.openAllocationReference(reference);say('Alocação '+reference+' carregada do histórico publicado.');}await audit(false,say);break;}
  case 'resume':await audit(true,say);break;
  case 'pause':service.cancel();say('Pausa solicitada. Aguarde o lote em processamento.');break;
  case 'package':await assistant.downloadInternal(false,say);break;
  case 'details':say('As pendências estão agrupadas abaixo e o detalhamento completo acompanha o relatório Excel.');break;
  default:{
- const rows=service.snapshot().rows;const candidates=rows.map((r,i)=>({r,i})).filter(({r})=>r.findings.length&&text.includes(r.document));
- if(candidates.length!==1){say('Informe o código completo de um documento para eu interpretar os achados com a IA. Também posso conferir os arquivos e preparar o pacote.');break;}
+ const rows=service.snapshot().rows;const candidates=g.GrconAllocationAssistant.questionRows(rows,text);
+ if(candidates.length!==1){say(candidates.length>1?'Há várias ocorrências desse documento. Informe também a revisão e o código da alocação para consultar a origem exata.':'Informe o código completo de um documento para interpretar seus achados. Também posso conferir os arquivos e preparar o pacote.');break;}
  await service.ai(candidates[0].i,text);const answer=service.snapshot().rows[candidates[0].i].ai?.analysis;
  say(answer?.rationale||'A IA não retornou uma resposta verificável. Consulte as fontes indicadas no relatório.');
  if(answer?.missingEvidence?.length)say('Referências adicionais: '+answer.missingEvidence.join('; '));break;
@@ -36,6 +36,6 @@ export const assistant={
  download(){return execute(speak=>assistant.downloadInternal(false,speak));},
  generate(){return execute(async(say)=>{await service.save();await assistant.downloadInternal(true,say);});},
  group(group:Data){return execute(async(say)=>{await service.acceptGroup(group);await service.save();say('Decisão registrada para '+group.rows.length+' ocorrências do mesmo contexto. Prepare o pacote para gerar as cópias.');});},
- restore(id:string){return execute(async(say)=>{const result=await service.assistantRpc('session-read',{id});const run=service.snapshot().runs.find(r=>r.id===result.payload.runId);if(result.payload.runId&&!run)throw Error('Análise fora da página atual do histórico. Abra pelo Auditor antes de retomar.');if(run)await service.restore(run);emit({sessionId:id,revision:result.revision,messages:result.payload.messages||[]});say('Conversa recuperada. Reanexe as fontes originais e reanalise antes de novas correções.');});},
+ restore(id:string){return execute(async(say)=>{const result=await service.assistantRpc('session-read',{id});if(result.payload.runId)await service.restoreById(result.payload.runId);emit({sessionId:id,revision:result.revision,messages:result.payload.messages||[]});say('Conversa recuperada. Reanexe as fontes originais e reanalise antes de novas correções.');});},
 };
 for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])window.addEventListener(event,()=>{generation++;state=initial();listeners.forEach(f=>f());});

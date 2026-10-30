@@ -38,7 +38,7 @@
       <section id="grcon-admin-editor" hidden><h3 id="grcon-admin-editor-title">Novo usuário</h3><form id="grcon-admin-user-form"><input id="admin-user-id" type="hidden"><div class="grcon-admin-grid"><label>Nome<input id="admin-user-name" required maxlength="160"></label><label>E-mail<input id="admin-user-email" type="email" required></label><label>Função<select id="admin-user-role"><option value="operator">Operador</option><option value="admin">Administrador</option><option value="owner">Proprietário</option></select></label><label><input id="admin-user-active" type="checkbox" checked> Acesso ativo</label></div><div class="egrdt-email-actions"><button type="submit">Salvar usuário</button><button id="admin-user-cancel" type="button">Cancelar</button></div><p id="admin-user-password" hidden></p></form></section>
       <details id="grcon-cloud-invitations-panel"><summary>Convites pendentes</summary><div id="grcon-cloud-invitations"></div></details>
       </section><section data-admin-panel="activity" hidden aria-labelledby="grcon-admin-activity-title"><h3 id="grcon-admin-activity-title" tabindex="-1">Registro de atividades</h3><details id="grcon-cloud-audit-panel" open><summary>Registro de atividades</summary><div id="grcon-cloud-audit"></div></details>
-      </section><section data-admin-panel="contracts" hidden aria-labelledby="grcon-admin-contracts-title"><h3 id="grcon-admin-contracts-title" tabindex="-1">Contratos e configurações</h3><div id="grcon-admin-contract-settings"><form id="grcon-admin-contract-form"><input id="admin-contract-id" type="hidden"><div class="grcon-admin-grid"><label>Código<input id="admin-contract-code" required maxlength="60"></label><label>Nome<input id="admin-contract-name" required maxlength="160"></label><label>Identificação<input id="admin-contract-display" required maxlength="255"></label><label>Empresa<input id="admin-contract-company" maxlength="100"></label><label>Cliente<input id="admin-contract-client" maxlength="100"></label><label>Local<input id="admin-contract-site" maxlength="100"></label><label>Projeto<input id="admin-contract-project" maxlength="100"></label><label>Perfil de regras<input id="admin-contract-profile" maxlength="100"></label><label><input id="admin-contract-active" type="checkbox"> Contrato ativo</label><label><input id="admin-contract-inherit" type="checkbox"> Usar regras documentais da UHDT</label></div><div class="egrdt-email-actions"><button type="submit">Salvar contrato</button><button id="admin-contract-new" type="button">Novo contrato</button></div><small>Desativar preserva os dados e o histórico. Novos contratos começam com suas próprias configurações.</small></form></div></section>
+      </section><section data-admin-panel="contracts" hidden aria-labelledby="grcon-admin-contracts-title"><h3 id="grcon-admin-contracts-title" tabindex="-1">Contratos e configurações</h3><div id="grcon-admin-contract-settings"><form id="grcon-admin-contract-form"><input id="admin-contract-id" type="hidden"><div class="grcon-admin-grid"><label>Código<input id="admin-contract-code" required maxlength="60"></label><label>Nome<input id="admin-contract-name" required maxlength="160"></label><label>Identificação<input id="admin-contract-display" required maxlength="255"></label><label>Empresa<input id="admin-contract-company" maxlength="100"></label><label>Cliente<input id="admin-contract-client" maxlength="100"></label><label>Local<input id="admin-contract-site" maxlength="100"></label><label>Projeto<input id="admin-contract-project" maxlength="100"></label><label>Perfil de regras<input id="admin-contract-profile" maxlength="100"></label><label><input id="admin-contract-active" type="checkbox"> Contrato ativo</label><label><input id="admin-contract-inherit" type="checkbox"> Usar regras documentais da UHDT</label><label><input id="admin-contract-allocation-assistant" type="checkbox"> Assistente de Auditoria no Gerador</label></div><div class="egrdt-email-actions"><button type="submit">Salvar contrato</button><button id="admin-contract-new" type="button">Novo contrato</button></div><small>Desativar preserva os dados e o histórico. Novos contratos começam com suas próprias configurações.</small></form></div></section>
       <section data-admin-panel="technical" hidden aria-labelledby="grcon-admin-technical-title"><h3 id="grcon-admin-technical-title" tabindex="-1">Painel técnico</h3><p>Saúde dos serviços, integrações, falhas e tarefas de todos os contratos.</p><div id="grcon-admin-technical"></div></section>
       <section data-admin-panel="intelligence" hidden><h3 tabindex="-1">Inteligência do Robô</h3><div id="grcon-admin-intelligence"></div></section><section data-admin-panel="storage" hidden aria-labelledby="grcon-admin-storage-title"><h3 id="grcon-admin-storage-title" tabindex="-1">Infraestrutura e armazenamento</h3><div id="grcon-admin-storage"></div></section>
       </div></div>
@@ -101,6 +101,7 @@
     $("#admin-contract-profile").value = c.settings?.ruleProfile || "UNCONFIGURED";
     $("#admin-contract-active").checked = c.active !== false;
     $("#admin-contract-inherit").checked = c.settings?.inheritLegacyRules === true;
+    $("#admin-contract-allocation-assistant").checked = c.settings?.enabledModules?.allocationAuditAssistant === true;
   }
   function editUser(user) {
     if (!master() || user?.isMaster) return;
@@ -203,15 +204,16 @@
       const copied = (status.turso.snapshots || []).filter(s => s.state === "verified");
       const copyAllowed = status.turso.connected && status.externalStorageAuthorized && status.preflightApproved;
       host.innerHTML = `<div class="grcon-storage-visuals">
-        ${storageCard("Supabase", status.databaseBytes, status.supabaseCapacityBytes, "Banco operacional · fonte oficial")}
-        ${storageCard("Turso", status.turso.databaseBytes, status.turso.capacityBytes, "Consulta Geral · cópia em homologação", status.turso.connected)}
+        ${storageCard("Supabase", status.databaseBytes, status.supabaseCapacityBytes, status.newImportsTarget ? "Permissões, metadados e índice operacional" : "Banco operacional · fonte oficial")}
+        ${storageCard("Turso", status.turso.databaseBytes, status.turso.capacityBytes, status.payloadSource === "turso" ? "Consulta Geral · fonte dos dados" : status.newImportsTarget ? "Consulta Geral · novas importações" : "Consulta Geral · cópia em homologação", status.turso.connected)}
       </div><p class="grcon-storage-measured-at">Última verificação: ${escape(new Date().toLocaleString("pt-BR"))}. Percentuais aparecem apenas quando o limite é informado de forma explícita.</p>
       <section class="grcon-storage-diagnostics" aria-label="Diagnóstico dos serviços">
         <h4>Diagnóstico dos serviços</h4>
         <p>${status.turso.connected ? "Supabase: medição disponível. Turso: conexão confirmada." : "Turso: " + escape(connectionMessages[connectionError]) + " Código: " + escape(connectionError) + "."}</p>
-        <small>Uma conexão confirmada não comprova conclusão da migração. A fonte oficial permanece no Supabase.</small>
+        <p>Neon: ${status.neon?.connected ? (status.neon.ready ? "conexão e estrutura auxiliar confirmadas" : "conectado; estrutura auxiliar pendente") : status.neon?.configured ? "conexão não confirmada" : "configuração da conexão pendente"}. A divisão de módulos será definida separadamente.</p>
+        <small>${status.newImportsTarget ? "Novas planilhas são publicadas diretamente no Turso. O Supabase mantém permissões, metadados e o índice operacional." : "Uma conexão confirmada não comprova conclusão da migração. A fonte oficial permanece no Supabase."}</small>
       </section>
-      <details class="grcon-storage-technical"><summary>Ver detalhes de infraestrutura e migração</summary><dl class="grcon-admin-storage-metrics"><div><dt>Fonte oficial</dt><dd>Supabase</dd></div><div><dt>Modo do servidor</dt><dd>${escape(status.mode)}</dd></div><div><dt>Banco Supabase completo</dt><dd>${escape(mib(status.databaseBytes))}</dd></div><div><dt>Tabela da Consulta Geral completa</dt><dd>${escape(mib(status.sourceBytes))}</dd></div><div><dt>Snapshots deste contrato</dt><dd>${escape(Number(status.snapshots || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Registros deste contrato</dt><dd>${escape(Number(status.records || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Turso</dt><dd>${status.turso.connected ? "Conexão confirmada" : status.turso.configured ? "Conexão não confirmada" : "Configuração pendente"}</dd></div><div><dt>Banco Turso completo</dt><dd>${escape(mib(status.turso.databaseBytes))}</dd></div><div><dt>Cópias validadas neste contrato</dt><dd>${copied.length}</dd></div></dl></details><p>A fonte oficial permanece no Supabase. A ativação do Turso depende da conclusão dos testes de migração e recuperação.</p><div class="grcon-admin-row-actions"><button type="button" data-storage-refresh>Atualizar métricas</button><button type="button" data-storage-report>Baixar relatório</button><button type="button" data-storage-copy ${status.turso.connected && status.externalStorageAuthorized && status.preflightApproved ? "" : "disabled"}>Iniciar / retomar cópia</button></div><p data-storage-progress role="status" aria-live="polite"></p>`;
+      <details class="grcon-storage-technical"><summary>Ver detalhes de infraestrutura e migração</summary><dl class="grcon-admin-storage-metrics"><div><dt>Dados completos da Consulta Geral</dt><dd>${status.payloadSource === "turso" ? "Turso" : status.newImportsTarget ? "Turso (bases novas) e Supabase (bases antigas)" : "Supabase"}</dd></div><div><dt>Modo do servidor</dt><dd>${escape(status.mode)}</dd></div><div><dt>Banco Supabase completo</dt><dd>${escape(mib(status.databaseBytes))}</dd></div><div><dt>Tabela da Consulta Geral completa</dt><dd>${escape(mib(status.sourceBytes))}</dd></div><div><dt>Snapshots deste contrato</dt><dd>${escape(Number(status.snapshots || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Registros deste contrato</dt><dd>${escape(Number(status.records || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Turso</dt><dd>${status.turso.connected ? "Conexão confirmada" : status.turso.configured ? "Conexão não confirmada" : "Configuração pendente"}</dd></div><div><dt>Banco Turso completo</dt><dd>${escape(mib(status.turso.databaseBytes))}</dd></div><div><dt>Cópias validadas neste contrato</dt><dd>${copied.length}</dd></div></dl></details><p>${status.payloadSource === "turso" ? "As bases completas são consultadas no Turso. O índice operacional no Supabase não armazena as planilhas completas." : status.newImportsTarget ? "As bases antigas continuam no Supabase até a liberação das cópias verificadas." : "A fonte oficial permanece no Supabase. A ativação do Turso depende da conclusão dos testes de migração e recuperação."}</p><div class="grcon-admin-row-actions"><button type="button" data-storage-refresh>Atualizar métricas</button><button type="button" data-storage-report>Baixar relatório</button><button type="button" data-storage-copy ${status.turso.connected && status.externalStorageAuthorized && status.preflightApproved ? "" : "disabled"}>Iniciar / retomar cópia</button></div><p data-storage-progress role="status" aria-live="polite"></p>`;
       const backgroundButton=document.createElement("button");
       backgroundButton.type="button";backgroundButton.dataset.storageBackground="";backgroundButton.textContent="Copiar em segundo plano";
       backgroundButton.disabled=!copyAllowed;
@@ -242,7 +244,10 @@
         try{await api("background-copy",{});backgroundProgress.textContent="Cópia iniciada no servidor. Conferindo progresso…";await monitor();}
         catch(error){if(valid()){backgroundProgress.textContent=error.message;backgroundButton.disabled=false;host.querySelector("[data-storage-copy]").disabled=false;}}
       });
-      void monitor();
+      if(status.payloadSource==='turso'){
+        backgroundButton.hidden=true;host.querySelector('[data-storage-copy]').hidden=true;
+        backgroundProgress.textContent='Migração concluída. As bases completas e as novas importações são consultadas no Turso.';
+      }else void monitor();
       host.querySelector("[data-storage-refresh]").addEventListener("click", () => void loadStorage());
       host.querySelector("[data-storage-report]").addEventListener("click", async () => {
         const refreshed = await api("status").catch(() => status); if (!valid()) return;
@@ -290,9 +295,93 @@
         } catch (error) { if (report) report.error = error.message; if (valid()) progress.textContent = error.message + " Os lotes já conferidos foram preservados."; }
         finally { if (report) report.finishedAt = new Date().toISOString(); if (valid()) for (const button of host.querySelectorAll("button")) button.disabled = false; }
       });
+      await loadBaseManagement(host,api,valid);
     } catch (error) { if (valid()) host.textContent = error.message; }
   }
   let unmountIntelligence = null;
+  async function loadBaseManagement(host,api,valid) {
+    const panel=document.createElement("section");panel.className="grcon-admin-storage-bases";host.append(panel);
+    panel.innerHTML='<h4>Bases da Consulta Geral</h4><p>Exclua versões obsoletas. A base ativa fica protegida. A exclusão permanente também remove a cópia e o backup daquela versão.</p><div data-base-list>Carregando bases…</div><p data-base-message role="status" aria-live="polite"></p>';
+    const message=panel.querySelector("[data-base-message]"),list=panel.querySelector("[data-base-list]");
+    try {
+      const {bases}=await api("bases");if(!valid())return;
+      list.innerHTML='<div style="overflow:auto;max-height:400px"><table class="grcon-admin-table"><thead><tr><th>Versão</th><th>Data</th><th>Arquivo</th><th>Registros</th><th>Ação</th></tr></thead><tbody>'+bases.map(b=>`<tr><td>${escape(b.version)}</td><td>${escape(String(b.date||"").slice(0,10))}</td><td>${escape(b.fileName)}</td><td>${Number(b.records).toLocaleString("pt-BR")}</td><td>${b.status==='active'?'<strong>Base ativa</strong>':`<button type="button" data-delete-base="${escape(b.id)}">${b.deletionPending?'Concluir exclusão':'Excluir permanentemente'}</button>`}</td></tr>`).join("")+'</tbody></table></div>';
+      for(const button of list.querySelectorAll("[data-delete-base]"))button.addEventListener("click",async()=>{
+        const base=bases.find(b=>b.id===button.dataset.deleteBase);if(!base||base.status==='active'||!valid())return;
+        if(!root.confirm(`Excluir permanentemente a versão ${base.version}?\n${base.fileName}\n${Number(base.records).toLocaleString("pt-BR")} registros.\nA cópia no Turso, os registros no Supabase e o backup desta versão serão removidos. Essa ação não pode ser desfeita pela tela.`))return;
+        button.disabled=true;
+        try {
+          let result;do{result=await api("delete-base",{snapshot:base.id,confirm:base.id});}while(!result.complete&&valid());
+          if(!valid())return;
+          root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
+          panel.remove();await loadBaseManagement(host,api,valid);
+        }catch(error){message.textContent=error.message+" A exclusão pode ser retomada nesta tela.";button.disabled=false;}
+      });
+      // The Master may release verified legacy payloads without deleting the
+      // historical snapshot. Every release is checked again in the Worker:
+      // full audit, immutable R2 manifest, verified Turso destination and
+      // exact source fields. A failed request leaves all unproven rows intact.
+      const releasable=bases.filter(b=>!b.storage&&(b.status==='active'||b.status==='archived'));
+      if(releasable.length){
+        const transfer=document.createElement("section");transfer.className="grcon-admin-storage-release";
+        transfer.innerHTML='<h4>Liberar espaço da Consulta Geral no Supabase</h4><p>As planilhas completas de '+releasable.length+' base(s) ainda estão no Supabase. Libere apenas as que tiverem cópia, auditoria integral e backup comprovados no Turso. As bases continuam disponíveis no GRCON; a base ativa não será excluída.</p><button type="button" data-release-verified>Liberar cópias verificadas</button><p data-release-progress role="status" aria-live="polite"></p>';
+        panel.append(transfer);
+        const releaseButton=transfer.querySelector("[data-release-verified]"),progress=transfer.querySelector("[data-release-progress]");
+        releaseButton.addEventListener("click",async()=>{
+          if(!valid()||!root.confirm('Liberar do Supabase apenas os registros completos das '+releasable.length+' bases com cópia integral comprovada no Turso?\\nAs bases e os índices operacionais permanecem; o servidor recusará qualquer base sem auditoria e backup válidos.'))return;
+          releaseButton.disabled=true;
+          let released=0,failed=null;
+          for(const base of releasable){
+            if(!valid())break;
+            progress.textContent='Verificando e liberando '+(released+1)+' de '+releasable.length+' base(s): versão '+base.version+'.';
+            try{
+              let result=null,steps=0;
+              do{
+                if(!valid())break;
+                if(++steps>650)throw new Error("SIGEM_RELEASE_PROGRESS_LIMIT");
+                result=await api("release-base",{snapshot:base.id,confirm:base.id});
+                if(!result||result.ok!==true||typeof result.released!=="boolean")throw new Error("SIGEM_RELEASE_RESPONSE_INVALID");
+                if(!result.released){
+                  const expected=Number(result.expected)||base.records||0;
+                  const processed=Number(result.processed)||0;
+                  const percent=expected?Math.min(100,Math.round(100*processed/expected)):0;
+                  const phase=result.phase==="projecting"?"Preparando e verificando a projeção operacional":result.phase==="cleaning"?"Removendo os registros antigos já protegidos pelo Turso":"Verificando";
+                  progress.textContent=phase+" — versão "+base.version+" ("+percent+"%; etapa "+steps+"). "+(released)+" de "+releasable.length+" bases liberadas. Pode sair da tela e retomar depois.";
+                }
+              }while(valid()&&result?.released!==true);
+              if(!valid())break;
+              if(result?.released!==true)throw new Error("SIGEM_RELEASE_NOT_CONFIRMED");
+              released++;
+            }catch(error){failed='Versão '+base.version+': '+error.message;break;}
+          }
+          if(!valid())return;
+          panel.remove();
+          await loadBaseManagement(host,api,valid);
+          const status=host.querySelector("[data-base-message]");
+          if(status)status.textContent=failed?'Liberadas '+released+' base(s). Interrompido em '+failed+' As demais continuam preservadas. Recarregue e retome após conferir a auditoria.':'Liberadas '+released+' base(s) verificadas. Os registros operacionais permaneceram no Supabase. Confira o tamanho físico do banco e realize manutenção somente após esvaziar a tabela legada.';
+        });
+      }
+      const retire=document.createElement("div");retire.innerHTML='<h4>Desativação do armazenamento documental</h4><p>Os envios e acessos ao antigo Cofre estão desativados.</p><button type="button" data-document-inventory>Verificar arquivos para remoção</button><p data-document-message role="status" aria-live="polite"></p>';panel.append(retire);
+      const preview=retire.querySelector("button"),status=retire.querySelector("[data-document-message]");
+      preview.addEventListener("click",async()=>{
+        preview.disabled=true;
+        try {
+          const inventory=await api("document-inventory");if(!valid())return;
+          status.textContent=`${inventory.objects.toLocaleString("pt-BR")} arquivos · ${(inventory.bytes/1073741824).toLocaleString("pt-BR",{maximumFractionDigits:2})} GiB · ${inventory.multipartUploads} envios multipartes.`;
+          if(!inventory.objects&&!inventory.catalogRecords&&!inventory.multipartUploads){status.textContent="Armazenamento documental removido. Nenhum arquivo ou envio pendente do antigo Cofre.";return;}
+          const remove=document.createElement("button");remove.type="button";remove.textContent="Excluir arquivos do antigo Cofre";retire.append(remove);
+          remove.addEventListener("click",async()=>{
+            if(!root.confirm(`Excluir permanentemente os ${inventory.objects.toLocaleString("pt-BR")} arquivos do antigo Cofre e cancelar os ${inventory.multipartUploads} envios multipartes?\nOs arquivos do seu computador serão preservados. Os backups da Consulta Geral não fazem parte desta exclusão.`))return;
+            remove.disabled=true;let deleted=0;
+            try{
+              let result;do{result=await api("document-purge",{confirm:"EXCLUIR ARQUIVOS DO COFRE"});deleted+=result.deleted;if(valid())status.textContent=`${deleted.toLocaleString("pt-BR")} arquivos removidos…`;}while(!result.complete&&valid());
+              if(valid())status.textContent="Arquivos do antigo Cofre removidos e catálogo limpo.";
+            }catch(error){status.textContent=error.message+" A remoção pode ser retomada.";remove.disabled=false;}
+          });
+        }catch(error){status.textContent=error.message;preview.disabled=false;}
+      });
+    }catch(error){message.textContent=error.message;}
+  }
   async function selectSection(section, focus = true) {
     if (!master() || !state.open || !["users", "contracts", "technical", "activity", "storage", "intelligence"].includes(section)) return;
     unmountIntelligence?.(); unmountIntelligence = null;
@@ -335,7 +424,7 @@
   async function saveContract(event) {
     event.preventDefault(); if (!master() || state.saving) return;
     const code = $("#admin-contract-code").value.trim().toUpperCase(), inherit = $("#admin-contract-inherit").checked;
-    const input = { id: $("#admin-contract-id").value || null, code, slug: code.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""), name: $("#admin-contract-name").value.trim(), displayName: $("#admin-contract-display").value.trim(), company: $("#admin-contract-company").value.trim(), client: $("#admin-contract-client").value.trim(), site: $("#admin-contract-site").value.trim(), project: $("#admin-contract-project").value.trim(), active: $("#admin-contract-active").checked, settings: { ...(state.editing?.settings || {}), ruleProfile: $("#admin-contract-profile").value.trim() || "UNCONFIGURED", inheritLegacyRules: inherit, enabledModules: { ...(state.editing?.settings?.enabledModules || {}), legacyUhdtRules: inherit } } };
+    const input = { id: $("#admin-contract-id").value || null, code, slug: code.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""), name: $("#admin-contract-name").value.trim(), displayName: $("#admin-contract-display").value.trim(), company: $("#admin-contract-company").value.trim(), client: $("#admin-contract-client").value.trim(), site: $("#admin-contract-site").value.trim(), project: $("#admin-contract-project").value.trim(), active: $("#admin-contract-active").checked, settings: { ...(state.editing?.settings || {}), ruleProfile: $("#admin-contract-profile").value.trim() || "UNCONFIGURED", inheritLegacyRules: inherit, enabledModules: { ...(state.editing?.settings?.enabledModules || {}), legacyUhdtRules: inherit, allocationAuditAssistant: $("#admin-contract-allocation-assistant").checked } } };
     setSaving(true);
     try {
       const { error } = await cloud().state.client.rpc("grcon_contract_save", { input }); if (error) throw error;

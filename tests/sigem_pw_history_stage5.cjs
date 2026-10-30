@@ -33,10 +33,17 @@ function functionBody(source, name, nextName) {
 (function validatedCandidateIsRecordedBeforeActivation() {
   const sigem = functionBody(dashboardApp, "importSigem", "importPw");
   const pw = functionBody(dashboardApp, "importPw", "importLd");
-  const ld = functionBody(dashboardApp, "importLd", "clearPreStage7BasesOnce");
+  // LD validation moved to the shared persistence helper so both bulk imports
+  // and activation toggles execute the same snapshot-before-write sequence.
+  const ld = functionBody(dashboardApp, "persistReferenceBase", "importLd");
+  const ldImport = functionBody(dashboardApp, "importLd", "toggleLdSource");
   assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core().saveSigemBase"));
   assert.ok(pw.indexOf("registerHistoryBeforeActivation") < pw.indexOf("Core().savePwBase"));
-  assert.ok(ld.indexOf("registerHistoryBeforeActivation") < ld.indexOf("Core().saveLdAndReprocessPw"));
+  assert.ok(ld.indexOf("registerHistoryBeforeActivation") >= 0
+    && ld.indexOf("registerHistoryBeforeActivation") < ld.indexOf("Core().saveLdAndReprocessPw"),
+    "toda LD deve ter histórico confirmado antes da substituição de sua base ativa");
+  assert.match(ldImport, /persistReferenceBase\(candidateLd/,
+    "a importação das fontes deve utilizar o helper auditado");
   assert.match(dashboardApp, /não pôde ser registrada no histórico e não foi ativada/,
     "falha histórica deve preservar a base vigente");
 })();

@@ -116,9 +116,13 @@ function functionBody(source, name, nextName) {
   const register = functionBody(dashboardApp, "registerHistoryBeforeActivation", "importSigem");
   const sigem = functionBody(dashboardApp, "importSigem", "importPw");
   const pw = functionBody(dashboardApp, "importPw", "importLd");
-  const ld = functionBody(dashboardApp, "importLd", "clearPreStage7BasesOnce");
+  const ld = functionBody(dashboardApp, "persistReferenceBase", "importLd");
+  const ldImport = functionBody(dashboardApp, "importLd", "toggleLdSource");
+  const ldToggle = functionBody(dashboardApp, "toggleLdSource", "clearPreStage7BasesOnce");
   assert.match(register, /history\.rollbackRecordedActiveBases\(recorded\)/);
   [sigem, pw, ld].forEach((body) => assert.match(body, /rollbackStagedImport\(recorded/));
+  assert.match(ldImport, /persistReferenceBase\(candidateLd/);
+  assert.match(ldToggle, /persistReferenceBase\(candidate/);
   assert.match(historyCore, /const checkpoint = await captureRecordingCheckpoint\(\)/);
   assert.match(historyCore, /await rollbackRecordedActiveBases\(partial\)/);
   assert.match(historyCore, /meta\.delete\(`sourcePayload:\$\{id\}`\)/);

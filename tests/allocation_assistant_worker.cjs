@@ -12,6 +12,15 @@ const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes
  const context={contract:'qa',versions:{},bases:{},ldHashes:{'LD.xlsx':'b'.repeat(64)}};
  const row={contract:'qa',document:'DOC-121',revision:'0',discipline:'ELE',officialAllocation:true,sourceHash:'a'.repeat(64),versions:{},origin:{revision:'0',file:'LD.xlsx',sheet:'ELE',row:2},lineage:'one',workflow:'old',title:'=FORMULA',findings:[],recommendations:[{field:'workflow',before:'old',after:'new',evidence:['LD exata']}]};
  assert.equal(A.intent('Confira essas alocações'),'audit');
+ assert.equal(A.allocationReference('Confira a alocação 375'),'375');
+ assert.equal(A.allocationReference('Auditar C1O-ALOC-CM-0375-2026'),'C1O-ALOC-CM-0375-2026');
+ assert.equal(A.allocationReference('Confira os arquivos'),'');
+ assert.equal(A.allocationReference('375'),'375');assert.equal(A.intent('375'),'audit');
+ const questions=[{document:'DOC-121',revision:'0',allocation:'C1O-ALOC-CM-0375-2026',findings:[{}]},{document:'DOC-122',revision:'0',findings:[{}]},{document:'DOC-1210',revision:'A',findings:[{}]}];
+ assert.equal(A.questionRows(questions,'Explique DOC-1210.')[0].r.document,'DOC-1210');
+ assert.equal(A.questionRows(questions.slice(0,2),'Explique DOC-1210').length,0);
+ assert.equal(A.questionRows(questions,'DOC-121 rev 1').length,0);
+ assert.equal(A.questionRows(questions,'DOC-121 rev 0 C1O-ALOC-CM-0375-2026').length,1);
  const rule={state:'active',payload:{...row,field:'workflow',before:'old',after:'new',ldHash:'b'.repeat(64),evidence:['origem']}};
  assert.equal(A.evaluate(row,rule,context).eligible,true);
  for(const change of [{document:'DOC-122'},{revision:'1'},{sourceHash:'c'.repeat(64)},{discipline:'TUB'},{contract:'other'},{origin:null}])assert.equal(A.evaluate({...row,...change},rule,context).eligible,false);

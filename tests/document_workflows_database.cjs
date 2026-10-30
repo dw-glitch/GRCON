@@ -131,31 +131,22 @@ const workspace='00000000-0000-4000-8000-000000000001';
     }catch(error){return Response.json({message:error.message,code:'42501'},{status:403});}
   };
   const env={SUPABASE_URL:'https://database.test',SUPABASE_SECRET_KEY:'sb_secret_qa',GRCON_DOCUMENTS:bucket,GRCON_DOCUMENT_UPLOADS_ENABLED:'true'};
+  const endpoint=(action,body={},actor=owner,method='POST')=>worker.fetch(new Request('https://grcon.test/api/document-vault/'+action+(method==='GET'?'?workspace='+workspace+'&'+new URLSearchParams(body):''),{method,headers:{authorization:'Bearer '+actor,'x-grcon-workspace':workspace,'content-type':'application/json'},...(method==='POST'?{body:JSON.stringify({workspaceId:workspace,...body})}:{})}),env);
   const deleteFile=(actor=owner,target=workspace,id=fileId)=>worker.fetch(new Request('https://grcon.test/api/document-vault/delete',{method:'POST',headers:{authorization:'Bearer '+actor,'content-type':'application/json'},body:JSON.stringify({workspaceId:target,id})}),env);
   try {
-    assert.equal((await deleteFile(viewer)).status,403);assert.equal(deleted,0);
-    assert.equal((await deleteFile(owner,other)).status,403);assert.equal(deleted,0);
-    const failed=await deleteFile(admin);assert.equal(failed.status,409);assert.equal(deleted,0);
-    await db.exec('reset role');assert.equal((await db.query('select status from private.grcon_document_files where id=$1',[fileId])).rows[0].status,'delete_failed');
-    assert.ok(objects.has(key));assert.equal((await db.query('select object_key from private.grcon_document_files where id=$1',[aliasId])).rows[0].object_key,key+'.retained-'+fileId);
-    failDelete=false;failFinish=true;assert.equal((await deleteFile()).status,409);assert.equal(objects.has(key),false,'partial database failure does not pretend success');
-    const listsBeforeUsage=inventoryLists;
-    const usageResponse=await worker.fetch(new Request('https://grcon.test/api/document-vault/usage?workspace='+workspace,{headers:{authorization:'Bearer '+owner}}),env);
-    assert.equal(usageResponse.status,200);const usage=(await usageResponse.json()).storage;
-    assert.equal(usage.usedBytes,3,'operational usage stops counting a pending object already removed from R2');
-    assert.equal(usage.fileCount,1,'only the retained physical object remains counted');
-    assert.equal(usage.pendingChecked,1,'the pending deletion is checked against R2 without scanning the bucket');
-    assert.equal(usage.source,'catalog');
-    assert.equal(inventoryLists,listsBeforeUsage,'opening usage must not scan the entire physical bucket');
-    failFinish=false;assert.equal((await deleteFile()).status,200);assert.equal((await deleteFile()).status,200,'retry after success is idempotent');
-    await db.exec('reset role');assert.equal((await db.query('select count(*)::int n from private.grcon_document_files where id=$1',[fileId])).rows[0].n,0);
-    assert.equal((await db.query('select count(*)::int n from public.grcon_history')).rows[0].n,1,'old GRDT history is untouched');
-    assert.equal((await db.query("select count(*)::int n from public.grcon_audit_events where action='document_vault_delete_finish'")).rows[0].n,1);
-    const deniedReconcile=await worker.fetch(new Request('https://grcon.test/api/document-vault/reconcile',{method:'POST',headers:{authorization:'Bearer '+viewer,'content-type':'application/json'},body:JSON.stringify({workspaceId:workspace})}),env);assert.equal(deniedReconcile.status,403);
-    const reconciled=await worker.fetch(new Request('https://grcon.test/api/document-vault/reconcile',{method:'POST',headers:{authorization:'Bearer '+owner,'content-type':'application/json'},body:JSON.stringify({workspaceId:workspace})}),env);assert.equal(reconciled.status,200);
-    assert.ok(inventoryLists>listsBeforeUsage,'explicit physical reconciliation still scans R2');
-    await db.exec('reset role');assert.equal((await db.query("select count(*)::int n from public.grcon_audit_events where action='document_vault_storage_reconciled'")).rows[0].n,1);
-    assert.ok(objects.has(key+'.retained-'+fileId),'reused binary is preserved for another document');
+    // Corporate retirement supersedes the old upload/download/usage endpoints.
+    // No setting, member role or signed-in session can reactivate the vault.
+    for(const actor of [viewer,admin,owner])assert.equal((await deleteFile(actor)).status,410);
+    for(const action of ['usage','download','lookup','list','reconcile','init','upload','multipart/start','multipart/complete']){
+      const response=await worker.fetch(new Request('https://grcon.test/api/document-vault/'+action),env);
+      assert.equal(response.status,410);assert.equal((await response.json()).error,'DOCUMENT_STORAGE_RETIRED');
+    }
+    assert.equal(deleted,0);assert.equal(inventoryLists,0);
+    // Preserve historical SQL fixtures for the unrelated allocation tests below.
+    await as('', 'service_role');
+    await rpc('grcon_document_delete',[workspace,owner,'begin',{id:fileId}]);
+    await rpc('grcon_document_delete',[workspace,owner,'retain',{id:fileId}]);
+    await rpc('grcon_document_delete',[workspace,owner,'finish',{id:fileId}]);
     await as('', 'service_role');const result=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:[{requestId:'1',documentCode:'DOC-001'},{requestId:'2',documentCode:'DOC-002'}]}]);
     assert.equal(result.results[0].matches.length,0);assert.equal(result.results[1].matches.length,1);
     const list=await rpc('grcon_document_vault_list',[workspace,owner,{q:'DOC-002',allocation:'all'}]);assert.equal(list.files.length,1);assert.equal(list.files[0].created_by_name,'Owner QA');
@@ -203,50 +194,8 @@ const workspace='00000000-0000-4000-8000-000000000001';
     const isolated=await rpc('grcon_document_vault_list',[other,owner,{allocation:'all'}]);
     assert.equal(isolated.files.length,0,'vault data remains isolated by contract');
 
-    // Real SQL + authenticated Worker + checksum-enforcing R2 double.
-    Object.defineProperty(crypto, 'DigestStream', { configurable: true, value: class extends WritableStream {
-      constructor() { const hash=createHash('sha256'); let resolve; const digest=new Promise(r=>resolve=r);
-        super({write(chunk){hash.update(chunk);},close(){const bytes=hash.digest();resolve(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));}}); this.digest=digest; }
-    }});
-    const endpoint=(action,body={},actor=owner,method='POST')=>worker.fetch(new Request('https://grcon.test/api/document-vault/'+action+(method==='GET'?'?workspace='+workspace+'&'+new URLSearchParams(body):''),{method,headers:{authorization:'Bearer '+actor,'x-grcon-workspace':workspace,'content-type':'application/json'},...(method==='POST'?{body:JSON.stringify({workspaceId:workspace,...body})}:{})}),env);
-    const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
-    const reserve=async(bytes,name='TRACE-003_0.pdf',allowConflict=false)=>{
-      const response=await endpoint('init',{fileName:name,documentCode:'TRACE-003',revision:'0',format:'pdf',sizeBytes:bytes.length,sha256:digest(bytes),allowConflict,mimeType:'application/pdf'});
-      return {status:response.status,data:await response.json()};
-    };
-    const upload=async(id,bytes,actor=owner)=>worker.fetch(new Request('https://grcon.test/api/document-vault/upload',{method:'PUT',headers:{authorization:'Bearer '+actor,'x-grcon-workspace':workspace,'x-grcon-file-id':id,'content-type':'application/pdf'},body:bytes}),env);
-    const bytes1=Buffer.from('%PDF-version-one'),bytes2=Buffer.from('%PDF-version-two');
-    const first=await reserve(bytes1);assert.equal(first.status,200);assert.equal(first.data.file.file_version,1);
-    assert.equal((await upload(first.data.file.id,bytes1)).status,200);
-    const duplicate=await reserve(bytes1);assert.equal(duplicate.data.ready,true);assert.equal(duplicate.data.file.id,first.data.file.id);
-    assert.equal((await reserve(bytes2)).status,409,'different bytes require explicit version confirmation');
-    const second=await reserve(bytes2,'TRACE-003_0.pdf',true);assert.equal(second.data.file.file_version,2);assert.equal(second.data.file.previous_file_id,first.data.file.id);
-    await as('', 'service_role');let detail=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:first.data.file.id}]);assert.equal(detail.file.is_active,true,'pending newer upload does not deactivate ready file');
-    assert.equal((await upload(second.data.file.id,bytes2)).status,200);
-    await as('', 'service_role');detail=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:first.data.file.id}]);assert.equal(detail.file.is_active,false);assert.equal(detail.versions.length,2);assert.ok(detail.file.replaced_at);
-    const lookup=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:[{documentCode:'TRACE-003',requestId:'a'}]}]);assert.equal(lookup.results[0].matches.length,1);assert.equal(lookup.results[0].matches[0].id,second.data.file.id,'operational GRDT lookup uses current verified version');
-    await db.exec('reset role');const emitted=await db.query('insert into public.grcon_history(workspace_id,contract_id,egrdt_number,generated_at,created_by,payload) values($1,$2,$3,now(),$4,$5) returning id',[workspace,contract,'QA-TRACE-GRDT',owner,{files:[{document:'TRACE-003',vaultFileId:first.data.file.id,purpose:'Para Construção',fileProvenance:{sha256:digest(bytes1)}}]}]);
-    await db.query('update public.grcon_history set payload=payload where id=$1',[emitted.rows[0].id]);
-    const beforeDelete=deleted;const protectedResponse=await deleteFile(owner,workspace,first.data.file.id);assert.equal(protectedResponse.status,403);assert.match((await protectedResponse.json()).message,/GRDT/);assert.equal(deleted,beforeDelete,'protected history version is rejected BEFORE R2 deletion');
-    const retrieved=await endpoint('download',{id:first.data.file.id},viewer,'GET');assert.equal(retrieved.status,200);assert.equal(Buffer.from(await retrieved.arrayBuffer()).toString(),bytes1.toString());assert.equal(retrieved.headers.get('cache-control'),'private, no-store');
-    await as('', 'service_role');const master=await rpc('grcon_vault_operations',[workspace,viewer,'master',{code:'TRACE-003'}]);assert.equal(master.vault.length,2);assert.equal(master.history[0].egrdt_number,'QA-TRACE-GRDT');assert.equal(master.vault.find(f=>f.id===first.data.file.id).emissions.length,1,'retry does not duplicate emission links');
-    assert.ok((await rpc('grcon_vault_operations',[workspace,owner,'search',{q:'QA-TRACE-GRDT'}])).results.some(r=>r.code==='TRACE-003'));
-    await assert.rejects(rpc('grcon_vault_operations',[workspace,viewer,'metadata',{id:first.data.file.id,purpose:'Denied'}]),/permissão/);
-    await assert.rejects(rpc('grcon_vault_operations',[other,viewer,'detail',{id:first.data.file.id}]),/acesso/);
-    await rpc('grcon_vault_operations',[workspace,admin,'metadata',{id:first.data.file.id,purpose:'Audited',discipline:'Civil'}]);
-    const metrics=await endpoint('usage',{},viewer,'GET');assert.equal(metrics.status,200);const measured=(await metrics.json()).storage;assert.equal(measured.source,'catalog');assert.equal(measured.details.historical,1);assert.ok(measured.usedBytes>=bytes1.length+bytes2.length);
-    assert.equal((await endpoint('usage',{scope:'global'},viewer,'GET')).status,403,'global storage is owner-only');
-    const globalUsage=await endpoint('usage',{scope:'global'},owner,'GET');assert.equal(globalUsage.status,200);assert.ok((await globalUsage.json()).storage.contracts.length>0);
-    const snapshot=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:first.data.file.id}]);assert.ok(snapshot.audit.some(e=>e.action==='document_vault_download'));assert.ok(snapshot.audit.some(e=>e.action==='document_vault_metadata'));
-    objects.delete(snapshot.file.object_key);
-    const restored=await reserve(bytes1);assert.equal(restored.status,200);assert.equal(restored.data.file.id,first.data.file.id,'restoration keeps historical file identity');assert.equal((await upload(restored.data.file.id,bytes1)).status,200);
-    const restDownload=await endpoint('download',{id:first.data.file.id},viewer,'GET');assert.equal(Buffer.from(await restDownload.arrayBuffer()).toString(),bytes1.toString());
-    const malformed=await reserve(Buffer.from('expected-bytes'),'TRACE-BAD.pdf',true);assert.equal((await upload(malformed.data.file.id,Buffer.from('tampered-bytes'))).status,409,'R2 checksum rejects tampered single upload');
-    await as('', 'service_role');assert.equal((await rpc('grcon_document_catalog',[workspace,owner,'get',{id:malformed.data.file.id}])).status,'pending');
-    let maintenance;await worker.scheduled({},env,{waitUntil(p){maintenance=p;}});await maintenance;
-    await as('', 'service_role');assert.ok((await rpc('grcon_vault_operations',[workspace,owner,'metrics',{}])).evolution.length>0,'Cron persists real usage without deleting valid files');
-    await as(viewer);await assert.rejects(rpc('grcon_vault_operations',[workspace,owner,'metrics',{}]),/permission denied/,'browser cannot impersonate owner via service-only RPC');
-    console.log('Vault versions + exact history file + restore + hash + private downloads + Master/search + roles + Cron: passed.');
+    let scheduledCalls=0;await worker.scheduled({},env,{waitUntil(){scheduledCalls++;}});
+    assert.equal(scheduledCalls,0,'retired document storage has no scheduled integrity scan');
     await as('', 'service_role');
     await db.exec('reset role; set enable_seqscan=off');
     const aliasPlan=await db.query("explain (format json) select id from private.grcon_document_files where workspace_id=$1 and contract_id=$2 and status='ready' and private.grcon_master_document_key(identity_code)=private.grcon_master_document_key('DOC-001')",[workspace,contract]);

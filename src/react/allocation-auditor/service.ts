@@ -14,6 +14,7 @@ async function compute(operation:string,input:Data){if(!worker){worker=new Worke
 async function rpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_auditor',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message||'Não foi possível acessar o histórico do auditor.');return r.data;}
 async function task(action:()=>Promise<unknown>){if(state.busy)throw Error('Aguarde a operação atual.');requireSession();const t=epoch;emit({busy:true,error:'',message:''});try{return await action();}catch(e){if(t===epoch)emit({error:(e as Error).message||String(e)});throw e;}finally{if(t===epoch)emit({busy:false});}}
 function reset(){sourceFiles.clear();identity=scope();epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();saveRequest='';savedEvents=0;saveMetadata=null;emit({groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[]});}
+function remainingGroups(events:Data[],rows:Data[]=state.rows){const latest=new Map(events.map(e=>[JSON.stringify([e.lineage,e.field]),e]));return g.GrconAllocationAssistant?.groups(rows.map(row=>({...row,recommendations:(row.recommendations||[]).filter((p:Data)=>!['accepted','rejected'].includes(latest.get(JSON.stringify([row.lineage,p.field]))?.decision||''))})))||[];}
 function clearResults(){saveRequest='';savedEvents=0;saveMetadata=null;emit({groups:[],summary:{},rows:[],events:[],progress:0,total:0,runId:'',selected:[],context:{...state.context,saved:false,checkpoint:false,history:undefined}});}
 async function generator(){await g.GRCONModuleLoader.ensure('react-dist/allocation-app.js');return g.GrconAllocationGeneratorUi;}
 async function getContext(){const ui=await generator();return await ui.auditContext();}
@@ -23,7 +24,7 @@ export const service={
  async assistantRpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_assistant',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message);return r.data;},
  async applyAutomatic(){
   await service.save();const t=epoch;const result=await service.assistantRpc('authorize',{runId:state.runId});current(t);
-  emit({events:[...state.events,...result.events]});savedEvents=state.events.length;return result.events.length;
+  const events=[...state.events,...result.events];emit({events,groups:remainingGroups(events)});savedEvents=state.events.length;return result.events.length;
  },
  async importMany(files:File[]){return task(async()=>{
   const t=epoch,c=requireSession();if(files.length>20)throw Error('Selecione até 20 arquivos por lote.');
@@ -56,19 +57,20 @@ export const service={
  },
  async assistantPackage(sessionId:string,generateOfficial=false){return task(async()=>{
   const t=epoch,files:Data[]=[],exceptions:string[]=[];const approved=g.GrconAllocationAuditorCore.approvedChanges(state.events);
-  for(const source of state.context.sources||[]){
+  for(const source of [...(state.context.sources||[])].sort((a,b)=>Number(b.kind==='ld')-Number(a.kind==='ld'))){
    const file=sourceFiles.get(source.sha256);if(!file){exceptions.push(source.name+': reanexe a origem para produzir a cópia.');continue;}
    if(source.kind==='allocation'){
     const rows=state.rows.filter(r=>r.sourceHash===source.sha256);const events=approved.filter((e:Data)=>rows.some(r=>r.lineage===e.lineage)&&g.GrconAllocationAssistant.editable(e.field));
     if(!events.length)continue;
     try{const result=await compute('revise-allocation',{file,rows,events,sourceHash:source.sha256,contract:cloud().membership.contract_id});current(t);files.push({name:'03_Alocacoes_Corrigidas/'+source.sha256.slice(0,8)+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/\.xlsx$/i,'')+'_CORRIGIDA.xlsx',bytes:result.bytes,changed:result.changed,changes:result.changes,official:true});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
    }else{
-    const events=approved.filter((e:Data)=>e.field==='title'&&state.rows.some(r=>r.lineage===e.lineage&&r.origin?.file===source.name));if(!events.length)continue;
-    try{const ui=await generator();const result=await ui.reviseAuditLd(file,state.rows,events);current(t);files.push({name:'02_LDs_Corrigidas/'+source.sha256.slice(0,8)+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_'),bytes:new Uint8Array(result.buffer),changed:result.count,changes:events.map((e:Data)=>({lineage:e.lineage,document:e.document,field:e.field,before:e.before,after:e.after}))});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
+    const events=approved.filter((e:Data)=>state.rows.some(r=>r.lineage===e.lineage&&r.origin?.file===source.name));if(!events.length)continue;
+    try{const ui=await generator();const result=await ui.reviseAuditLd(file,state.rows,events,source.sha256);current(t);if(!result.count)continue;files.push({name:'02_LDs_Corrigidas/'+source.sha256.slice(0,8)+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_'),bytes:new Uint8Array(result.buffer),changed:result.count,changes:result.changes});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
    }
   }
   if(generateOfficial){
    if(!state.runId)throw Error('Salve a auditoria antes de gerar uma nova alocação.');
+   if(approved.some((e:Data)=>['title','tag','eap','discipline'].includes(e.field)&&!files.some(f=>f.changes?.some((x:Data)=>x.lineage===e.lineage&&x.field===e.field&&x.after===e.after))))throw Error('Há correções na origem sem cópia de LD validada. Reanexe a LD e resolva as exceções antes de emitir nova alocação.');
    const ui=await generator();const groups=new Map<string,Data[]>();
    for(const row of state.rows){const key=JSON.stringify([row.sourceHash||row.sourceFile||'Gerador',row.allocation||'']);groups.set(key,[...(groups.get(key)||[]),row]);}
    for(const rows of groups.values()){
@@ -97,6 +99,7 @@ export const service={
  async import(file:File,sheet:string,kind:'allocation'|'history',allocation=''){return task(async()=>{const c=requireSession(),t=epoch;const code=allocation.trim()||identifyAllocation(file.name);const data=await compute('parse',{file,sheet,allocation:code,contract:c.membership.contract_id});current(t);clearResults();emit(kind==='history'?{history:g.GrconAllocationAuditorCore.mergeHistory(state.history,data.records),message:`${data.records.length} eventos fiscais lidos. Comentários originais preservados.`}:{records:data.records,context:{...state.context,inputFile:file.name,inputSheet:sheet,inputModel:data.model,allocation:code,sourceHash:data.sha256},message:`${data.records.length} documentos da aba ${sheet} reconhecidos (${data.model==='official-16'?'modelo oficial de 16 colunas':'colunas compatíveis'}). Iniciando verificação.`});return data;});},
  async importLd(files:File[]){return task(async()=>{const t=epoch,ui=await generator();await ui.importAuditLd(files);current(t);clearResults();emit({message:'LDs lidas. Originais preservados.'});});},
  async availableAllocations(){return task(async()=>{const t=epoch,ctx=await getContext();current(t);emit({context:{...state.context,allocationRuns:ctx.allocationRuns||[]},message:'Alocações reconhecidas no histórico do Gerador carregadas.'});});},
+ async openAllocationReference(reference:string){const ui=await generator();return ui.auditAllocationReference(reference);},
  async openAllocation(id:string){const ui=await generator();const run=state.context.allocationRuns?.find((r:Data)=>r.id===id);if(!run)throw Error('Selecione uma alocação disponível.');return ui.auditSavedRun(run);},
  async useLd(){return task(async()=>{const t=epoch,ctx=await getContext();current(t);clearResults();emit({records:ctx.ldRecords.map((r:Data)=>({...r,ld:r.source,ldSheet:r.sheet,sourceFile:r.source,sourceSheet:r.sheet,sourceRow:r.row,contract:cloud().membership.contract_id})),context:ctx,message:'Documentos da LD selecionados.'});});},
  setApplicability(revision:string,evidence:string){if(state.busy)return;clearResults();emit({context:{...state.context,applicability:{source:'ET-5290.00-22000-912-1LV-001',revision,evidence,contract:cloud()?.membership?.contract_id,confirmed:Boolean(evidence.trim()&&revision)}}});},
@@ -117,7 +120,7 @@ export const service={
  select(indices:number[]){emit({selected:indices});},
  async review(index:number,input:Data){const c=requireSession();if(state.busy)throw Error('Aguarde a operação atual.');if(!['owner','admin','operator'].includes(c.membership.role))throw Error('Perfil sem permissão de revisão.');const row=state.rows[index];if(input.field==='databook'&&input.value&&!state.context.bases?.databook?.some((p:Data)=>p.databook===input.value))throw Error('Escolha um caminho existente na base ativa.');
   const event={...g.GrconAllocationAuditorCore.reviewEvent(row,input,c.session.user.id),requestId:crypto.randomUUID()};
-  emit({events:[...state.events,event],message:'Decisão registrada. A Central e a LD oficial não foram alteradas.'});
+  const events=[...state.events,event];emit({events,groups:remainingGroups(events),message:'Decisão registrada. A Central e a LD oficial não foram alteradas.'});
  },
  async save(){return task(async()=>{if(!state.rows.length)throw Error('Nenhuma análise para salvar.');const t=epoch;saveRequest=saveRequest||crypto.randomUUID();
   const metadata=saveMetadata||(saveMetadata={engine:g.GrconAllocationAuditorCore.VERSION,contextWarning:state.context.contextWarning||'',sources:state.context.sources||[],ldHashes:state.context.ldHashes||{},versions:state.context.versions,applicability:state.context.applicability||{},sourceCount:(state.context.history||state.history).length,summary:g.GrconAllocationAuditorCore.summary(state.rows),kind:'audit'});
@@ -127,9 +130,12 @@ export const service={
   for(let i=savedEvents;i<state.events.length;i++){const e=state.events[i];await rpc('event',{id,requestId:e.requestId,event:e});current(t);savedEvents=i+1;}
   const page=await rpc('history');emit({runs:page.runs,message:state.progress===state.total?'Análise e decisões salvas com histórico auditável.':'Progresso parcial salvo. Reanexe as mesmas fontes para retomar após fechar o navegador.'});
  });},
+ async historyRows(id:string,after=0){return rpc('detail',{id,after});},
+ async restoreById(id:string){const data=await rpc('detail',{id,after:0});return service.restore(data.run);},
  async restore(run:Data){return task(async()=>{const t=epoch;const rows:Data[]=[];let meta:Data={},events:Data[]=[];
   for(let i=0;i<run.expected_count;i+=200){const d=await rpc('detail',{id:run.id,after:i});current(t);if(!d.rows.length)break;rows.push(...d.rows.map((x:Data)=>x.payload));meta=d.run.metadata;events=d.events;}
-  clearResults();saveMetadata=meta;savedEvents=events.length;emit({rows,records:rows.map(r=>({...r})),events,runId:run.id,selected:rows.map((_,i)=>i),progress:rows.length,total:run.expected_count,context:{checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions,applicability:meta.applicability,contract:cloud().membership.contract_id,saved:Boolean(run.completed_at)},message:'Análise histórica carregada com suas versões originais. Reanalise para usar bases atuais.'});
+  const grouped=await compute('summarize',{rows});current(t);
+  clearResults();saveMetadata=meta;savedEvents=events.length;emit({...grouped,groups:remainingGroups(events,rows),rows,records:rows.map(r=>({...r})),events,runId:run.id,selected:rows.map((_,i)=>i),progress:rows.length,total:run.expected_count,context:{checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions,applicability:meta.applicability,contract:cloud().membership.contract_id,saved:Boolean(run.completed_at)},message:'Análise histórica carregada com suas versões originais. Reanalise para usar bases atuais.'});
  });},
  async export(official=false){return task(async()=>{if(!state.rows.length)throw Error('Execute a auditoria primeiro.');const t=epoch;let files:Data[]=[];
   if(official){if(state.progress!==state.total)throw Error('Conclua a análise antes de gerar o pacote oficial.');const ui=await generator();files=await ui.generateAudited(state.rows.filter((_,i)=>state.selected.includes(i)),state.events,state.context.versions);current(t);}

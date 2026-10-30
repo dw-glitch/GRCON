@@ -97,6 +97,11 @@ export const service={
   const context=await this.auditContext();await globals.GRCONModuleLoader[assistantUi?'ensure':'ensureModule']('allocation-auditor');
   await globals.GrconAllocationAuditorUi.open({...context,rows});if(assistantUi)globals.GrconAllocationAuditorUi.showAssistant();
  },
+ async auditAllocationReference(reference:string){
+  await this.searchHistory(reference);const matches=state.history.filter((r:Data)=>r.allocation_code===reference||r.allocation_code?.match(/-(\d{3,4})-20\d{2}$/)?.[1]?.replace(/^0+/,'')===reference.replace(/^0+/,''));
+  if(matches.length!==1)throw Error(matches.length?'Mais de uma alocação corresponde ao número. Informe o código completo com ano.':'Alocação não encontrada no histórico publicado. Anexe o arquivo oficial para conferir.');
+  return this.auditSavedRun(matches[0]);
+ },
  async auditSavedRun(run:Data){
   const context=await this.auditContext();const ticket=epoch;const saved=await rpc('run-detail',{id:run.id});current(ticket);
   const rows=(saved.documents||[]).map((d:Data)=>({document:d.document,revision:d.revision,title:d.title,record:{},output:{discipline:d.discipline,workflow:d.workflow,databook:d.databook,levels:d.levels},identity:{discipline:d.discipline,eap:d.eap}}));
@@ -118,11 +123,15 @@ export const service={
   }
   await this.generate('single');return state.files;
  },
- async reviseAuditLd(file:File,rows:Data[],events:Data[]){
-  const approved=globals.GrconAllocationAuditorCore.approvedChanges(events).filter((e:Data)=>e.field==='title').map((e:Data)=>{
-   const row=rows.find(r=>r.lineage===e.lineage);if(!row?.origin?.file||row.origin.file!==file.name||!row.origin.sheet||!row.origin.row)throw Error('Origem exata não comprovada para esta LD. Use o pacote de correções.');
-   return {document:row.document,sheet:row.origin.sheet,row:row.origin.row,current:e.before,proposed:e.after,decision:'approved'};
-  });return compute('audit-revise-ld',{file,rows:approved});
+ async reviseAuditLd(file:File,rows:Data[],events:Data[],sourceHash?:string){
+  const approved=globals.GrconAllocationAuditorCore.approvedChanges(events).filter((e:Data)=>rows.some(r=>r.lineage===e.lineage&&r.origin?.file===file.name)).map((e:Data)=>{
+   const row=rows.find(r=>r.lineage===e.lineage);if(!row?.origin?.file||row.origin.file!==file.name||!row.origin.sheet||!row.origin.row||row.origin.revision!==row.revision)throw Error('Origem e revisão exatas não comprovadas para esta LD.');
+   if(!e.evidence?.length)throw Error('Evidência obrigatória para corrigir a origem.');
+   return {document:row.document,revision:row.revision,lineage:row.lineage,field:e.field,sheet:row.origin.sheet,row:row.origin.row,current:e.before,proposed:e.after,decision:'approved'};
+  });
+  if(sourceHash)return compute('audit-revise-origin',{file,rows:approved,sourceHash});
+  if(approved.some((e:Data)=>e.field!=='title'))throw Error('Reanexe a LD no assistente para verificar o hash da origem.');
+  return compute('audit-revise-ld',{file,rows:approved});
  },
  subscribe(fn:()=>void){listeners.add(fn);return ()=>{listeners.delete(fn);};},snapshot:()=>state,
  refresh:()=>task('Atualizando bases e histórico',refreshInternal),

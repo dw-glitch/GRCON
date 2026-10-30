@@ -47,12 +47,14 @@ interface SigemPwDashboardCoreApi {
   SIGEM_BASE_KEY: string; PW_BASE_KEY: string; LD_BASE_KEY: string; HISTORY_KEY: string; LEGACY_SIGEM_BASE_KEY: string; LEGACY_PW_BASE_KEY: string; HISTORY_VERSION: number; PW_SCOPE_VERSION: number;
   normalizeHeader(value: unknown): string; norm(value: unknown): string; parseDateMs(value: unknown): number;
   isC1OCode(value: unknown): boolean;
+  documentIdentity(value: unknown): { key: string; canonical: string; info?: unknown };
   isPwCompanyInScope(record: SigemPwRecord): boolean;
   revisionKey(value: unknown): string; normalizeRevisionScope(value: unknown): SigemPwRevisionScope;
   parsePwCsv(source: string, meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   parseLdMatrix(matrix: string[][], meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
+  parseReferenceSheets(sheets: Array<{ name: string; matrix: string[][] }>, meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   sanitizePwBase(base: SigemPwBase, ld: SigemPwBase | SigemPwRecord[]): SigemPwBase;
-  createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[], settings?: { requireN1710Ld?: boolean; ldAvailable?: boolean; sigemAvailable?: boolean; pwAvailable?: boolean }): SigemPwModel;
+  createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[], settings?: { requireN1710Ld?: boolean; requireDocumentReference?: boolean; ldAvailable?: boolean; sigemAvailable?: boolean; pwAvailable?: boolean }): SigemPwModel;
   aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }, options?: { revisionScope?: SigemPwRevisionScope }): SigemPwResult;
   loadBases(): Promise<{ sigem: SigemPwBase; pw: SigemPwBase; ld: SigemPwBase; history: SigemPwHistory }>;
   loadHistory(): Promise<SigemPwHistory>;
@@ -203,6 +205,7 @@ declare global {
     GrconSigemPwDashboardReact?: { mounted: boolean };
     GrconPostingConference?: PostingConferenceApi;
     GrconSharedSigemQuery?: {
+      state?: { stale?: boolean };
       listVersions(): Promise<import("./domain").SigemPwSharedVersion[]>;
       loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
       setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined>;

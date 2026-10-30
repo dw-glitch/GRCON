@@ -95,6 +95,7 @@
   }catch(error){if(ticket===state.ticket&&state.open)$('#grcon-jobs-feedback').textContent=error.message;}
  }
  async function submit(kind,data,key=root.crypto.randomUUID()){
+  if(kind==='sigem_import') return root.GrconSharedSigemQuery.publish(data);
   const workspaceId=cloud()?.state?.membership?.workspace_id;if(!workspaceId)throw new Error('Conecte-se ao contrato para criar a tarefa.');
   await(root.GrconOperations?.paint?.()||new Promise(resolve=>setTimeout(resolve,0)));
   const identity=context();

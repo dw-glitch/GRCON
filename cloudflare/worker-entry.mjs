@@ -1,4 +1,8 @@
 import {handleSigemStorage} from './sigem-storage.mjs';
+import {handleReleaseMaintenance} from './sigem-maintenance.mjs';
+import {purgeDocumentBatch} from './storage-retirement.mjs';
+import {liveRpc,externalRowsByNumber} from './sigem-live.mjs';
+import {canonical,sha256} from './sigem-turso.mjs';
 import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
 import {syncSharepoint} from './teams-sharepoint.mjs';
 import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
@@ -13,6 +17,10 @@ const PREFIX = "/api/document-vault/";
 // Reads of existing records stay available to authenticated, authorized users.
 const STORAGE_WRITE_ACTIONS = new Set(["init", "upload", "multipart/start", "multipart/part", "multipart/complete", "restart", "delete", "metadata"]);
 function storageWritesEnabled(env) { return env?.GRCON_DOCUMENT_UPLOADS_ENABLED === "true"; }
+// Corporate decision: the former PDF vault is retired. This is deliberately
+// independent of dashboard variables so an old deployment setting cannot
+// reactivate uploads, downloads or scheduled integrity scans.
+const RETIRED_DOCUMENT_ACTIONS = new Set(["init", "upload", "multipart/start", "multipart/part", "multipart/complete", "restart", "delete", "metadata", "detail", "metrics", "health", "list", "usage", "reconcile", "lookup", "download"]);
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
 const MIB = 1024 * 1024;
 
@@ -116,8 +124,29 @@ async function catalog(env, workspaceId, actorId, operation, input = {}) {
 }
 
 async function vaultOperation(env, workspaceId, actorId, operation, input = {}) {
-  if (operation === "master-page") return rpc(env, "grcon_master_query", { target_workspace: workspaceId, actor_id: actorId, input });
-  return rpc(env, "grcon_vault_operations", { target_workspace: workspaceId, actor_id: actorId, operation, input });
+  if (operation === "master-page" || operation === "master") {
+    const queryInput={...input};if(queryInput.source==='sigem')delete queryInput.revision;
+    const result=await rpc(env, "grcon_master_query", { target_workspace: workspaceId, actor_id: actorId, input: queryInput });
+    result.vault=[];if(result.sources)result.sources.vault={available:false,reason:'Armazenamento documental desativado.'};
+    if(result.pages)result.pages.vault={after:0,next:0,hasMore:false,revision:'retired'};
+    const snapshot=result.sources?.sigem?.snapshotId;
+    if(snapshot&&env.GRCON_SIGEM_DIRECT_IMPORTS_ENABLED==='true'&&(!input.source||input.source==='sigem')){
+      const info=await liveRpc(env,actorId,workspaceId,'metadata',{snapshot});
+      if(info.kind){
+        const found=await liveRpc(env,actorId,workspaceId,'lookup',{snapshot,code:input.code});
+        const revision=await sha256(canonical({snapshot,checksum:info.snapshot.fingerprint,rows:found.rows}));
+        if(input.source==='sigem'&&input.revision&&input.revision!==revision)throw Object.assign(Error('A fonte mudou. Atualize a consulta.'),{status:409,code:'SOURCE_CHANGED'});
+        const after=Number(input.after)||0,selected=found.rows.slice(after,after+100);
+        result.sigem=await externalRowsByNumber(env,info,selected);
+        result.pages.sigem={after,next:after+selected.length,hasMore:found.rows.length>after+100,revision};
+      }
+    }
+    return result;
+  }
+  const result=await rpc(env, "grcon_vault_operations", { target_workspace: workspaceId, actor_id: actorId, operation, input });
+  if(result&&typeof result==='object')delete result.vault;
+  if(Array.isArray(result?.results))result.results=result.results.filter(r=>r.source!=='cofre');
+  return result;
 }
 export async function hashStoredObject(object) {
   if (!object?.body || typeof crypto.DigestStream !== "function") throw Object.assign(new Error("Validação de conteúdo indisponível."), { code: "HASH_UNAVAILABLE" });
@@ -796,9 +825,23 @@ async function handleDelete(request, env) {
   }
 }
 
+
+async function handleDocumentRetirement(request,env){
+ if(request.method!=='POST')return apiError('Método inválido.',405,'METHOD_NOT_ALLOWED');
+ await verifyGithubToken(bearerToken(request),{repository:'dw-glitch/GRCON',repositoryId:'1322072089',ownerId:'202873892',audience:'grcon-document-retirement',visibility:'public',workflow:'dw-glitch/GRCON/.github/workflows/deploy-cloudflare.yml@refs/heads/main',allowedEvents:['push','workflow_dispatch']});
+ const input=await parseJson(request),workspace=safeUuid(input.workspace);
+ if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
+ const scope=await rpc(env,'grcon_document_retirement_service',{target_workspace:workspace,operation:'document-scope'});
+ const result=await purgeDocumentBatch(requireBucket(env),scope);
+ if(result.complete&&scope.records>0)await rpc(env,'grcon_document_retirement_service',{target_workspace:workspace,operation:'document-finish'});
+ return json({ok:true,...result});
+}
+
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if(action==="retire-legacy-storage")return handleDocumentRetirement(request,env);
+  if (RETIRED_DOCUMENT_ACTIONS.has(action)) return apiError("Armazenamento de documentos desativado por decisão corporativa.", 410, "DOCUMENT_STORAGE_RETIRED");
   if (STORAGE_WRITE_ACTIONS.has(action) && !storageWritesEnabled(env)) {
     return apiError("Armazenamento documental suspenso até autorização corporativa.", 403, "STORAGE_WRITES_DISABLED");
   }
@@ -835,19 +878,14 @@ export default {
       ctx.waitUntil(syncSharepoint(env).catch(error => console.error('GRCON SharePoint sync', error.code || 'SYNC_FAILED')));
       return;
     }
-    ctx.waitUntil((async () => {
-      const targets = await rpc(env, "grcon_vault_maintenance", { operation: "targets", input: {} });
-      for (const target of targets || []) {
-        try {
-          const storage = await storageSnapshot(env, target.workspace_id, target.actor_id);
-          await rpc(env, "grcon_vault_maintenance", { operation: "record", input: { workspace_id: target.workspace_id, ...storage } });
-        } catch (error) { console.error("GRCON vault maintenance", { workspace: target.workspace_id, code: error.code || "INTEGRITY_CHECK_FAILED" }); }
-      }
-    })());
+    // R2 migration journals and background jobs have independent lifecycles.
+    // The retired document vault has no scheduled work.
   },
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
+      const maintenanceResponse = await handleReleaseMaintenance(request, env);
+      if (maintenanceResponse) return maintenanceResponse;
       const sigemResponse = await handleSigemStorage(request, env);
       if (sigemResponse) return sigemResponse;
       const githubResponse = await handleGithubRoute(request, env);

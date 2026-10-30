@@ -18,7 +18,7 @@ jobs:
     name: Publicar Workers Static Assets
     if: github.ref == 'refs/heads/main' && github.event.repository.private == false
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -59,3 +59,10 @@ jobs:
           GRCON_PRODUCTION_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev
         run: node scripts/verify-document-ai-production.mjs
 
+      - name: Concluir remoção do armazenamento documental desativado
+        env:
+          GRCON_PRODUCTION_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev
+        run: node scripts/retire-document-storage.mjs
+
+      - name: Liberar cópias antigas da Consulta Geral auditadas no Turso
+        run: node scripts/release-sigem-production.mjs

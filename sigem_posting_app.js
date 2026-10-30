@@ -7,7 +7,7 @@
   const Emission = window.GrconEmission;
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.44.16";
+    || "5.44.18";
   if (!Posting || !History) return;
 
   const $ = (selector, root) => (root || document).querySelector(selector);

@@ -40,15 +40,10 @@ for (const path of ['contract_storage.js', 'contract_admin_app.js', 'sigem_statu
 }
 const healthResponse = await get('/api/document-vault/health');
 const health = await healthResponse.json().catch(() => null);
-const configured = value => typeof value === 'boolean' ? String(value) : 'desconhecido';
-assert.equal(healthResponse.status, 200, 'Saúde do Cofre HTTP ' + healthResponse.status + ': Supabase configurado=' + configured(health?.supabaseConfigured) + ', R2 configurado=' + configured(health?.r2Configured) + '. O health verifica presença da configuração, não a validade da chave.');
-assert.equal(health.ok, true, 'Cofre deve estar configurado.');
-assert.equal(health.r2Configured, true);
-assert.equal(health.supabaseConfigured, true);
-assert.equal(typeof health.powerAutomateConfigured, 'boolean', 'Health deve informar se o Power Automate está configurado sem expor a URL.');
-assert.equal(typeof health.powerAutomateUrlValid, 'boolean', 'Health deve informar se a URL configurada tem formato aceito.');
-const anonymous = await get('/api/document-vault/list');
-assert.equal(anonymous.status, 401, 'Catálogo deve exigir sessão.');
+assert.equal(healthResponse.status,410,'Armazenamento documental deve permanecer desativado.');
+assert.equal(health.error,'DOCUMENT_STORAGE_RETIRED');
+const anonymous=await get('/api/document-vault/list');
+assert.equal(anonymous.status,410,'Catálogo aposentado deve permanecer indisponível.');
 const verifiedAssets = ['sigem_pw_dashboard_core.js', 'workers/sigem_pw_dashboard.worker.js', 'react-dist/sigem-pw-dashboard-app.js', 'document-vault.css', 'sw.js', 'sigem_pw_revision_report.js', 'workers/export.worker.js', 'react-dist/sigem-pw-evolution-app.js'];
 verifiedAssets.push('grcon_mascot_controller_v4.js', 'grcon_mascot_runner.js', 'assets/mascot/video/grcon-mascot-papers-running-alpha.webm', 'assets/mascot/grcon-mascot-papers-fallback.png');
 verifiedAssets.push('app.js', 'app-ui.js', 'p1_ux.js', 'document_vault_app.js');
@@ -59,6 +54,7 @@ verifiedAssets.push('background_jobs_app.js','background-jobs.css','client_diagn
 verifiedAssets.push('docx-pdf.css','docx_pdf_layout.js','docx_pdf_core.js','docx_pdf_app.js','assets/vendor/pdfjs/pdf.min.mjs','assets/vendor/pdfjs/pdf.worker.min.mjs');
 verifiedAssets.push('shared_pw_query_app.js','allocation_generator_core.js','allocation_ld_export.js','allocation-generator.css','workers/allocation.worker.js','react-dist/allocation-app.js','vendor/recon/allocation_core.js','vendor/recon/allocation_workbook.js');
 verifiedAssets.push('document_explanations.js','posting_conference_bootstrap.js');
+verifiedAssets.push('allocation_auditor_assistant.js','allocation_auditor_package.js');
 verifiedAssets.push('allocation_auditor_core.js','allocation_auditor_revision.js','allocation-auditor.css','workers/allocation-auditor.worker.js','react-dist/allocation-auditor-app.js');
 verifiedAssets.push('sigem_pw_scope_fix.js','sigem_pw_revision_core.js','sigem_pw_readiness_core.js','sigem_pw_evolution_core.js','sigem_pw_history_core.js','sigem-pw-dashboard.css');
 verifiedAssets.push('egrdt_teams_trace_app.js','egrdt_teams_trace_core.js','history_report.js','grcon_reposting_report.js');
@@ -73,6 +69,8 @@ const jobsAnonymous=await fetch(new URL('/api/background-jobs/list?workspace=000
 assert.equal(jobsAnonymous.status,401,'Tarefas devem exigir sessão.');
 const auditorAnonymous=await fetch(new URL('/api/document-vault/allocation-audit-ai',base),{method:'POST',headers:{'content-type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});
 assert.equal(auditorAnonymous.status,401,'Auditor semântico deve exigir sessão.');
+const retirementAnonymous=await fetch(new URL('/api/document-vault/retire-legacy-storage',base),{method:'POST',body:'{}',signal:AbortSignal.timeout(20000)});
+assert.equal(retirementAnonymous.status,401,'Limpeza R2 exige identidade assinada do workflow protegido.');
 const githubAnonymous = await fetch(new URL('/api/egrdt-teams/github', base), {method:'POST',body:'{}',signal:AbortSignal.timeout(20000)});
 assert.equal(githubAnonymous.status,401,'Retorno GitHub deve exigir OIDC assinado.');
-console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, verifiedAssets, cofreConfigured: true, powerAutomateConfigured: health.powerAutomateConfigured, powerAutomateUrlValid: health.powerAutomateUrlValid, anonymousCatalogStatus: anonymous.status }));
+console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, verifiedAssets, documentStorageRetired: true, anonymousCatalogStatus: anonymous.status }));

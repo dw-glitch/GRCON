@@ -1,6 +1,6 @@
 (function(root){
  'use strict';
- const VERSION='2.0.0-preview';
+ const VERSION='2.0.0';
  const editable=field=>field==='workflow'||field==='databook'||/^N[1-6]$/.test(field);
  const value=(row,field)=>String(/^N[1-6]$/.test(field)?row.levels?.[Number(field.slice(1))-1]||'':row[field]||'');
  // Rules are bounded precedents: never generalize a fiscal comment across documents.
@@ -29,14 +29,26 @@
   }
   return [...out.values()];
  }
+ function allocationReference(text){
+  const full=String(text).match(/\bC1O-ALOC-[A-Z]+-\d{3,4}-20\d{2}\b/i);if(full)return full[0].toUpperCase();
+  if(/^\s*\d{1,4}\s*$/.test(text))return String(text).trim();
+  return String(text).match(/\baloca(?:ç|c)[aã]o\s*(?:n[º°o.]?\s*)?(\d{1,4})\b/i)?.[1]||'';
+ }
+ function questionRows(rows,text){
+  const tokens=new Set(String(text).toUpperCase().split(/[\s,;:()!?\[\]{}'"“”]+/).map(v=>v.replace(/\.$/,'')));
+  const revision=String(text).match(/\brev(?:is[aã]o|\.)?\s*[:.]?\s*([0-9A-Z]+)\b/i)?.[1]?.toUpperCase();
+  const allocation=String(text).match(/\bC1O-ALOC-[A-Z]+-\d{3,4}-20\d{2}\b/i)?.[0]?.toUpperCase();
+  return rows.map((r,i)=>({r,i})).filter(({r})=>r.findings.length&&tokens.has(r.document.toUpperCase())&&(!revision||r.revision.toUpperCase()===revision)&&(!allocation||r.allocation?.toUpperCase()===allocation));
+ }
  function intent(text){
   const t=String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   if(/\b(baix|pacote|export)/.test(t))return 'package';
   if(/\b(paus|parar|interromp)/.test(t))return 'pause';
   if(/\b(retom|continu)/.test(t))return 'resume';
+  if(allocationReference(text))return 'audit';
   if(/\b(audit|analis|confer|confir|verifi|corrij|corrig)/.test(t))return 'audit';
   if(/\b(penden|exce|detalh)/.test(t))return 'details';
   return 'help';
  }
- root.GrconAllocationAssistant=Object.freeze({VERSION,editable,value,evaluate,groups,intent});
+ root.GrconAllocationAssistant=Object.freeze({VERSION,editable,value,evaluate,groups,intent,allocationReference,questionRows});
 })(typeof globalThis!=='undefined'?globalThis:this);

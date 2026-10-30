@@ -267,10 +267,10 @@ export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.f
   bothEmitted: "SIGEM + PW: emitido",
   pwOnlyNotEmitted: "PW: revisão sem SIGEM, não emitida",
   pwOnlyEmitted: "PW: revisão sem SIGEM, emitida",
-  sigemN1710OutsideLd: "SIGEM N-1710 fora da LD",
-  pwN1710OutsideLd: "PW N-1710 fora da LD",
-  ldUnavailableN1710: "N-1710 aguardando LD",
-  ldWithoutSigem: "LD N-1710 sem SIGEM",
+  sigemN1710OutsideLd: "SIGEM — fora das referências",
+  pwN1710OutsideLd: "PW — fora das referências",
+  ldUnavailableN1710: "Aguardando referências documentais",
+  ldWithoutSigem: "Documentos de referência sem SIGEM",
   n1710Candidates: "Códigos N-1710 para conferir",
 });
 

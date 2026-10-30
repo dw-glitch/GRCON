@@ -1,25 +1,27 @@
 {
-  "date": "2026-10-28",
-  "status": "preview-not-deployed",
-  "base": "dbe94f99229e792272ed5d92938dcb09d27190e9",
-  "verify": {
-    "command": "npm run verify",
-    "exitCode": 0
-  },
+  "date": "2026-10-29",
+  "scope": "Operational assistant; independent normative homologation is not claimed",
+  "base": "787f9521dfe538a5ddc8124de0d2c6036625fa9e",
   "cloudflarePackage": {
     "files": 338,
     "validated": true
   },
   "database": {
-    "localChecks": 24,
-    "remoteApplied": false,
-    "error": "Invalid or expired requestState"
+    "localChecks": 27,
+    "remoteApplied": true,
+    "remoteSmoke": "passed; all QA writes rolled back",
+    "rls": true,
+    "directAuthenticatedTableRead": false,
+    "anonymousRpcExecute": false,
+    "realBrowserAuthenticatedSession": false
   },
   "browser": {
     "browser": "153.0.8010.0",
     "realWorkers": true,
     "realMascotRuntime": true,
     "multiAllocation": true,
+    "correctedOfficialCopies": 2,
+    "trainingWithoutJson": true,
     "documents": 2,
     "reportSheets": [
       "RESUMO",
@@ -28,6 +30,7 @@
     "closeReopen": true,
     "checkpointCount": 400,
     "checkpointResume": true,
+    "restoreOutsideHistoryPage": true,
     "contextReset": true,
     "reducedMotion": true,
     "widths": [
@@ -36,17 +39,37 @@
     ],
     "pageErrors": []
   },
-  "realSample": {
-    "allocations": [
-      "0353",
-      "0369"
+  "realSources": {
+    "allocationFiles": 2,
+    "documents": 48,
+    "ldFiles": 5,
+    "ldRecords": 28806,
+    "fiscalHistory": 15441,
+    "exactOrigins": 48,
+    "exactRevisions": 48,
+    "reportSheets": [
+      "RESUMO",
+      "DETALHAMENTO"
     ],
-    "documents": 53,
     "automaticCorrections": 0,
-    "normativeHomologation": false
+    "normativeApproval": false,
+    "corporateBytesUploaded": false
   },
-  "precision": null,
-  "falsePositives": null,
-  "falseNegatives": null,
-  "automaticCorrectionPrecision": null
+  "sourceCorrections": {
+    "exactSha": true,
+    "exactDocumentAndRevision": true,
+    "previousValueChecked": true,
+    "formulasAndMergedCellsRejected": true,
+    "fiscalCommentsPreserved": true,
+    "unmodifiedOoxmlPartsVerified": true,
+    "crcAndXlsxReopened": true
+  },
+  "corporateRulesActivated": false,
+  "normativeApproval": false,
+  "release": {
+    "pr": 343,
+    "targetContract": "UHDT-D",
+    "featureSetting": "enabledModules.allocationAuditAssistant",
+    "rollback": "Disable the contract feature; preserve audit and rule history"
+  }
 }

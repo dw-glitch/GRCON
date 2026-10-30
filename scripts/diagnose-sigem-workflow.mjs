@@ -33,6 +33,7 @@ export async function diagnoseWorkflow(config,fetcher=fetch){
  const root='sigem-migration-jobs/v1/'+config.workspace+'/'+latest.id;
  const grant=await object(root+'/grant.json');
  if(grant.workspace!==config.workspace||grant.id!==latest.id||!Array.isArray(grant.lanes)||grant.lanes.length>3)throw Error('DIAG_JOB_INVALID');
+ const auditReceipts=[...(grant.completed||[])];
  const result=[],safeCount=value=>Number.isSafeInteger(value)&&value>=0?value:0;
  const progress={recordsExpected:safeCount(grant.records),completedSnapshots:Array.isArray(grant.completed)?grant.completed.length:0,
   reusedAuditedRecords:Array.isArray(grant.completed)?grant.completed.reduce((n,s)=>n+safeCount(s.validatedRecords),0):0,
@@ -42,6 +43,7 @@ export async function diagnoseWorkflow(config,fetcher=fetch){
   let report;
   try{report=await object(root+'/lane-'+lane+'.json');}
   catch(error){if(error.message!=='DIAG_NOT_FOUND')throw error;}
+  if(report)auditReceipts.push(...(report.snapshots||[]));
   if(!report){result.push({lane,status:'not-started',error:null,lastSteps:[]});progress.allLanesComplete=false;continue;}
   if(!Number.isSafeInteger(report.segment)||report.segment<0||report.segment>10000)throw Error('DIAG_SEGMENT_INVALID');
   progress.copiedRecords+=safeCount(report.copied);
@@ -61,7 +63,7 @@ export async function diagnoseWorkflow(config,fetcher=fetch){
  progress.auditedRecords+=progress.reusedAuditedRecords;
  // These are R2 checkpoint counters only; they cannot prove full migration,
  // which also requires live Supabase/Turso inventory and row/hash validation.
- return {ok:true,readOnly:true,started:true,progress,sourceOfProgress:'r2-checkpoints-only',instances:result};
+ return {ok:true,readOnly:true,started:true,progress,sourceOfProgress:'r2-checkpoints-only',auditReceipts:auditReceipts.filter(p=>p.fullAudit===true).map(p=>({id:p.id,count:p.count,checksum:p.checksum,manifestHash:p.manifestHash})),instances:result};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
  try{console.log(JSON.stringify(await diagnoseWorkflow({account:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN,workspace:process.env.GRCON_RECOVERY_WORKSPACE})));}
