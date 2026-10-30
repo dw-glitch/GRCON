@@ -25,7 +25,15 @@ function fmt(value: number): string {
 export function SigemPwDashboardApp() {
   const { state, adapter } = useSigemPwDashboard();
   const legacyRef = useRef<HTMLDetailsElement>(null);
-  const openLegacyList = (list: SigemPwListKey) => { adapter.setActiveList(list); if (legacyRef.current) legacyRef.current.open = true; };
+  const openLegacyList = (list: SigemPwListKey) => {
+    adapter.setActiveList(list);
+    const panel = legacyRef.current;
+    if (!panel) return;
+    panel.open = true;
+    // A escolha em cartões técnicos deve realmente expor a lista selecionada,
+    // não apenas atualizar filtros invisíveis numa seção recolhida.
+    window.requestAnimationFrame(() => panel.scrollIntoView({ block: "nearest", behavior: "auto" }));
+  };
   const pageData = adapter.pageRows();
   const activeLabel = SIGEM_PW_LISTS[state.activeList];
   const sigemStatusOptions = useMemo(() => [...new Set((state.result?.lists?.[state.activeList] || []).map(row => row.sigemStatus).filter(Boolean))].sort(), [state.result, state.activeList]);
@@ -83,7 +91,7 @@ export function SigemPwDashboardApp() {
           <button type="button" className="secondary-button" onClick={() => openLegacyList("pwN1710OutsideLd")}>Conferir PW</button>
         </div> : null}
         <details className="spw-import-options"><summary>Comparativos operacionais e situações por revisão</summary>
-          <SigemPwSituationCards state={state} activeList={state.activeList} onSelect={(list) => adapter.setActiveList(list)} />
+          <SigemPwSituationCards state={state} activeList={state.activeList} onSelect={openLegacyList} />
         </details>
         </details>
       </UiPanel>
