@@ -1,67 +1,49 @@
-# SIGEM × PW — Fase 8 | Integração controlada e liberação sem riscos
+# SIGEM × PW — Homologação de conteúdo e implantação controlada (GRCON)
 
-## Situação de release
+## Decisão confirmada em 30/10/2026
+A planilha **LD x PW 2.xlsx** é uma referência das INFORMAÇÕES desejadas pelo coordenador, **não** um molde obrigatório de layout ou um catálogo de ações a ser copiado literalmente. O GRCON deve usar sua linguagem visual e estrutura intuitiva, sem criar indicadores falsos nem omitir informações de origem.
 
-**Não publicada.** As fases #357, #359, #361, #362, #363, #364 permanecem em PRs `draft` encadeadas; esta fase também é uma PR encadeada. Nenhuma verificação `mergeable` equivale a aceite de negócio ou autorização para publicar.
+## Entrega do Excel gerencial
+A exportação do GRCON contém 3 abas úteis:
+1. **Resumo**: indicadores consistentes com o painel do GRCON, conflitos de referências, contagens fora do escopo, empresa CSG/QTM e proveniência das fontes.
+2. **N-1710**: controle dos documentos com código, revisão, título, status da referência, status do SIGEM, situação de cadastro/emissão PW, conferência de revisões, providência gerencial e histórico das revisões. O nome técnico da aba permanece para facilitar identificação contratual, mas a apresentação usa as cores/filtros do GRCON.
+3. **REL. PW**: todos os **70 campos** originais da consulta CSV PW (inclusive vazios, não classificados e outras empresas), como texto literal, para auditoria das fontes. Nenhuma coluna PW original é artificialmente descartada.
 
-## O que esta fase entrega
-- Comparador local, de leitura, entre a planilha original do coordenador (`LD x PW 2.xlsx`) e um XLSX exportado pelo GRCON.
-- Bloqueadores verificáveis: três abas na ordem oficial, `N-1710` com 32 colunas A:AF e fórmulas F:I, `REL. PW` com 70 colunas A:BR e nomes originais, aba `SIGEM` vazia, ações em J pertencentes ao vocabulário do modelo (12 textos históricos).
-- Saída resumida em JSON com diferenças, quantidades e bloqueadores. **Não imprime documentos, valores das células, nomes pessoais, nem envia o XLSX para serviços externos.**
-- Testes sintéticos para estrutura, mudança de cabeçalho, ação inesperada, ausência de fórmula e aba extra.
-- Ajustes de QA nos controles legados localizados dentro dos painéis recolhíveis, após modernização da interface.
+A antiga aba **SIGEM** era vazia no exemplo e foi substituída pela aba Resumo; a verdadeira fonte da situação SIGEM é a **Consulta Geral** do GRCON.
 
-## Comparação local obrigatória
+## Teste correto: equivalência funcional
+O comparador de homologação `scripts/sigem-pw-semantic-parity.cjs` foi criado para verificar:
+- Existência de documento, revisão e providência no controle;
+- Mesmo universo de documento+revisão **quando ambas as exportações usarem as mesmas fontes**;
+- Mesmos atributos PW (incluindo nomes repetidos e número de ocorrências) e **todas as linhas/valores**, independentemente da ordem de colunas ou linhas;
+- Ausência de células de AÇÃO em branco.
+  
+**Não** é requisito repetir cabeçalhos, fórmulas ou os 12 textos da planilha modelo em sequência idêntica. A interface pode empregar a taxonomia gerencial do GRCON (com distinção de ressalvas e recusa), desde que a providência seja correta e auditável.
 
-Com os dois arquivos no ambiente autorizado (e nunca enviados a contas externas sem permissão):
-
+Com os dois XLSX no ambiente local autorizado, sem enviá-los ao GitHub/CI:
 ```sh
-node scripts/sigem-pw-release-parity.cjs "LD x PW 2.xlsx" "GRCON_SIGEM_PW_CONTROLE.xlsx"
+npm run check:sigem-pw-release -- "LD x PW 2.xlsx" "GRCON_SIGEM_PW_GERENCIAL_YYYYMMDD.xlsx"
 ```
+Esse comando informa **apenas contagens**, diferenças e alertas, não lista documentos nem atributos sensíveis. O modo anterior `scripts/sigem-pw-release-parity.cjs` continua disponível para auditoria histórica *opcional*, mas **não é gate de layout**.
 
-Ou, usando o script `npm run check:sigem-pw-release -- "LD x PW 2.xlsx" "GRCON_SIGEM_PW_CONTROLE.xlsx"`.
+## Gates antes da liberação real
+- [x] Modelo original recuperado da Biblioteca do usuário, 6.041 documentos e 29.421 linhas PW, 70 atributos (observação de referência, não universo fixo).
+- [x] Excel adaptado ao GRCON, aba Resumo, proveniência e fonte PW original.
+- [x] Comparação funcional sem exigir layout idêntico.
+- [ ] Validar XLSX real gerado no navegador (incluindo abertura no Excel corporativo e volume completo).
+- [ ] Corrigir e comprovar Chromium de exportação `#spw-export`, com repetição de downloads.
+- [ ] Verificar autorização corporativa para replicar atributos PW brutos em banco/terceiros; as linhas PW sem código são preservadas **localmente**, mas o RPC `grcon_pw_base` atual não aceita replicá-las. **Não** modificar política de armazenamento nem fazer upload dessas linhas sem aprovação.
+- [ ] Confirmar CI/QA do commit final e rollback/saúde Cloudflare.
 
-A comparação **não é um certificador completo de regras**: os dados podem pertencer a datas e universos diferentes; ela verifica integridade do esquema, presença das fórmulas, nomes de colunas e alinhamento do vocabulário de ações. O resultado `readyForWorkbookReview: true` NÃO significa permissão de implantação. O campo `approvedForProduction` é sempre `false`, por design.
+Não executar operações destrutivas no R2, Supabase, Consulta Geral ou Turso/Neon como parte desta modernização. A migração do banco é um fluxo separado.
 
-Sem os dois arquivos, a ferramenta bloqueia com erro claro. O arquivo real do coordenador não foi encontrado entre os arquivos acessíveis nesta execução.
-
-## Gates antes de uma integração na main
-
-| Gate | Evidência exigida | Resultado nesta fase |
-|---|---|---|
-| Paridade com modelo do coordenador | Comparador com os 2 XLSX originais, validação manual de fórmulas F:I e resultados | **Pendente** |
-| Catálogo de 12 providências da coluna J | Confirmação expressa do coordenador nos casos reais | **Pendente** |
-| Precisão das contagens | CSG/QTM da coluna C; Previsto registrado; LD ativa; exclusões segregadas; status/revisão corretos | Cobertura automatizada, validação final pendente |
-| CSV PW de 70 colunas autorizado | Aprovação do contrato/área para reter e compartilhar atributos e histórico | **Pendente** |
-| Volume corporativo | Geração e abertura em Excel de XLSX com aproximadamente 6.041 LD + 29.421 linhas PW, sem travamento | **Pendente** |
-| Qualidade técnica | `npm run verify`, QA Chromium, CI do último SHA da `main` | Exigir verde no último SHA |
-| Segurança | Sem inserção de arquivos internos em R2 ou novos serviços, nenhum segredo no repo ou chat | Sem novas integrações nesta fase |
-| Retorno seguro | Snapshot/tag de versão anterior, plano de rollback, acesso ao Cloudflare permitido | **Pendente** |
-
-Os testes sintéticos Fase 6 conferem a preparação do plano de 29.421 linhas PW, **não** a gravação do arquivo de mais de 2 milhões de células no navegador.
-
-## Sequência exata quando todos os gates forem aprovados
-
-1. Revisar a dif. e documentação de cada PR. Resolver bloqueios de CI em todo o encadeamento, sem mesclar apenas porque os commits individuais passam em testes.
-2. Mesclar #357 na `main` sem excluir a base das PRs seguintes; atualizar #359 para a `main` e conferir diff/testes; integrar.
-3. Repetir para #361, #362, #363, #364 e a PR da Fase 8; manter ordem e verificar se o GitHub reorientou bases/branches.
-4. Criar identificação de rollback do SHA anterior da `main`. Confirmar janela com o usuário/área.
-5. Executar **um único build/validação** do SHA final aprovado, observando consumo de GitHub Actions. Não introduzir workflows extras nem ativar limites pagos.
-6. Publicar o pacote aprovado pelo processo Cloudflare Workers já existente no GRCON, sem alterar rotas de Supabase/Turso/Neon.
-7. Confirmar no ambiente de produção: 3 fontes ativas, KPIs, clique nos cartões, 1 caso Previsto, 1 caso CV, 1 código fora da LD, uma revisão divergente, um caso com comentário fiscal, exportação XLSX com colunas e abas originais.
-8. Se qualquer verificação pós-publicação falhar, **rollback** para versão anterior; não apagar bases PW, Consulta Geral ou LD, nem modificar históricos.
-
-## Comandos técnicos de preparação
-
+## Validação
 ```sh
-npm run typecheck
-npm run test:sigem-pw-phase8
 npm run test:sigem-pw-coordinator
-npm run test:sigem-pw-pw-fidelity
 npm run test:sigem-pw-phase6
-npm run verify
+npm run test:sigem-pw-semantic
+npm run typecheck
+npm run build
 ```
 
-O comparador de arquivos **não foi inserido no `npm run verify`**, justamente porque os XLSX oficiais não são distribuídos ao repositório. O teste sintético do comparador está no `npm test`.
-
-**Regra permanente:** nunca publicar apenas em resposta ao comando "faça a próxima" enquanto faltar aprovação do modelo do coordenador, da permissão corporativa, do teste integral de volume ou de um CI bloqueante.
+Um build Vite bem-sucedido **não** é prova de paridade dos dados reais nem de aprovação do compartilhamento PW. Nunca declarar a publicação concluída sem confirmação da implantação Cloudflare no SHA final.
