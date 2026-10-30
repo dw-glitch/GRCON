@@ -79,4 +79,34 @@ assert.equal(wider.meta.pwRawColumnCount, 73);
 assert.equal(wider.records[0].pwRawCells.length, 73, "células após último cabeçalho nunca truncadas");
 assert.equal(wider.meta.pwRawHeaders.length, 70);
 
+
+const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
+const ts = require("typescript");
+const source = readFileSync(join(__dirname, "../src/react/sigem-pw/services/sigemPwRawPw.ts"), "utf8");
+const compiled = ts.transpileModule(source, { compilerOptions: {
+  module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022
+}}).outputText;
+const output = { exports: {} };
+new Function("exports", "module", "require", compiled)(output.exports, output, require);
+const { getPwOriginalMatrix } = output.exports;
+const matrix = getPwOriginalMatrix(base);
+assert.deepEqual(matrix.headers, columns);
+assert.deepEqual(matrix.rows, [row1, row2, row3]);
+assert.deepEqual(matrix.sourceRows, [2, 3, 4]);
+assert.equal(matrix.excludedInvalidRows, 1);
+const widerMatrix = getPwOriginalMatrix(Core.sanitizePwBase(wider, []));
+assert.equal(widerMatrix.headers.length, 73);
+assert.deepEqual(widerMatrix.rows[0], more);
+assert.throws(() => getPwOriginalMatrix({
+  meta: { fileName: "legado.csv" }, records: [{ document }]
+}), /Reimporte o CSV/);
+assert.throws(() => getPwOriginalMatrix({
+  meta: { pwRawHeaders: columns }, records: [{ document }]
+}), /sem colunas originais/);
+
+const history = readFileSync(join(__dirname, "../sigem_pw_history_management.js"), "utf8");
+assert.match(history, /sourceRecords: clone\(base\.sourceRecords\)/);
+assert.match(history, /sourceRecords: clone\(context\.previousPayload\.sourceRecords\)/);
+
 console.log("SIGEM × PW Fase 4: 70 colunas PW, duplicados, CSV citado, linha C, histórico bruto e layout variável OK");
