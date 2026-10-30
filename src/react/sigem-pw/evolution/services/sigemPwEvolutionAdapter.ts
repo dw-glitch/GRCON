@@ -1099,7 +1099,20 @@ function closeDetail(): void {
 }
 
 function currentFiltersForExport(): EvolutionFilters {
-  return { ...state.filters, ...state.rawFilters };
+  // Exportar a busca tal como o operador a vê, mesmo durante o debounce.
+  // Os valores do DOM são uma salvaguarda contra eventos React ainda pendentes;
+  // fora da tela, o snapshot do adapter continua sendo a fonte de verdade.
+  const filters = { ...state.filters, ...state.rawFilters };
+  const fieldValue = (id: string, fallback: string): string => {
+    const field = document.getElementById(id);
+    return field instanceof HTMLInputElement ? field.value : fallback;
+  };
+  return {
+    ...filters,
+    query: fieldValue("spw-evo-filter-query", filters.query),
+    tag: fieldValue("spw-evo-filter-tag", filters.tag),
+    eap: fieldValue("spw-evo-filter-eap", filters.eap),
+  };
 }
 
 function auditRow(row: EvolutionRecord, situation = ""): Record<string, unknown> {
