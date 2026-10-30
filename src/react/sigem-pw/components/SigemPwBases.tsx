@@ -54,6 +54,11 @@ function BaseInfo({ kind, title, empty, base, result }: {
       <strong title={String(base.meta.fileName || "")}>{String(base.meta.fileName || title)}</strong>
       <small>Data da base: {kind === "sigem" && base.meta.referenceDate ? String(base.meta.referenceDate).split("-").reverse().join("/") : fmtDate(base.meta.importedAt)}{originalDate}{kind === "sigem" && base.meta.referenceDate ? ` · Upload: ${fmtDate(base.meta.importedAt)}` : ""}</small>
       <em>{fmt(Number(count) || 0)} {suffix}</em>
+      {kind === "pw" ? (
+        Number(base.meta.pwRawColumnCount) > 0
+          ? <small className="spw-pw-source-fidelity">{fmt(Number(base.meta.pwRawColumnCount))} colunas originais preservadas · {fmt(Number(base.meta.pwRawValidRowCount) || 0)} linhas documentais com atributos brutos{Number(base.meta.pwRawInvalidRowCount) ? ` · ${fmt(Number(base.meta.pwRawInvalidRowCount))} linha(s) sem código válido desconsiderada(s)` : ""}</small>
+          : <small className="spw-pw-source-fidelity" role="status">Versão antiga: atributos originais não disponíveis. Reimporte a relação PW para preservar todas as colunas.</small>
+      ) : null}
     </div>
   );
 }
