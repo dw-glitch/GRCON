@@ -80,6 +80,53 @@ function inspectWorkbook(book,role) {
     actions,actionCount:actions.length,
   };
 }
+/**
+ * Compare only a homologation pair generated from the SAME LD/PW/SIGEM
+ * snapshots. Counts/schema alone are insufficient to certify unchanged content.
+ * Return aggregate counts only: never put corporate document IDs in logs.
+ */
+function compareRows(original,candidate) {
+  const left=original.Sheets["N-1710"],right=candidate.Sheets["N-1710"];
+  const a=left?firstSheetData(left):[],b=right?firstSheetData(right):[];
+  const key=(sheet,n)=>normalize(getValue(sheet,"A"+n))+"|"+normalize(getValue(sheet,"B"+n));
+  const groups=(sheet,rows)=> {
+    const index=new Map(),duplicates=[];
+    for(const n of rows){const id=key(sheet,n);if(index.has(id))duplicates.push(n);else index.set(id,n);}
+    return {index,duplicateCount:duplicates.length};
+  };
+  const l=groups(left,a),r=groups(right,b);
+  let missing=0,unexpected=0,contentDifferences=0,formulaDifferences=0,formulaValueDifferences=0;
+  const comparable=["A","B","C","D","E","J","K",...Array.from({length:21},(_,i)=>XLSX.utils.encode_col(i+11))];
+  for(const [id,row] of l.index) {
+    const n=r.index.get(id);
+    if(!n){missing++;continue;}
+    for(const col of comparable){
+      if(text(getValue(left,col+row))!==text(getValue(right,col+n)))contentDifferences++;
+    }
+    for(const col of formulaColumns){
+      const aa=normalize(left[col+row]?.f),bb=normalize(right[col+n]?.f);
+      if(aa!==bb)formulaDifferences++;
+      if(normalize(getValue(left,col+row))!==normalize(getValue(right,col+n)))formulaValueDifferences++;
+    }
+  }
+  for(const id of r.index.keys())if(!l.index.has(id))unexpected++;
+  const pwLeft=original.Sheets["REL. PW"],pwRight=candidate.Sheets["REL. PW"];
+  const pl=sheetExtent(pwLeft),pr=sheetExtent(pwRight);
+  let pwCellDifferences=0;
+  const common=Math.min(pl.rows,pr.rows);
+  // First row is the headers; compare all data columns, including empty cells.
+  for(let row=2;row<=common;row++){
+    for(let col=0;col<70;col++){
+      const pos=XLSX.utils.encode_cell({r:row-1,c:col});
+      if(getValue(pwLeft,pos)!==getValue(pwRight,pos))pwCellDifferences++;
+    }
+  }
+  return {modelRows:a.length,grconRows:b.length,
+    duplicateKeysModel:l.duplicateCount,duplicateKeysGrcon:r.duplicateCount,
+    missingRows:missing,unexpectedRows:unexpected,
+    contentDifferences,formulaDifferences,formulaValueDifferences,
+    pwModelRows:Math.max(0,pl.rows-1),pwGrconRows:Math.max(0,pr.rows-1),pwCellDifferences};
+}
 function compareBooks(original,candidate) {
   const model=inspectWorkbook(original,"Modelo oficial");
   const grcon=inspectWorkbook(candidate,"Exportação GRCON");
@@ -98,12 +145,26 @@ function compareBooks(original,candidate) {
   // expected cardinality; a different catalogue requires a documented review.
   if(model.actionCount!==12)
     blockers.push("Modelo oficial: esperadas 12 providências distintas na coluna J; encontradas "+model.actionCount+".");
+  const detail=compareRows(original,candidate);
+  if(detail.modelRows!==detail.grconRows || detail.missingRows || detail.unexpectedRows)
+    blockers.push("Universos documentais divergentes entre os arquivos: total, documentos ou revisões diferentes. Utilize as mesmas bases de entrada.");
+  if(detail.duplicateKeysModel || detail.duplicateKeysGrcon)
+    blockers.push("Código+revisão duplicado na relação N-1710. Revisão humana necessária.");
+  if(detail.contentDifferences)
+    blockers.push("Conteúdo N-1710 divergente em "+detail.contentDifferences+" célula(s) fora das fórmulas (A:E, J:AF).");
+  if(detail.formulaDifferences)
+    blockers.push("Fórmulas F:I diferentes do modelo oficial em "+detail.formulaDifferences+" célula(s); conferir lógica antes de liberar.");
+  if(detail.formulaValueDifferences)
+    blockers.push("Resultados exibidos F:I diferentes em "+detail.formulaValueDifferences+" célula(s).");
+  if(detail.pwModelRows!==detail.pwGrconRows || detail.pwCellDifferences)
+    blockers.push("Dados brutos REL. PW divergentes: quantidade de linhas ou "+detail.pwCellDifferences+" células de conteúdo.");
   return {
     readyForWorkbookReview:!blockers.length,
     // Technical equivalence is NOT operational approval or permission to publish.
     approvedForProduction:false,
     model:{dimensions:model.dimensions,recordCount:model.recordCount,actionCount:model.actionCount,formulaCounts:model.formulaCounts},
     grcon:{dimensions:grcon.dimensions,recordCount:grcon.recordCount,actionCount:grcon.actionCount,formulaCounts:grcon.formulaCounts},
+    parityCounts:detail,
     blockers,
     remainingApprovals:[
       "Permissão corporativa explícita para armazenamento/compartilhamento dos 70 campos PW",
