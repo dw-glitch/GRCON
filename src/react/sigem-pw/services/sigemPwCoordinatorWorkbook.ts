@@ -55,7 +55,7 @@ const GRCON = Object.freeze({
 });
 
 const text = (value: unknown): string => value == null ? "" : String(value);
-const revisionKey = (value: unknown) => text(value).trim().toUpperCase().replace(/^REV(?:ISAO|ISÃO)?[.]?\\s*/, "");
+const revisionKey = (value: unknown) => text(value).trim().toUpperCase().replace(/^REV(?:ISAO|ISÃO)?[.]?\s*/, "");
 const sameRevision = (a: unknown, b: unknown): boolean => !!revisionKey(a) && revisionKey(a) === revisionKey(b);
 const safeNumber = (value: number | null): number => {
   if (value === null) throw new Error("Os totais gerenciais estão inconclusivos. Confira as fontes antes de exportar.");
