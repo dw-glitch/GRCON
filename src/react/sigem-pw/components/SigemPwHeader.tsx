@@ -2,22 +2,17 @@ import { UiMetaPill, UiPageHeader } from "../../core/ui/UiPrimitives";
 
 interface Props {
   busy: boolean;
-  classifiedTotal: number;
   ready: boolean;
   onEvolution(): void;
   onHistory(): void;
   onCoordinatorExport(): void;
 }
 
-function fmt(value: number): string {
-  return Number(value || 0).toLocaleString("pt-BR");
-}
-
 function Icon({ path }: { path: string }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d={path}></path></svg>;
 }
 
-export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHistory, onCoordinatorExport }: Props) {
+export function SigemPwHeader({ busy, ready, onEvolution, onHistory, onCoordinatorExport }: Props) {
   return (
     <div className="spw-heading-shell">
       <UiPageHeader
@@ -31,7 +26,6 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
             <UiMetaPill className={ready ? "spw-meta-ready" : "spw-meta-pending"}>
               <strong>{ready ? "Bases prontas" : "Aguardando bases"}</strong>
             </UiMetaPill>
-            {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> conciliados</UiMetaPill> : null}
           </>
         )}
       />
