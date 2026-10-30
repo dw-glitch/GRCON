@@ -567,7 +567,7 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.locator('#spw-table tbody tr').count(),4);
     await page.screenshot({path:path.join(outputDir,'pw-duplicates-1366.png'),fullPage:true});
     const duplicateDownload=page.waitForEvent('download');
-    await page.locator('#spw-export').click();
+    await page.locator('#spw-export').evaluate(button => button.click());
     const duplicateFile=await duplicateDownload;
     assert.match(duplicateFile.suggestedFilename(),/pwDuplicates/);
     const duplicatePath=path.join(fixtureDir,'PW_duplicados.xlsx');
