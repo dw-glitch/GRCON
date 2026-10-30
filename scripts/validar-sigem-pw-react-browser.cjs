@@ -458,6 +458,8 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwDashboardReact?.mounted)), true);
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwDashboardUi?.state)), true);
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.readiness?.status), "empty");
+    assert.match(await page.locator("#spw-coordinator-export").innerText(), /Exportar relatório GRCON/,
+      "o cabeçalho precisa apresentar claramente o relatório gerencial no padrão GRCON");
     await page.screenshot({ path: path.join(outputDir, "01-sigem-pw-empty-1366.png"), fullPage: true });
 
     await page.waitForFunction(() => Boolean(window.GrconSigemPwRevisionUi?.state?.active), null, { timeout: 30000 });
