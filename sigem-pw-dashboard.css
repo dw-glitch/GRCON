@@ -1404,3 +1404,5 @@
   #sigem-pw-dashboard-module .spw-managerial-card{transition:none}
   #sigem-pw-dashboard-module .spw-managerial-card:not(:disabled):hover{transform:none}
 }
+
+#sigem-pw-dashboard-module .spw-legacy-toolbar{display:flex;justify-content:flex-end;padding:12px 16px 0}
