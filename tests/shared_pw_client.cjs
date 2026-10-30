@@ -69,5 +69,5 @@ function client(){
  assert.equal(publishedMetadata.sharedSchemaVersion,2);
  await assert.rejects(c.api.publish({meta:{fileName:'invalid.csv'},sourceRecords:[{document:'',pwRawInvalid:true,pwRawCells:[]}]}),/Base PW inválida/);
  records[1005]=valid;
- console.log('PW cliente: duas sessões, 2.001 linhas, leitura paralela, cache, snapshot incompleto, histórico, offline e troca de contexto aprovados.');
+ console.log('PW cliente: duas sessões, 2.001 linhas brutas, linha sem código preservada e excluída dos indicadores, publicação schema v2, cache, histórico, offline e isolamento aprovados.');
 })().catch(e=>{console.error(e);process.exitCode=1});
