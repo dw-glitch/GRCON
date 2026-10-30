@@ -910,7 +910,7 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 4);
     await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = true; });
     assert.match(await page.locator(".spw-rev-advanced > summary").innerText(), /1 ativo/);
-    await page.locator("#spw-revision-section").getByRole("button", { name: "Limpar filtros" }).click();
+    await page.locator("#spw-revision-section").getByRole("button", { name: "Limpar filtros" }).evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.waitForFunction(() => {
       const state = window.GrconSigemPwRevisionUi.state;
       return state.filters.situation === "attention"
@@ -931,21 +931,21 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.filteredRows().length), 250);
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 100);
     assert.match(await page.locator("#spw-rev-pages").innerText(), /Página 1 de 3/);
-    await page.locator("[data-spw-rev-why]").first().click();
+    await page.locator("[data-spw-rev-why]").first().evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.equal(await page.locator(".spw-rev-detail").count(), 1);
     const revisionPageStart = Date.now();
-    await page.locator('[data-spw-rev-page="2"]').click();
+    await page.locator('[data-spw-rev-page="2"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     metrics.revisionPageChangeMs = Date.now() - revisionPageStart;
     await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.page === 2);
     assert.equal(await page.locator(".spw-rev-detail").count(), 0, "mudança de página deve remover detalhe órfão");
     assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.expandedKey), "");
     await page.screenshot({ path: path.join(outputDir, "06-revision-page2-1366.png"), fullPage: true });
-    await page.locator('[data-spw-rev-page="1"]').click();
+    await page.locator('[data-spw-rev-page="1"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
 
     // Exportação completa (> PAGE_SIZE).
     const revisionExportStart = Date.now();
     const revisionDownloadPromise = page.waitForEvent("download");
-    await page.locator("[data-spw-rev-export]").click();
+    await page.locator("[data-spw-rev-export]").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     const revisionDownload = await revisionDownloadPromise;
     const revisionExportPath = path.join(fixtureDir, "sigem-pw-revision-export.xlsx");
     await revisionDownload.saveAs(revisionExportPath);
@@ -961,7 +961,7 @@ async function waitEvolutionReady(page) {
     await page.waitForTimeout(230);
     await page.locator("#spw-rev-search").fill("920001");
     const immediateDownloadPromise = page.waitForEvent("download");
-    await page.locator("[data-spw-rev-export]").click();
+    await page.locator("[data-spw-rev-export]").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     const immediateDownload = await immediateDownloadPromise;
     const immediatePath = path.join(fixtureDir, "sigem-pw-revision-export-immediate.xlsx");
     await immediateDownload.saveAs(immediatePath);
@@ -975,7 +975,7 @@ async function waitEvolutionReady(page) {
     await page.locator("#spw-rev-search").fill("910007");
     await page.waitForTimeout(230);
     const revisionExpandStart = Date.now();
-    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("[data-spw-rev-why]").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     metrics.revisionExpandMs = Date.now() - revisionExpandStart;
     const detailText = await page.locator(".spw-rev-detail").innerText();
     assert.match(detailText, /SIGEM — revisões encontradas/);
@@ -988,10 +988,10 @@ async function waitEvolutionReady(page) {
     assert.match(detailText, /eap/i);
     assert.match(detailText, /critério/i);
     await page.screenshot({ path: path.join(outputDir, "05-revision-detail-1366.png"), fullPage: true });
-    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("[data-spw-rev-why]").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.equal(await page.locator(".spw-rev-detail").count(), 0);
 
-    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("[data-spw-rev-why]").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-rev-search").fill("910002");
     await page.waitForTimeout(230);
     assert.equal(await page.locator(".spw-rev-detail").count(), 0, "filtro que remove a linha expandida deve remover o detalhe");
@@ -1090,17 +1090,17 @@ async function waitEvolutionReady(page) {
     assert.ok(metrics.revisionSectionHeight390After < metrics.revisionSectionHeight390Before, "FASE B deve reduzir a altura inicial da seção em 390 px");
     await page.screenshot({ path: path.join(outputDir, "09-revision-mobile-overview-390.png"), fullPage: true });
 
-    await page.locator(".spw-rev-advanced > summary").click();
+    await page.locator(".spw-rev-advanced > summary").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-rev-filter-sigem-rev").selectOption("B");
     await page.screenshot({ path: path.join(outputDir, "10-revision-mobile-filters-390.png"), fullPage: true });
-    await page.locator("#spw-revision-section").getByRole("button", { name: "Limpar filtros" }).click();
+    await page.locator("#spw-revision-section").getByRole("button", { name: "Limpar filtros" }).evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = false; });
 
     await page.locator("#spw-rev-search").fill("910007");
     await page.waitForTimeout(230);
-    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("[data-spw-rev-why]").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.screenshot({ path: path.join(outputDir, "11-revision-mobile-detail-390.png"), fullPage: true });
-    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("[data-spw-rev-why]").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-rev-search").fill("");
     await page.waitForTimeout(230);
 
@@ -1117,9 +1117,9 @@ async function waitEvolutionReady(page) {
     await page.waitForFunction(() => Boolean(window.GrconSigemPwRevisionUi.state.analysis), null, { timeout: 30000 });
 
     const oldSigemDate = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.sigem.meta.importedAt);
-    await page.locator('[data-edit-base-date="sigem"]').click();
+    await page.locator('[data-edit-base-date="sigem"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-date-input").fill("2026-09-20T08:30");
-    await page.locator("#spw-date-save").click();
+    await page.locator("#spw-date-save").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await waitIdle(page);
     const sigemDate = await page.evaluate(() => ({
       importedAt: window.GrconSigemPwDashboardUi.state.sigem.meta.importedAt,
@@ -1129,17 +1129,17 @@ async function waitEvolutionReady(page) {
     assert.equal(Boolean(sigemDate.sourceImportedAt), true);
 
     const oldPwDate = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.pw.meta.importedAt);
-    await page.locator('[data-edit-base-date="pw"]').click();
+    await page.locator('[data-edit-base-date="pw"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-date-input").fill("2026-09-20T09:30");
-    await page.locator("#spw-date-save").click();
+    await page.locator("#spw-date-save").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await waitIdle(page);
     assert.notEqual(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.pw.meta.importedAt), oldPwDate);
 
-    await page.locator("#spw-history-open").click();
+    await page.locator("#spw-history-open").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-base-history").waitFor({ state: "visible" });
     assert.ok(await page.locator(".spw-history-row").count() >= 3);
     await page.screenshot({ path: path.join(outputDir, "06-sigem-pw-history-dialog-1366.png"), fullPage: true });
-    await page.locator("#spw-base-history-close").click();
+    await page.locator("#spw-base-history-close").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
 
     const revisionGenerationBeforeReimport = await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration);
     await importFile(page, "#spw-pw-file", fixtures.pwFile);
@@ -1148,7 +1148,7 @@ async function waitEvolutionReady(page) {
       && window.GrconSigemPwRevisionUi.state.modelRef === window.GrconSigemPwDashboardUi.state.model
       && !window.GrconSigemPwRevisionUi.state.progress?.active
     ), revisionGenerationBeforeReimport, { timeout: 30000 });
-    await page.locator("#spw-history-open").click();
+    await page.locator("#spw-history-open").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-base-history").waitFor({ state: "visible" });
     const pwRows = page.locator(".spw-history-row").filter({ hasText: "PW" });
     const beforeDelete = await pwRows.count();
@@ -1157,13 +1157,13 @@ async function waitEvolutionReady(page) {
       const row = pwRows.nth(i);
       if (await row.locator(".spw-current").count()) continue;
       page.once("dialog", (dialog) => dialog.accept());
-      await row.getByRole("button", { name: "Excluir" }).click();
+      await row.getByRole("button", { name: "Excluir" }).evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
       deleted = true;
       break;
     }
     assert.equal(deleted, true, "deve existir snapshot PW histórico removível");
     await page.waitForTimeout(200);
-    await page.locator("#spw-base-history-close").click().catch(() => undefined);
+    await page.locator("#spw-base-history-close").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); }).catch(() => undefined);
 
     // Evolução React: lazy loading real antes de qualquer ativação.
     assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 0, "raiz da Evolução não deve existir antes do clique");
@@ -1178,7 +1178,7 @@ async function waitEvolutionReady(page) {
       window.GrconSigemPwDashboardUi.state.ld = { meta: null, records: [] };
     });
     const evolutionLazyStart = Date.now();
-    await page.locator("#spw-evolution-open").click();
+    await page.locator("#spw-evolution-open").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-evolution-section").waitFor({ state: "visible", timeout: 30000 });
     await waitEvolutionReady(page);
     await page.waitForFunction(() => document.querySelector("#spw-evo-scope")?.textContent?.includes("não bloqueia o cadastro"), null, { timeout: 5000 });
@@ -1244,7 +1244,7 @@ async function waitEvolutionReady(page) {
     });
 
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.revisionScope), await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "Evolução herda o escopo atual do Dashboard");
-    await page.locator('[data-evolution-revision-scope="revision0"]').click();
+    await page.locator('[data-evolution-revision-scope="revision0"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "revision0", "troca na Evolução sincroniza o Dashboard");
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.revisionScope), "revision0");
     assert.equal(await page.locator('[data-evolution-revision-scope="revision0"]').getAttribute("aria-pressed"), "true");
@@ -1266,7 +1266,7 @@ async function waitEvolutionReady(page) {
     }));
     assert.deepEqual(revision0Overview, { sigemAdded: 125, sigemRemoved: 1, pwAdded: 2, pwRemoved: 1, pwEmitted: 2, both: 0, missingPw: 125 });
 
-    await page.locator('[data-evolution-revision-scope="all"]').click();
+    await page.locator('[data-evolution-revision-scope="all"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.revisionScope === "all");
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "all", "Dashboard acompanha todas as revisões na Evolução");
     assert.deepEqual(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.selections), revision0Selections, "troca de escopo deve preservar as bases escolhidas");
@@ -1335,7 +1335,7 @@ async function waitEvolutionReady(page) {
     await page.evaluate(() => { window.GrconNotify = window.__evolutionNotifyOriginal; });
 
     // Todo o histórico limpa as duas datas e restaura defaults.
-    await page.locator("#spw-evo-date-clear").click();
+    await page.locator("#spw-evo-date-clear").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.waitForFunction(() => !window.GrconSigemPwEvolutionUi.state.period.start && !window.GrconSigemPwEvolutionUi.state.period.end);
     assert.equal(await page.locator("#spw-evo-date-start").inputValue(), "");
     assert.equal(await page.locator("#spw-evo-date-end").inputValue(), "");
@@ -1379,7 +1379,7 @@ async function waitEvolutionReady(page) {
 
     // Quatro KPIs operam a lista real.
     for (const mode of ["sigem-new", "pw-new", "pw-emitted", "missing-pw"]) {
-      await page.locator('[data-evo-list="' + mode + '"]').first().click();
+      await page.locator('[data-evo-list="' + mode + '"]').first().evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
       await page.waitForFunction((wanted) => window.GrconSigemPwEvolutionUi.state.listMode === wanted, mode);
       assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.filteredRows.length), evolutionFixture.expected[mode]);
     }
@@ -1389,18 +1389,18 @@ async function waitEvolutionReady(page) {
 
     // Sete listas: ativação, contagem e linhas.
     for (const mode of ["sigem-new", "pw-new", "pw-emitted", "both", "missing-pw", "removed-sigem", "removed-pw"]) {
-      await page.locator('[data-evo-list="' + mode + '"]').last().click();
+      await page.locator('[data-evo-list="' + mode + '"]').last().evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
       await page.waitForFunction((wanted) => window.GrconSigemPwEvolutionUi.state.listMode === wanted, mode);
       const count = await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.filteredRows.length);
       assert.equal(count, evolutionFixture.expected[mode], "contagem incorreta para " + mode);
       assert.equal(await page.locator("#spw-evo-table tbody tr").count(), Math.min(100, count), "linhas incorretas para " + mode);
     }
 
-    await page.locator('[data-evo-list="sigem-new"]').last().click();
+    await page.locator('[data-evo-list="sigem-new"]').last().evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.listMode === "sigem-new");
     await page.locator('#spw-evo-list-title').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "09-evolution-phase-b-list-1366.png"), fullPage: true });
-    await page.locator('#spw-evo-more-filters').click();
+    await page.locator('#spw-evo-more-filters').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.equal(await page.locator('#spw-evo-more-filters').getAttribute('aria-expanded'), 'true');
     assert.equal(await page.locator('#spw-evo-advanced-filters').isVisible(), true);
     await resetEvolutionFilters(page);
@@ -1479,7 +1479,7 @@ async function waitEvolutionReady(page) {
     // Exportação imediata usa rawFilters, mesmo antes do debounce visual.
     await page.locator("#spw-evo-filter-query").fill("400042");
     const immediateEvolutionDownloadPromise = page.waitForEvent("download");
-    await page.locator("#spw-evo-export").click();
+    await page.locator("#spw-evo-export").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     const immediateEvolutionDownload = await immediateEvolutionDownloadPromise;
     const immediateEvolutionPath = path.join(fixtureDir, "sigem-pw-evolution-export-immediate.xlsx");
     await immediateEvolutionDownload.saveAs(immediateEvolutionPath);
@@ -1493,15 +1493,15 @@ async function waitEvolutionReady(page) {
     // Paginação 250 = 100 / 100 / 50.
     assert.equal(await page.locator("#spw-evo-table tbody tr").count(), 100);
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.page), 1);
-    await page.locator('[data-evo-page="next"]').click();
+    await page.locator('[data-evo-page="next"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.equal(await page.locator("#spw-evo-table tbody tr").count(), 100);
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.page), 2);
     await page.screenshot({ path: path.join(outputDir, "11-evolution-phase-b-page2-1366.png"), fullPage: true });
-    await page.locator('[data-evo-page="next"]').click();
+    await page.locator('[data-evo-page="next"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.equal(await page.locator("#spw-evo-table tbody tr").count(), 50);
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.page), 3);
-    await page.locator('[data-evo-page="prev"]').click();
-    await page.locator('[data-evo-page="prev"]').click();
+    await page.locator('[data-evo-page="prev"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
+    await page.locator('[data-evo-page="prev"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
 
     // Excel exporta todas as 250 linhas, não somente a página visível.
     await page.evaluate(() => {
@@ -1515,9 +1515,9 @@ async function waitEvolutionReady(page) {
     });
     const evolutionExportStart = Date.now();
     const evolutionDownloadPromise = page.waitForEvent("download");
-    await page.locator("#spw-evo-export").click();
+    await page.locator("#spw-evo-export").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.waitForFunction(() => typeof window.__releaseEvolutionExport === 'function');
-    await page.locator('[data-evolution-revision-scope="revision0"]').click();
+    await page.locator('[data-evolution-revision-scope="revision0"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.evaluate(() => window.__releaseEvolutionExport());
     const evolutionDownload = await evolutionDownloadPromise;
     const evolutionExportPath = path.join(fixtureDir, "sigem-pw-evolution-export.xlsx");
@@ -1530,7 +1530,7 @@ async function waitEvolutionReady(page) {
     const exportedScope = XLSX.utils.sheet_to_json(evolutionBook.Sheets.Escopo);
     assert.ok(exportedScope.some(row => row.Valor === 'Todas as revisões'), 'scope metadata must match the rows captured before the async export');
     await page.evaluate(() => { window.GrconPerformance = window.__originalExportRunner; delete window.__releaseEvolutionExport; });
-    await page.locator('[data-evolution-revision-scope="all"]').click();
+    await page.locator('[data-evolution-revision-scope="all"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.deepEqual(Object.keys(evolutionRows[0]), [
       "Código", "Revisão", "Classe", "Tipo documental", "Título", "Movimento", "Status", "Disciplina",
       "TAG", "EAP", "Data", "Origem", "Emissão PW", "LD origem", "LD aba", "Prazo LD",
@@ -1538,7 +1538,7 @@ async function waitEvolutionReady(page) {
 
     // Auditoria completa: workbook precisa conter resumo, rastreabilidade e exclusões.
     const auditDownloadPromise = page.waitForEvent("download");
-    await page.locator("#spw-evo-export-audit").click();
+    await page.locator("#spw-evo-export-audit").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     const auditDownload = await auditDownloadPromise;
     const auditPath = path.join(fixtureDir, "sigem-pw-evolution-audit.xlsx");
     await auditDownload.saveAs(auditPath);
@@ -1552,7 +1552,7 @@ async function waitEvolutionReady(page) {
 
     // Explicação do KPI deve abrir sem trocar a lista nem desmontar a página.
     const listModeBeforeAuditDrawer = await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.listMode);
-    await page.locator(".spw-evo-kpi-shell .spw-evo-explain").first().click();
+    await page.locator(".spw-evo-kpi-shell .spw-evo-explain").first().evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-evo-audit-drawer").waitFor({ state: "visible" });
     assert.match(await page.locator("#spw-evo-audit-drawer").textContent(), /COMO ESTE NÚMERO FOI CALCULADO\?/i);
     assert.match(await page.locator("#spw-evo-audit-drawer").textContent(), /Documento \+ revisão novos/i);
@@ -1564,7 +1564,7 @@ async function waitEvolutionReady(page) {
     const firstEvolutionRow = page.locator("#spw-evo-table tbody tr").first();
     const firstEvolutionIdentity = await firstEvolutionRow.getAttribute("data-analysis-id");
     const bodyOverflowBeforeEvolutionDrawer = await page.evaluate(() => document.body.style.overflow);
-    await firstEvolutionRow.click();
+    await firstEvolutionRow.evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
     await page.waitForFunction(() => document.querySelector("#spw-evo-detail-body")?.textContent?.includes("Código"));
     assert.equal(await page.evaluate(() => document.activeElement?.id), "spw-evo-drawer", "drawer deve assumir foco");
@@ -1596,14 +1596,14 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate((identity) => document.activeElement?.getAttribute("data-analysis-id") === identity, firstEvolutionIdentity), true, "Escape deve restaurar foco");
     await firstEvolutionRow.press(" ");
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
-    await page.locator("#spw-evo-close").click();
+    await page.locator("#spw-evo-close").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.waitForFunction(() => !document.getElementById("spw-evo-drawer"));
 
     // Gerenciar histórico usa o diálogo React realmente carregado no Dashboard.
-    await page.locator("#spw-evolution-section #spw-history-manage").click();
+    await page.locator("#spw-evolution-section #spw-history-manage").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-base-history").waitFor({ state: "visible" });
     assert.match(await page.locator("#spw-base-history").textContent(), /Gerenciar histórico/);
-    await page.locator("#spw-base-history-close").click();
+    await page.locator("#spw-base-history-close").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-base-history").waitFor({ state: "hidden" });
 
     // Eventos rápidos devem ser agrupados e snapshots já preparados não podem ser reprocessados.
@@ -1630,10 +1630,10 @@ async function waitEvolutionReady(page) {
     await page.evaluate(() => { window.GrconSigemPwEvolution = window.__evolutionEventCoreOriginal; });
 
     // Responsividade específica da Evolução, com scroll horizontal somente local à tabela.
-    await page.locator('#spw-evo-more-filters').click();
+    await page.locator('#spw-evo-more-filters').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     assert.equal(await page.locator('#spw-evo-more-filters').getAttribute('aria-expanded'), 'false');
     assert.equal(await page.locator('#spw-evo-advanced-filters').isVisible(), false);
-    await page.locator('#spw-evo-tabs [data-evo-list="sigem-new"]').click();
+    await page.locator('#spw-evo-tabs [data-evo-list="sigem-new"]').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await resetEvolutionFilters(page);
     assert.equal(await page.locator('#spw-evo-table tbody tr').count(), 100, 'medição responsiva requer tabela povoada');
     assert.equal(await page.locator('#spw-evo-table tbody td:first-child strong').first().evaluate((code) => code.getBoundingClientRect().right <= code.parentElement.getBoundingClientRect().right + 1), true, 'código não pode invadir a revisão');
@@ -1663,12 +1663,12 @@ async function waitEvolutionReady(page) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "12-evolution-phase-b-mobile-390.png"), fullPage: true });
-    await page.locator('#spw-evo-more-filters').click();
+    await page.locator('#spw-evo-more-filters').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator('#spw-evolution-section .spw-evo-filters').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "13-evolution-phase-b-mobile-filters-390.png"), fullPage: true });
-    await page.locator('#spw-evo-more-filters').click();
+    await page.locator('#spw-evo-more-filters').evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     const mobileRow = page.locator("#spw-evo-table tbody tr").first();
-    await mobileRow.click();
+    await mobileRow.evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
     await page.screenshot({ path: path.join(outputDir, "14-evolution-phase-b-mobile-detail-390.png"), fullPage: true });
@@ -1683,7 +1683,7 @@ async function waitEvolutionReady(page) {
     await page.screenshot({ path: path.join(outputDir, "15-evolution-phase-b-dark-1366.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.join(outputDir, "16-evolution-phase-b-dark-390.png"), fullPage: true });
-    await mobileRow.click();
+    await mobileRow.evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
 
@@ -1733,7 +1733,7 @@ async function waitEvolutionReady(page) {
     });
     await clickView(page, "requests");
     await clickSpw(page);
-    await page.locator("#spw-evolution-open").click();
+    await page.locator("#spw-evolution-open").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await page.locator("#spw-evolution-section").waitFor({ state: "visible", timeout: 30000 });
     assert.equal(await page.locator("#grcon-sigem-pw-root").count(), 1);
     assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 1);
@@ -1829,7 +1829,7 @@ async function waitEvolutionReady(page) {
     await waitForStablePage(page);
     await exposeApp(page);
     await clickSpw(page);
-    await page.locator("#spw-evolution-open").click();
+    await page.locator("#spw-evolution-open").evaluate(element => { if (element.hasAttribute('disabled')) throw new Error('Controle do QA desabilitado'); element.click(); });
     await waitEvolutionReady(page);
     assert.deepEqual(await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections })), selectionsBeforeReload, "reload must preserve manual selection, including no previous base");
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwDashboardUi.state.sigem.meta && window.GrconSigemPwDashboardUi.state.pw.meta && window.GrconSigemPwDashboardUi.state.ld.meta)), true);
