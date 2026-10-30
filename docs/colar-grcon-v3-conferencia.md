@@ -5,13 +5,13 @@ A exportação mantém as abas Resumo, eGRDTs, Documentos e Colar GRCON v2. A no
 | Coluna | Conteúdo |
 | --- | --- |
 | A:F | Contrato legado, sem mudanças |
-| G | Status oficial da Conferência |
+| G | Estado gerencial da conferência: POSTADO, AGUARDANDO RETORNO DO SIGEM ou NÃO VERIFICADO |
 | H | SIM apenas com evidência atual de código e revisão exatos; demais casos INDETERMINADO |
 | I | Revisão verificada |
 | J | Data de referência da Consulta Geral |
 | K | Identificador do snapshot |
 
-Presença no SIGEM não é aprovação. Nos casos Em análise, Em workflow e Recusado, G conserva o estado da evidência junto de POSTADO. A confirmação H continua sendo a presença da revisão. Revisão divergente não recebe SIM. Base indisponível ou marcada como desatualizada não confirma postagem.
+Presença no SIGEM não significa aprovação. A coluna G mostra **somente três estados** para o Controle de Solicitações: **POSTADO** (código e revisão exatos presentes na Consulta Geral); **AGUARDANDO RETORNO DO SIGEM** (uma eGRDT foi gerada pelo GRCON para o documento, mas sua revisão ainda não está confirmada na Conferência, mesmo quando o motor exige análise ou a Consulta Geral antecede o envio); **NÃO VERIFICADO** (o registro não tem número de eGRDT ou código documental identificável). As classificações técnicas como Em Análise, Em Workflow, Recusado e revisão divergente continuam disponíveis no módulo Conferência, mas não geram novos rótulos na coluna G. A coluna H conserva a evidência SIM/INDETERMINADO; revisão divergente nunca recebe SIM. Base indisponível/desatualizada bloqueia a exportação operacional em vez de inventar um status. **A distinção entre solicitação de inclusão/alocação na LD e solicitação de postagem no SIGEM depende do tipo da solicitação na planilha de Controle de Solicitações, coluna G**, informação que não faz parte do Histórico de eGRDTs e por isso não é inferida pelo exportador. No modo de diagnóstico sem base, o relatório preserva **AGUARDANDO RETORNO DO SIGEM** para eGRDTs existentes, mas não atribui **POSTADO**; a exportação operacional exige Consulta Geral atualizada. Na planilha de Controle de Solicitações, a fórmula consulta a eGRDT específica da coluna Q para evitar reaproveitar a postagem de outra emissão.
 
 O adaptador passa a base ativa e seu indicador de desatualização explicitamente ao worker. O worker carrega o motor oficial e suas dependências. Não consulta outra cópia de contrato pelo armazenamento local. A chave de vínculo dos eventos normaliza o instante para ISO, evitando falhas por representações equivalentes de data.
 
@@ -55,10 +55,7 @@ status como NÃO VERIFICADO. Nenhuma postagem é inferida só por existir eGRDT.
 
 A preferência de uma Consulta Geral local importada permanece respeitada.
 Se o contrato ou o snapshot mudar durante a geração, o download é cancelado,
-para não entregar resultados de outra fonte. Se houver status SIGEM divergentes
-no mesmo instante para código e revisão exatos, G informa
-**POSTADO — STATUS SIGEM CONFLITANTE**; H confirma somente presença da revisão,
-não sua aprovação.
+para não entregar resultados de outra fonte. Se houver status SIGEM divergentes no mesmo instante para documento e revisão exatos, o módulo Conferência preserva a indicação de conflito. Na exportação gerencial, G permanece **POSTADO** se a presença exata estiver confirmada; H registra somente a presença da revisão, não aprovação técnica.
 
 Esta alteração exige build e publicação do aplicativo antes de valer em produção;
 a cópia antiga do Excel não se corrige sozinha. A importação da aba Colar GRCON

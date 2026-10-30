@@ -294,11 +294,27 @@
       if (settings.requireConferenceEvidence) throw new Error(message);
       return fallback();
     };
-    const fallback = (status = "NÃO VERIFICADO") => source.flatMap(record =>
+    // Visão gerencial única: os pormenores (Recusado, Em análise, conflito,
+    // revisão divergente etc.) permanecem no módulo Conferência e na base.
+    // Somente a evidência de documento + revisão CONFIRMADA permite POSTADO.
+    const managerialStatus = (row, record, file) => {
+      // A Consulta Geral pode ser anterior à emissão ou exigir revisão manual.
+      // Isso NÃO desfaz o fato operacional de que a eGRDT foi gerada no GRCON.
+      // "NÃO VERIFICADO" é reservado à ausência de número de GRDT/documento.
+      const hasGeneratedGrdt = Boolean(text(record && record.egrdtNumber)
+        && text(file && file.document));
+      if (!hasGeneratedGrdt) return "NÃO VERIFICADO";
+      if (row && row.status === conference.STATUSES.CONFIRMED
+        && row.currentEvidence && !row.ambiguity)
+        return "POSTADO";
+      return "AGUARDANDO RETORNO DO SIGEM";
+    };
+    const fallback = () => source.flatMap(record =>
       (record.files || []).map(file => [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber),
         text(file.document), grdtRevision(file), text(file.ldPrazo),
-        pasteAllocation(file.allocation), status, "INDETERMINADO", "", "", "",
+        pasteAllocation(file.allocation), managerialStatus(null, record, file),
+        "INDETERMINADO", "", "", "",
       ]));
     if (!conference || typeof conference.reconcile !== "function")
       return unavailable("O motor oficial da Conferência não foi carregado; relatório de status cancelado.");
@@ -318,7 +334,7 @@
       return unavailable("Sem Consulta Geral ativa: não é possível exportar status reais da Conferência.");
     if (stale) {
       if (settings.requireConferenceEvidence) throw new Error("Consulta Geral desatualizada: atualize a Conferência para exportar os status.");
-      return fallback("NÃO VERIFICADO — BASE DESATUALIZADA");
+      return fallback();
     }
     if (settings.requireConferenceEvidence && !text(base.meta && base.meta.snapshotId))
       throw new Error("Consulta Geral sem identificador: recarregue a base para exportar os status.");
@@ -333,14 +349,6 @@
     for (const row of evaluated.rows || []) {
       byEvent.set(conferenceRowKey(conference, row, row.document, row.revisionSent), row);
     }
-    const labels = {
-      CONFIRMADO: "POSTADO",
-      AGUARDANDO: "AGUARDANDO CONFIRMAÇÃO",
-      REVISAO_DIVERGENTE: "REVISÃO DIVERGENTE",
-      NAO_ENCONTRADO: "NÃO LOCALIZADO",
-      REQUER_ANALISE: "REQUER ANÁLISE",
-      NAO_VERIFICADO: "NÃO VERIFICADO",
-    };
     return source.flatMap(record => (record.files || []).map(file => {
       const rev = grdtRevision(file);
       const match = byEvent.get(conferenceRowKey(conference, record, file.document, rev));
@@ -349,13 +357,7 @@
       return [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber), text(file.document),
         rev, text(file.ldPrazo), pasteAllocation(file.allocation),
-        confirmed && match.sigemStatusConflict
-          ? "POSTADO — STATUS SIGEM CONFLITANTE"
-          : confirmed && /^(EM ANALISE|EM WORKFLOW|RECUSADO|RECUSADA)$/.test(norm(match.sigemStatus))
-            ? `POSTADO — ${text(match.sigemStatus).toUpperCase()}`
-            : confirmed && !text(match.sigemStatus)
-              ? "POSTADO — STATUS SIGEM NÃO INFORMADO"
-              : text(match && labels[match.status]) || "NÃO VERIFICADO",
+        managerialStatus(match, record, file),
         confirmed ? "SIM" : "INDETERMINADO",
         match ? text(match.revisionFound) : "",
         conferenceReferenceDate(meta.referenceDate),
