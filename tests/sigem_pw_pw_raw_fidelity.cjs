@@ -49,6 +49,10 @@ assert.equal(parsed.meta.pwRawValidRowCount, 3);
 assert.equal(parsed.meta.pwRawInvalidRowCount, 1);
 assert.equal(parsed.meta.sourceRowCount, 4);
 assert.deepEqual(parsed.records.map(r => r.sourceRow), [2, 3, 4]);
+assert.equal(parsed.sourceRecords.length, 4, "a origem deve incluir cada linha preenchida");
+assert.equal(parsed.sourceRecords[3].pwRawInvalid, true);
+assert.deepEqual(parsed.sourceRecords[3].pwRawCells, invalid);
+
 assert.deepEqual(parsed.records[0].pwRawCells, row1);
 assert.deepEqual(parsed.records[1].pwRawCells, row2);
 assert.equal(parsed.records[0].pwRawCells[42], "primeiro");
@@ -59,14 +63,16 @@ assert.equal(parsed.records[0].company, "CSG", "empresa estritamente da coluna C
 
 const base = Core.sanitizePwBase(parsed, []);
 assert.equal(base.records.length, 2, "somente CSG/QTM no modelo");
-assert.equal(base.sourceRecords.length, 3, "preservar registros válidos de outras empresas");
+assert.equal(base.sourceRecords.length, 4, "preservar também linhas inválidas, sem contaminar indicadores");
 assert.equal(base.meta.scopeExcludedCount, 1);
+assert.equal(base.sourceRecords[3].pwRawInvalid, true);
+assert.equal(base.meta.pwRawInvalidRowCount, 1);
 assert.equal(base.meta.scopeAcceptedRecordCount, 2);
 assert.deepEqual(base.sourceRecords[2].pwRawCells, row3);
 assert.equal(base.records[0].pwRawCells, undefined, "modelo leve, sem replicar todas as colunas");
 assert.deepEqual(base.meta.pwRawHeaders, columns, "cabeçalhos persistem no metadado");
 const next = Core.sanitizePwBase(structuredClone(base), []);
-assert.deepEqual(next.sourceRecords.map(r => r.pwRawCells), [row1,row2,row3], "reprocessar LD não elimina os atributos brutos");
+assert.deepEqual(next.sourceRecords.map(r => r.pwRawCells), [row1,row2,row3,invalid], "reprocessar LD não elimina os atributos brutos nem linhas inválidas");
 assert.deepEqual(next.meta.pwRawHeaders, columns);
 const rehydrated = JSON.parse(JSON.stringify(next));
 assert.deepEqual(rehydrated.sourceRecords[0].pwRawCells, row1);
@@ -92,8 +98,8 @@ new Function("exports", "module", "require", compiled)(output.exports, output, r
 const { getPwOriginalMatrix } = output.exports;
 const matrix = getPwOriginalMatrix(base);
 assert.deepEqual(matrix.headers, columns);
-assert.deepEqual(matrix.rows, [row1, row2, row3]);
-assert.deepEqual(matrix.sourceRows, [2, 3, 4]);
+assert.deepEqual(matrix.rows, [row1, row2, row3, invalid]);
+assert.deepEqual(matrix.sourceRows, [2, 3, 4, 5]);
 assert.equal(matrix.excludedInvalidRows, 1);
 const widerMatrix = getPwOriginalMatrix(Core.sanitizePwBase(wider, []));
 assert.equal(widerMatrix.headers.length, 73);

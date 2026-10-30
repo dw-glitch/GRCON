@@ -48,6 +48,7 @@ const rawRows = [
   rec(code, "Liberado", "CSG", "A", "Sim", quoted),
   rec(planned, "Previsto", "QTM", "0", "Previsto", "Em preparação"),
   rec(outside, "Externo", "ABC", "0", "Sim", "Outro contrato"),
+  rec("", "Linha sem código", "CSG", "", "Não", "Preservar atributos; não contar como documento"),
 ];
 const encode = v => /[;"\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
 const csv = [headers, ...rawRows].map(line => line.map(encode).join(";")).join("\n");
@@ -71,7 +72,7 @@ assert.equal(plan.sheets["N-1710"].length,5);
 assert.equal(plan.sheets["N-1710"][2].length,32);
 assert.equal(plan.sheets["N-1710"][3].length,32);
 assert.equal(plan.sheets["REL. PW"][0].length,70);
-assert.equal(plan.sheets["REL. PW"].length,5);
+assert.equal(plan.sheets["REL. PW"].length,6,"linha inválida também deve estar na aba fonte");
 assert.deepEqual(plan.sheets["REL. PW"][2],rawRows[1]);
 assert.equal(plan.sheets.SIGEM.length,0,"SIGEM original era vazio");
 assert.equal(plan.sheets["N-1710"][3][9],"Sem ação necessária");
@@ -114,6 +115,8 @@ const { workbook } = buildCoordinatorWorkbook(state, ExcelJS);
   const source = reopened.getWorksheet("REL. PW");
   assert.equal(source.getCell("BR3").value,quoted,"raw formula-like PW text stays literal");
   assert.equal(source.getCell("C5").value,"ABC");
+  assert.equal(source.getCell("BR6").value,"Preservar atributos; não contar como documento");
+  assert.ok(["",null].includes(source.getCell("A6").value),"linha sem código preservada sem inventar documento");
   assert.equal(source.getCell("A1").value,"NumeroDocumentoCliente");
   assert.equal(source.views[0].ySplit,1);
   assert.equal(reopened.getWorksheet("SIGEM").actualRowCount,0);
