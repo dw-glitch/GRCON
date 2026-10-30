@@ -214,13 +214,15 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>window.__sharedQa.unavailable=false);
  await page.getByText('Tentar novamente',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),1);
+ // Keyboard activation is a real user interaction and avoids the nested-scroll
+ // viewport race in Chromium; the same buttons remain focusable for operators.
  // Owner can promote a historical shared base, then delete the active base; the backend replacement becomes official.
  page.once('dialog',dialog=>dialog.accept());
- await page.getByText('Tornar base atual',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
+ await page.getByText('Tornar base atual',{exact:true}).focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
  assert.equal(await page.inputValue('#spw-analysis-sigem'),'');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions.find(v=>v.snapshot_id==='shared-old').status),'active');
  page.once('dialog',dialog=>dialog.accept());
- await page.getByText('Excluir base atual',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-current');
+ await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-current');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions.some(v=>v.snapshot_id==='shared-old')),false);
  assert.equal(await page.locator('#spw-analysis-sigem option[value="shared-old"]').count(),0);
  assert.equal(await page.evaluate(()=>window.__sharedQa.calls.includes('grcon_sigem_query_activate')&&window.__sharedQa.calls.includes('grcon_sigem_query_delete')),true);
@@ -231,9 +233,9 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
   assert.equal(await page.evaluate(async()=>{try{await window.GrconSharedSigemQuery.deleteVersion('shared-current');return false;}catch{return true;}}),true);
  }
  await page.evaluate(async()=>{window.GrconCloud.state.masterOwner=true;window.GrconCloud.state.membership.role='owner';await window.GrconSigemPwDashboardUi.refresh('owner QA');});
- page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).click();
+ page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');
  await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-middle');
- page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).click();
+ page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).focus();await page.keyboard.press('Enter');
  await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&!window.GrconSigemPwDashboardUi.state.sigem.meta);
  assert.equal(await page.evaluate(()=>window.GrconSharedSigemQuery.current()),null);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),0);
