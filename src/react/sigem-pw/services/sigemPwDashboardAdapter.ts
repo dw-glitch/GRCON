@@ -1118,7 +1118,7 @@ function installExternalListeners(): () => void {
 
 async function exportCoordinatorWorkbook(): Promise<void> {
   if (state.busy) return;
-  setBusy(true, "Gerando Excel do controle documental…");
+  setBusy(true, "Gerando relatório gerencial do GRCON…");
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos indisponível.");
     await window.GRCONModuleLoader.ensure("excel");
@@ -1126,7 +1126,7 @@ async function exportCoordinatorWorkbook(): Promise<void> {
     const excel = runtime[["Excel", "JS"].join("")];
     if (!excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
     await downloadCoordinatorWorkbook(state, excel);
-    notify("Controle documental exportado com as três abas originais.", "success");
+    notify("Relatório GRCON exportado: Resumo, N-1710 e relação PW completa.", "success");
   } catch (error) {
     console.error("[SIGEM×PW] Exportação do coordenador:", error);
     notify(messageOf(error, "Não foi possível exportar o relatório gerencial."), "error");
