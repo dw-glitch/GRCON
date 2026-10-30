@@ -641,9 +641,32 @@ async function waitEvolutionReady(page) {
     assert.equal(revision0Summary.classifiedTotal, 253);
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.result.lists.all.every((row) => row.revision === "0")), true);
 
-    const revision0ExportPromise = page.waitForEvent("download");
-    await page.locator("#spw-export").click();
-    const revision0Download = await revision0ExportPromise;
+    // A navegação anterior testa filtros persistentes. Esta validação, ao
+    // contrário, mede a exportação completa do universo Rev. 0.
+    await page.locator("#spw-clear").evaluate(button => button.click());
+    await page.locator('[data-list="all"]').evaluate(button => button.click());
+    const readyForExport = await page.evaluate(() => ({
+      total: window.GrconSigemPwDashboardUi.state.result.summary.classifiedTotal,
+      filtered: window.GrconSigemPwDashboardUi.filteredRows().length,
+      list: window.GrconSigemPwDashboardUi.state.activeList,
+      busy: window.GrconSigemPwDashboardUi.state.busy,
+    }));
+    assert.equal(readyForExport.list, "all");
+    assert.equal(readyForExport.busy, false);
+    assert.equal(readyForExport.filtered, revision0Summary.classifiedTotal,
+      "a exportação de universo Rev. 0 deve usar a lista inteira, sem filtros de cenário anterior");
+    const revision0ExportPromise = page.waitForEvent("download", { timeout: 20000 });
+    await page.locator("#spw-export").evaluate(button => button.click());
+    const revision0Download = await revision0ExportPromise.catch(async error => {
+      const diagnostics = await page.evaluate(() => ({
+        list: window.GrconSigemPwDashboardUi.state.activeList,
+        filtered: window.GrconSigemPwDashboardUi.filteredRows().length,
+        busy: window.GrconSigemPwDashboardUi.state.busy,
+        toast: document.querySelector("#toast")?.textContent?.slice(0, 300),
+        loaderReady: Boolean(window.GRCONModuleLoader),
+      }));
+      throw new Error("Sem download do Excel Rev. 0: " + JSON.stringify(diagnostics), { cause: error });
+    });
     assert.match(revision0Download.suggestedFilename(), /revision0/i, "nome do Excel deve identificar o universo Revisão 0");
     const revision0ExportPath = path.join(fixtureDir, "sigem-pw-export-revision0.xlsx");
     await revision0Download.saveAs(revision0ExportPath);
