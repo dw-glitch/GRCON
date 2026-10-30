@@ -20,7 +20,7 @@ function read(path){
 }
 function matrix(book,name){
   const sheet=book.Sheets[name];
-  return sheet?XLSX.utils.sheet_to_json(sheet,{header:1,defval:"",raw:true,blankrows:false}):[];
+  return sheet?XLSX.utils.sheet_to_json(sheet,{header:1,defval:"",raw:true,blankrows:true}):[];
 }
 function widths(row){return Array.isArray(row)?row.length:0;}
 function findHeader(book,required,expectedWidth){
