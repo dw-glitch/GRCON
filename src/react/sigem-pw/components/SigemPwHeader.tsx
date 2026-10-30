@@ -28,7 +28,7 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
         meta={(
           <>
             <UiMetaPill><strong>PW: CSG + QTM · coluna C</strong></UiMetaPill>
-            <UiMetaPill>Chave <strong>documento + revisão</strong></UiMetaPill>
+            <UiMetaPill>Indicadores por <strong>documento único</strong></UiMetaPill>
             <UiMetaPill className={ready ? "spw-meta-ready" : "spw-meta-pending"}>
               <strong>{ready ? "Bases prontas" : "Aguardando bases"}</strong>
             </UiMetaPill>
@@ -43,8 +43,8 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
         <button className="secondary-button" id="spw-history-open" type="button" disabled={busy} onClick={onHistory}>
           <Icon path="M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4" /><span>Gerenciar histórico</span>
         </button>
-        <button className="secondary-button" id="spw-coordinator-export" type="button" disabled={busy || !ready} onClick={onCoordinatorExport}>Exportar controle Excel</button>
-        <button className="primary-button" id="spw-export" type="button" disabled={busy} onClick={onExport}>
+        <button className="primary-button" id="spw-coordinator-export" type="button" disabled={busy || !ready} onClick={onCoordinatorExport}>Exportar controle Excel</button>
+        <button className="secondary-button" id="spw-export" type="button" disabled={busy} onClick={onExport}>
           <Icon path="M12 3v12M8 11l4 4 4-4M5 19h14" /><span>Exportar lista</span>
         </button>
       </div>
