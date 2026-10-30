@@ -1666,7 +1666,7 @@ async function waitEvolutionReady(page) {
           `a Evolução não deve crescer além do viewport mobile: ${JSON.stringify(dimensions)}`);
         assert.ok(dimensions.tableWrapClientWidth <= dimensions.documentClientWidth + 1
           && dimensions.tableWrapScrollWidth > dimensions.tableWrapClientWidth
-          && dimensions.tableClientWidth > dimensions.tableWrapClientWidth,
+          && dimensions.tableScrollWidth > dimensions.tableWrapClientWidth,
           `a rolagem local deve estar no contêiner da tabela: ${JSON.stringify(dimensions)}`);
       }
     }
