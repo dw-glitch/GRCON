@@ -102,7 +102,7 @@ function sourceRowBinding(
   return sourceNumbers.get(Number(selected.sourceRow)) || -1;
 }
 function sourceFormula(sourceRow: number, sourceColumn: number): string {
-  if (sourceRow < 2 || sourceColumn < 0) return '=""';
+  if (sourceRow < 2 || sourceColumn < 0) return '""';
   return `IFERROR('REL. PW'!$${columnLetter(sourceColumn)}$${sourceRow},"")`;
 }
 
@@ -154,6 +154,9 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
     REVISIONS.forEach(revision => { if (available.has(revision)) totals.set(revision, (totals.get(revision) || 0) + 1); });
     const number = master.length + 1;
     const sourceRow = sourceRowBinding(row, ldByCode.get(row.code) || "", indexed, sourceNumbers);
+    if (row.pwRegistered && sourceRow < 2) {
+      throw new Error("O documento " + row.code + " não possui vínculo com a linha original PW. Reimporte a consulta para exportação fiel.");
+    }
     // Cached display values and formulas always describe the SAME selected PW
     // evidence row, rather than pairing statuses from different revisions.
     const f = sourceFormula(sourceRow, revisionColumn);
