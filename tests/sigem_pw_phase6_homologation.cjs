@@ -76,13 +76,13 @@ assert.equal(report.summary.posted,refs.slice(50).filter(x=>sigemByDoc.has(x.doc
 assert.ok(report.summary.compliant<=report.summary.posted);
 assert.ok(report.summary.pending<=report.summary.active);
 const plan=coordinatorPlan(state);
-assert.deepEqual(Object.keys(plan.sheets),["N-1710","REL. PW","SIGEM"]);
+assert.deepEqual(Object.keys(plan.sheets),["Resumo","N-1710","REL. PW"]);
 assert.equal(plan.sheets["N-1710"].length,DOCUMENTS+3);
 assert.equal(plan.sheets["N-1710"][2].length,32);
 assert.equal(plan.sheets["REL. PW"].length,PW_ROWS+1);
 assert.equal(plan.sheets["REL. PW"][0].length,70);
 assert.equal(plan.sheets["REL. PW"][PW_ROWS].length,70);
-assert.equal(plan.sheets.SIGEM.length,0);
+assert.ok(plan.sheets.Resumo.length >= 16, "o painel da planilha deve trazer indicadores e proveniência");
 assert.equal(plan.formulas.length,DOCUMENTS);
 for(const name of ["active","registered","emitted","posted","compliant","pending"]){
   assert.equal(plan.summary[name],report.summary[name],name+" deve ser idêntico ao cartão");
