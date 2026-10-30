@@ -5,7 +5,7 @@ import { getPwOriginalMatrix } from "./sigemPwRawPw";
 type CellValue = string | number;
 export type Matrix = CellValue[][];
 export interface CoordinatorPlan {
-  sheets: Record<"N-1710" | "REL. PW" | "SIGEM", Matrix>;
+  sheets: Record<"Resumo" | "N-1710" | "REL. PW", Matrix>;
   /** Excel rows for the N-1710 table (zero-based array indices start at row 4). */
   formulas: Array<{ excelRow: number; f: string; g: string; h: string; i: string; results: [string, string, string, string] }>;
   summary: { active: number; registered: number; emitted: number; posted: number; compliant: number; pending: number };
@@ -174,8 +174,32 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
     ]);
   }
   REVISIONS.forEach((rev, index) => { header1[index + 11] = totals.get(rev) || 0; });
+  // O modelo do coordenador é referência de INFORMAÇÕES, não de ordem visual.
+  // A aba antes vazia ("SIGEM") dá lugar a um resumo útil sem fabricar
+  // linhas da Consulta Geral. A base PW mantém todas as 70 colunas originais.
+  const overview: Matrix = [
+    ["GRCON | SIGEM × PW", "CONTROLE DOCUMENTAL INTEGRADO"],
+    ["INDICADOR / FONTE", "VALOR"],
+    ["Documentos ativos nas referências", summary.active],
+    ["Cadastrados no PW (CSG/QTM)", summary.registered],
+    ["Emitidos no PW", summary.emitted],
+    ["Postados no SIGEM", summary.posted],
+    ["Em conformidade", summary.compliant],
+    ["Com pendência ou em andamento", summary.pending],
+    ["Cancelados nas referências", report.summary.cancelled],
+    ["Conflitos entre referências", report.summary.conflicts],
+    ["SIGEM fora das referências", report.excludedSigem],
+    ["PW fora das referências", report.excludedPw],
+    ["Empresa considerada (PW, coluna C)", "CSG / QTM"],
+    ["Consulta Geral utilizada", text(state.sigem.meta?.fileName)],
+    ["Base PW utilizada", text(state.pw.meta?.fileName)],
+    ["Referências documentais", text(state.ld.meta?.fileName)],
+    ["Critério de análise", "Código e revisão independentes; Previsto no PW = cadastrado, não emitido"],
+    ["Observação", "Comentários da fiscalização não equivalem a conformidade plena"],
+    ["Fonte do SIGEM", "Consulta Geral ativa do GRCON; não preencher dados fictícios"],
+  ];
   return {
-    sheets: { "N-1710": master, "REL. PW": [pw.headers, ...pw.rows], "SIGEM": [] },
+    sheets: { "Resumo": overview, "N-1710": master, "REL. PW": [pw.headers, ...pw.rows] },
     formulas, summary, pwColumns: 70,
   };
 }
@@ -245,6 +269,27 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
     }
   }
 }
+function styleOverview(sheet: ExcelSheet, rows: number): void {
+  sheet.views = [{ state: "frozen", ySplit: 2, topLeftCell: "A3" }];
+  sheet.getColumn(1).width = 47;
+  sheet.getColumn(2).width = 78;
+  sheet.getRow(1).height = 33;
+  sheet.getRow(2).height = 27;
+  for (const col of ["A", "B"]) {
+    formatHeader(sheet.getCell(col + "1"), GRCON.navy);
+    formatHeader(sheet.getCell(col + "2"), GRCON.teal);
+  }
+  for (let index = 3; index <= rows; index++) {
+    const label = sheet.getCell("A" + index);
+    const value = sheet.getCell("B" + index);
+    label.font = { name: "Aptos", size: 10, bold: index <= 12, color: { argb: GRCON.ink } };
+    value.font = { name: "Aptos", size: 10, bold: index <= 12, color: { argb: GRCON.ink } };
+    if (index % 2) for (const cell of [label, value]) {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.pale } };
+    }
+    sheet.getRow(index).height = 22;
+  }
+}
 function stylePw(sheet: ExcelSheet, dataRows: number): void {
   sheet.views = [{ state: "frozen", xSplit: 3, ySplit: 1, topLeftCell: "D2" }];
   sheet.autoFilter = `A1:BR${Math.max(2, dataRows)}`;
@@ -260,15 +305,16 @@ export function buildCoordinatorWorkbook(state: SigemPwState, excel: Coordinator
   const plan = coordinatorPlan(state);
   const workbook = new excel.Workbook();
   if (workbook.calcProperties) workbook.calcProperties.fullCalcOnLoad = true;
+  const overview = workbook.addWorksheet("Resumo");
+  plan.sheets.Resumo.forEach(row => overview.addRow(row));
+  styleOverview(overview, plan.sheets.Resumo.length);
   const main = workbook.addWorksheet("N-1710");
   plan.sheets["N-1710"].forEach(row => main.addRow(row));
   styleMain(main, plan);
   const pw = workbook.addWorksheet("REL. PW");
   plan.sheets["REL. PW"].forEach(row => pw.addRow(row));
   stylePw(pw, plan.sheets["REL. PW"].length);
-  // Template SIGEM was blank. Do NOT invent rows or turn it into a second
-  // official source; SIGEM comparison comes from the active Consulta Geral.
-  workbook.addWorksheet("SIGEM");
+  // A fonte SIGEM permanece a Consulta Geral; nenhum dado fictício é exportado.
   return { workbook, plan };
 }
 export async function downloadCoordinatorWorkbook(state: SigemPwState, excel: CoordinatorExcelApi): Promise<void> {
@@ -279,7 +325,7 @@ export async function downloadCoordinatorWorkbook(state: SigemPwState, excel: Co
   try {
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "GRCON_SIGEM_PW_CONTROLE_" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + ".xlsx";
+    anchor.download = "GRCON_SIGEM_PW_GERENCIAL_" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + ".xlsx";
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
