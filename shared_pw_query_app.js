@@ -44,7 +44,7 @@
     if(cached)return remember(id,{...cached,meta});
     const count=Number(version.record_count);
     if(!Number.isInteger(count)||count<1||count>100000)throw Error('Contagem PW inválida.');
-    const records=new Array(count);
+    const sourceRecords=new Array(count);
     for(let first=0;first<count;first+=4000){
       assertContext(ticket,identity);
       const offsets=[];for(let offset=first;offset<Math.min(first+4000,count);offset+=1000)offsets.push(offset);
@@ -53,10 +53,18 @@
       pages.forEach((page,i)=>{
         const expected=Math.min(1000,count-offsets[i]);
         if(!Array.isArray(page?.rows)||page.rows.length!==expected)throw Error('Snapshot PW incompleto; a base anterior foi preservada.');
-        page.rows.forEach((entry,j)=>{if(entry.row_number!==offsets[i]+j+1||!entry.payload?.document)throw Error('Paginação PW inválida.');records[offsets[i]+j]=entry.payload;});
+        page.rows.forEach((entry,j)=>{
+          const payload=entry.payload;
+          const validCode=typeof payload?.document==='string' && payload.document.trim().length>0;
+          const traceableInvalid=payload?.pwRawInvalid===true && !validCode
+            && Array.isArray(payload.pwRawCells) && payload.pwRawCells.some(v=>String(v??'').trim());
+          if(entry.row_number!==offsets[i]+j+1||(!validCode&&!traceableInvalid))
+            throw Error('Paginação PW inválida.');
+          sourceRecords[offsets[i]+j]=payload;
+        });
       });
     }
-    return remember(id,{meta,records,sourceRecords:records});
+    return remember(id,{meta,records:sourceRecords.filter(row=>!row.pwRawInvalid && String(row.document||'').trim()),sourceRecords});
   }
   function refresh(){
     if(state.scope!==scope())reset();
@@ -97,14 +105,20 @@
     if(!canPublish())throw Error('Seu perfil não pode publicar o PW compartilhado.');
     if(state.busy)throw Error('Já existe uma publicação PW em andamento.');
     const records=base?.sourceRecords||base?.records;
-    if(!Array.isArray(records)||!records.length||records.length>100000||records.some(r=>!String(r.document||'').trim()))throw Error('Base PW inválida para compartilhamento.');
+    const validRow=r=>r&&typeof r==='object'&&(
+      (typeof r.document==='string'&&r.document.trim().length>0)
+      ||(r.pwRawInvalid===true && !String(r.document||'').trim()
+        && Array.isArray(r.pwRawCells) && r.pwRawCells.some(v=>String(v??'').trim()))
+    );
+    if(!Array.isArray(records)||!records.length||records.length>100000||records.some(r=>!validRow(r)))
+      throw Error('Base PW inválida para compartilhamento.');
     if(!base.sourceRecords&&Number(base.meta?.sourceRecordCount)>records.length)throw Error('Esta base histórica não preservou todos os registros originais. Importe o CSV original antes de compartilhar.');
     const ticket=epoch,identity=scope();state.busy=true;
     try{
       const latest=await request('current',{},identity);assertContext(ticket,identity);
       const {snapshotId,historySourceSnapshotId,...sourceMeta}=base.meta||{};
       const started=await request('begin',{fileName:sourceMeta.fileName,count:records.length,
-        metadata:{...sourceMeta,sharedSchemaVersion:1},expectedActive:latest?.snapshot?.snapshot_id||null},identity);
+        metadata:{...sourceMeta,sharedSchemaVersion:2},expectedActive:latest?.snapshot?.snapshot_id||null},identity);
       for(let i=0;i<records.length;i+=250){
         assertContext(ticket,identity);await request('chunk',{id:started.id,first:i+1,rows:records.slice(i,i+250)},identity);
         onProgress?.({done:Math.min(records.length,i+250),total:records.length,message:'Publicando base PW'});
