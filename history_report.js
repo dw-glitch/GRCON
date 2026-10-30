@@ -290,6 +290,10 @@
     const conference = settings.conferenceCore || root.GrconPostingConference
       || (typeof module === "object" && module.exports ? require("./posting_conference_core.js") : null);
     const source = (records || []);
+    const unavailable = (message) => {
+      if (settings.requireConferenceEvidence) throw new Error(message);
+      return fallback();
+    };
     const fallback = (status = "NÃO VERIFICADO") => source.flatMap(record =>
       (record.files || []).map(file => [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber),
@@ -297,7 +301,7 @@
         pasteAllocation(file.allocation), status, "INDETERMINADO", "", "", "",
       ]));
     if (!conference || typeof conference.reconcile !== "function")
-      return fallback();
+      return unavailable("O motor oficial da Conferência não foi carregado; relatório de status cancelado.");
 
     let base = settings.conferenceBase || null;
     let stale = Boolean(settings.conferenceBaseStale);
@@ -307,12 +311,17 @@
       stale = Boolean(base && query?.state?.stale);
       if (!base && typeof conference.loadBase === "function") {
         try { base = await conference.loadBase(); }
-        catch (_) { return fallback(); }
+        catch (_) { return unavailable("Não foi possível carregar a Consulta Geral utilizada na Conferência."); }
       }
     }
     if (!base || !Array.isArray(base.records) || !base.records.length)
-      return fallback();
-    if (stale) return fallback("NÃO VERIFICADO — BASE DESATUALIZADA");
+      return unavailable("Sem Consulta Geral ativa: não é possível exportar status reais da Conferência.");
+    if (stale) {
+      if (settings.requireConferenceEvidence) throw new Error("Consulta Geral desatualizada: atualize a Conferência para exportar os status.");
+      return fallback("NÃO VERIFICADO — BASE DESATUALIZADA");
+    }
+    if (settings.requireConferenceEvidence && !text(base.meta && base.meta.snapshotId))
+      throw new Error("Consulta Geral sem identificador: recarregue a base para exportar os status.");
 
     const meta = base.meta || {};
     const evaluated = conference.reconcile(source, base.records, null, {
@@ -340,9 +349,13 @@
       return [
         pasteExcelDate(record.generatedAt), text(record.egrdtNumber), text(file.document),
         rev, text(file.ldPrazo), pasteAllocation(file.allocation),
-        confirmed && /^(EM ANALISE|EM WORKFLOW|RECUSADO|RECUSADA)$/.test(norm(match.sigemStatus))
-          ? `POSTADO — ${text(match.sigemStatus).toUpperCase()}`
-          : text(match && labels[match.status]) || "NÃO VERIFICADO",
+        confirmed && match.sigemStatusConflict
+          ? "POSTADO — STATUS SIGEM CONFLITANTE"
+          : confirmed && /^(EM ANALISE|EM WORKFLOW|RECUSADO|RECUSADA)$/.test(norm(match.sigemStatus))
+            ? `POSTADO — ${text(match.sigemStatus).toUpperCase()}`
+            : confirmed && !text(match.sigemStatus)
+              ? "POSTADO — STATUS SIGEM NÃO INFORMADO"
+              : text(match && labels[match.status]) || "NÃO VERIFICADO",
         confirmed ? "SIM" : "INDETERMINADO",
         match ? text(match.revisionFound) : "",
         conferenceReferenceDate(meta.referenceDate),

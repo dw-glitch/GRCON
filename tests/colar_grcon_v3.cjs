@@ -42,6 +42,30 @@ async function main() {
 
   const stale = await Report.colarGrconRowsV3(source, {conferenceCore:Conference,conferenceBase:base,conferenceBaseStale:true});
   assert(stale.every(row => row[6].includes("BASE DESATUALIZADA") && row[7] === "INDETERMINADO"));
+  // O fluxo operacional nunca deve entregar uma planilha inteira como
+  // NÃO VERIFICADO se a fonte de conferência não foi carregada.
+  await assert.rejects(
+    Report.colarGrconRowsV3(source,{conferenceCore:Conference,conferenceBase:{meta:{},records:[]},requireConferenceEvidence:true}),
+    /Sem Consulta Geral ativa/,
+  );
+  await assert.rejects(
+    Report.colarGrconRowsV3(source,{conferenceCore:Conference,conferenceBase:base,conferenceBaseStale:true,requireConferenceEvidence:true}),
+    /Consulta Geral desatualizada/,
+  );
+  await assert.rejects(
+    Report.colarGrconRowsV3(source,{conferenceCore:Conference,conferenceBase:{meta:{},records:base.records},requireConferenceEvidence:true}),
+    /Consulta Geral sem identificador/,
+  );
+  const conflicted = await Report.colarGrconRowsV3([history(document,"0")],{
+    conferenceCore:Conference,
+    conferenceBase:{meta:{snapshotId:"conflito",referenceDate:"2026-10-29"},records:[
+      {document,revision:"0",status:"Em análise",modifiedAt:"2026-10-29T10:00:00Z"},
+      {document,revision:"0",status:"Recusado",modifiedAt:"2026-10-29T10:00:00Z"},
+    ]},
+    requireConferenceEvidence:true,
+  });
+  assert.equal(conflicted[0][6],"POSTADO — STATUS SIGEM CONFLITANTE");
+  assert.equal(conflicted[0][7],"SIM","Status em conflito não apaga a presença documental");
 
   const latest = await Report.colarGrconRowsV3(
     [history(document,"A","2026-10-29T10:00:00")],
