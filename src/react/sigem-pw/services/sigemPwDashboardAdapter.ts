@@ -771,7 +771,9 @@ function openSigemDetails(): void {
   state.filterResetKey++;
   state.filters.query = ""; state.filters.revision = ""; state.filters.sigemStatus = ""; state.filters.inPw = "";
   setActiveList("sigem");
-  document.getElementById("spw-list-title")?.scrollIntoView({ block: "start" });
+  const legacy = document.querySelector<HTMLDetailsElement>("details.spw-legacy-disclosure");
+  if (legacy) legacy.open = true;
+  window.requestAnimationFrame(() => document.getElementById("spw-list-title")?.scrollIntoView({ block: "nearest" }));
 }
 function clearFilters(): void {
   state.filters.documentClass = "";
