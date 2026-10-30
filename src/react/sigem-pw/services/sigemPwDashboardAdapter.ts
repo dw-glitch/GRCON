@@ -1097,8 +1097,12 @@ function installExternalListeners(): () => void {
     if (detail?.source !== "sigem-pw-dashboard" && detail?.source !== "sigem-pw-dashboard-ld") void refresh("base PW atualizada em outro módulo");
   };
   const dates = () => { if (!state.busy) void refresh("metadados compartilhados atualizados"); };
+  // O Proprietário ADM só pode gerenciar versões depois da confirmação assíncrona da permissão.
+  // Re-renderizar os controles quando a capacidade mudar, sem alterar dados ou papéis.
+  const permissions = () => emit();
   const context = () => { restoredSessionScope=""; state.filters={documentClass:"",query:"",revision:"",sigemStatus:"",inPw:""}; state.revisionScope="all"; state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.pwVersions = []; state.pwSharedError = ""; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
   window.addEventListener("grcon:contract-context-changed", context);
+  window.addEventListener("grcon:permissions-changed", permissions);
   window.addEventListener("grcon:shared-sigem-date-updated", dates);
   window.addEventListener("grcon:shared-sigem-metadata-invalidated", dates);
   window.addEventListener("grcon:shared-sigem-updated", conference);
@@ -1107,6 +1111,7 @@ function installExternalListeners(): () => void {
   return () => {
     window.removeEventListener("grcon:sigem-pw-revision-scope-changed", scope);
     window.removeEventListener("grcon:contract-context-changed", context);
+    window.removeEventListener("grcon:permissions-changed", permissions);
     window.removeEventListener("grcon:shared-sigem-date-updated", dates);
     window.removeEventListener("grcon:shared-sigem-metadata-invalidated", dates);
     window.removeEventListener("grcon:shared-sigem-updated", conference);
