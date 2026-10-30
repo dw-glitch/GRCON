@@ -32,7 +32,7 @@ async function main() {
   const rows = await Report.colarGrconRowsV3(source, {conferenceCore: Conference, conferenceBase:base, now:"2026-10-29T09:30:00Z"});
   assert.equal(rows.length, 3);
   assert.deepEqual(rows.map(row => row[7]), ["SIM", "INDETERMINADO", "INDETERMINADO"]);
-  assert.deepEqual(rows.map(row => row[6]), ["POSTADO", "AGUARDANDO CONFIRMAÇÃO", "REVISÃO DIVERGENTE"]);
+  assert.deepEqual(rows.map(row => row[6]), ["POSTADO", "AGUARDANDO RETORNO DO SIGEM", "AGUARDANDO RETORNO DO SIGEM"]);
   assert.equal(rows[2][8], "B", "Não atribuir presença de outra revisão à atual");
   assert.equal(rows[0][9].toISOString(), "2026-10-29T00:00:00.000Z");
   assert.equal(rows[0][10], "unit-test");
@@ -41,7 +41,7 @@ async function main() {
   assert(missing.every(row => row[6] === "NÃO VERIFICADO" && row[7] === "INDETERMINADO"));
 
   const stale = await Report.colarGrconRowsV3(source, {conferenceCore:Conference,conferenceBase:base,conferenceBaseStale:true});
-  assert(stale.every(row => row[6].includes("BASE DESATUALIZADA") && row[7] === "INDETERMINADO"));
+  assert(stale.every(row => row[6] === "NÃO VERIFICADO" && row[7] === "INDETERMINADO"));
   // O fluxo operacional nunca deve entregar uma planilha inteira como
   // NÃO VERIFICADO se a fonte de conferência não foi carregada.
   await assert.rejects(
@@ -64,7 +64,7 @@ async function main() {
     ]},
     requireConferenceEvidence:true,
   });
-  assert.equal(conflicted[0][6],"POSTADO — STATUS SIGEM CONFLITANTE");
+  assert.equal(conflicted[0][6],"POSTADO");
   assert.equal(conflicted[0][7],"SIM","Status em conflito não apaga a presença documental");
 
   const latest = await Report.colarGrconRowsV3(
@@ -81,9 +81,22 @@ async function main() {
     const rows=await Report.colarGrconRowsV3([history(document,"0")],{
       conferenceBase:{...base,records:[{document,revision:"0",status}]},
     });
-    assert.equal(rows[0][6],`POSTADO — ${status.toUpperCase()}`);
+    assert.equal(rows[0][6],"POSTADO");
     assert.equal(rows[0][7],"SIM","Presença não significa aprovação");
   }
+  // As únicas três etiquetas permitidas na exportação são estas.
+  // A Conferência detalhada continua exibindo os estados técnicos originais.
+  const requestedLabels = new Set(["NÃO VERIFICADO","AGUARDANDO RETORNO DO SIGEM","POSTADO"]);
+  const review = await Report.colarGrconRowsV3([history(document,"")],{
+    conferenceBase:base,conferenceCore:Conference,
+  });
+  assert.equal(review[0][6],"NÃO VERIFICADO","Sem revisão válida não há status seguro");
+  const waiting = await Report.colarGrconRowsV3([history("DOC-AUSENTE","0","2026-10-01T09:00:00Z")],{
+    conferenceBase:base,conferenceCore:Conference,now:"2026-10-30T10:00:00Z",
+  });
+  assert.equal(waiting[0][6],"AGUARDANDO RETORNO DO SIGEM");
+  for (const row of [...rows,...missing,...stale,...conflicted,...waiting,...review,...repost])
+    assert(requestedLabels.has(row[6]),"Status fora do contrato de três estados: "+row[6]);
   const volume=Array.from({length:12000},(_,i)=>history(`${document}-${i}`,"0","2026-10-29T09:00:00Z"));
   const bulk=await Report.colarGrconRowsV3(volume,{conferenceBase:{...base,records:volume.map(r=>({document:r.files[0].document,revision:"0"}))}});
   assert.equal(bulk.length,12000);
