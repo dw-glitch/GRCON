@@ -121,7 +121,7 @@ export function SigemPwDashboardApp() {
 
       <details ref={legacyRef} className="spw-legacy-disclosure">
         <summary>Auditoria avançada: listas por revisão, duplicados, histórico e evolução documental</summary>
-      <div className="spw-legacy-toolbar"><button type="button" className="secondary-button" disabled={state.busy} onClick={() => { void adapter.exportCurrentList(); }}>Exportar lista por revisão</button></div>
+      <div className="spw-legacy-toolbar"><button id="spw-export" type="button" className="secondary-button" disabled={state.busy} onClick={() => { void adapter.exportCurrentList(); }}>Exportar lista por revisão</button></div>
       <UiPanel className="spw-list-card" labelledBy="spw-list-title">
         <header className="spw-list-head">
           <div>
