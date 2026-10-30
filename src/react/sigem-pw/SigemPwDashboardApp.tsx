@@ -36,7 +36,6 @@ export function SigemPwDashboardApp() {
     <div className="spw-dashboard-shell spw-phase-b">
       <SigemPwHeader
         busy={state.busy}
-        classifiedTotal={classifiedTotal}
         ready={Boolean(state.readiness?.ready)}
         onEvolution={() => { void adapter.openEvolution(); }}
         onHistory={() => { void adapter.openHistory(); }}
@@ -60,11 +59,11 @@ export function SigemPwDashboardApp() {
             <h3 id="spw-overview-title">Visão consolidada da conciliação</h3>
             <p>Somente registros PW com sigla CSG ou QTM na coluna C são considerados. Demais empresas ficam separadas para auditoria.</p>
           </div>
-          {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
         <SigemPwManagerialOverview state={state} />
         <details className="spw-advanced-area">
           <summary>Conferências técnicas por revisão e indicadores operacionais</summary>
+          {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> ocorrências classificadas por revisão</UiMetaPill> : null}
           <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
         <details className="spw-import-options"><summary>Indicadores operacionais por revisão</summary><SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} /></details>
         {state.pw.meta ? <section className="spw-pw-audit" aria-label="Conferência da lista PW" id="spw-pw-audit">
