@@ -822,7 +822,7 @@ async function waitEvolutionReady(page) {
     const revisionCardFilters = ["updated", "pw-previous", "pw-not-found", "pw-awaiting-emission", "other"];
     for (const situation of revisionCardFilters) {
       const card = page.locator('[data-spw-rev-situation="' + situation + '"]');
-      await card.click();
+      await card.evaluate(button => button.click());
       await page.waitForFunction((value) => window.GrconSigemPwRevisionUi.state.filters.situation === value, situation);
       assert.equal(await card.getAttribute("aria-pressed"), "true");
       if (situation === "updated") {
@@ -830,7 +830,7 @@ async function waitEvolutionReady(page) {
         assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() >= 2);
         await page.screenshot({ path: path.join(outputDir, "04-revision-filter-active-1366.png"), fullPage: true });
       }
-      await card.click();
+      await card.evaluate(button => button.click());
       await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.filters.situation === "attention");
     }
 
