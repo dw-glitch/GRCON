@@ -752,7 +752,7 @@
         scopeVersion: PW_SCOPE_VERSION,
         scopeRule: "Somente linhas com Sigla da Empresa CSG/QTM comprovam cadastro no PW do contrato; PREVISTO é cadastrado, não emitido",
         scopeLdSnapshotId: text(ldMeta && ldMeta.snapshotId) || (ldMeta ? snapshotId("ld", ldMeta) : ""),
-        sourceRecordCount: Number(previousMeta.sourceRecordCount) || sourceRecords.length,
+        sourceRecordCount: Number(previousMeta.sourceRecordCount) || Number(previousMeta.sourceRowCount) || sourceRecords.length,
         recordCount: audit.records.length,
         validRevisionRecordCount: entries.size,
         uniqueDocumentCount: documents.size,
