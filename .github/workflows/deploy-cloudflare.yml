@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_maintenance:
+        description: "Executar manutenção opcional de R2 e liberação de bases SIGEM (operações destrutivas)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -41,6 +47,7 @@ jobs:
       - name: Validar pacote Cloudflare
         run: npm run verify:cloudflare
       - name: Verificar bucket privado sem alterar documentos
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_maintenance == true }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -60,9 +67,11 @@ jobs:
         run: node scripts/verify-document-ai-production.mjs
 
       - name: Concluir remoção do armazenamento documental desativado
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_maintenance == true }}
         env:
           GRCON_PRODUCTION_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev
         run: node scripts/retire-document-storage.mjs
 
       - name: Liberar cópias antigas da Consulta Geral auditadas no Turso
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_maintenance == true }}
         run: node scripts/release-sigem-production.mjs
