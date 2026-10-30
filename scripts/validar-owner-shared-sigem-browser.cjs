@@ -106,6 +106,18 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(() => document.querySelectorAll('details.spw-advanced-area, details.spw-legacy-disclosure, details.spw-sources-disclosure').forEach(item => { item.open = true; }));
  await page.locator('[data-revision-scope="revision0"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
+ // Um cartão operacional deve expor a lista correspondente, nunca deixar
+ // apenas os filtros ativos num painel fechado.
+ await page.evaluate(()=>{
+   const advanced=document.querySelector('details.spw-advanced-area');if(advanced)advanced.open=true;
+   const section=[...document.querySelectorAll('details.spw-import-options')].find(item=>
+     item.querySelector('summary')?.textContent?.includes('Comparativos operacionais e situações por revisão'));
+   if(section)section.open=true;
+ });
+ await page.locator('[data-summary-list="bothEmitted"]').evaluate(button=>button.click());
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.activeList),'bothEmitted');
+ assert.equal(await page.evaluate(()=>Boolean(document.querySelector('details.spw-legacy-disclosure')?.open)),true);
+
  // The revision-level KPI is intentionally collapsed under the new
  // managerial panel. Expose it before the legacy click assertions.
  await page.evaluate(() => {
