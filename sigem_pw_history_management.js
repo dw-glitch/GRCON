@@ -149,7 +149,8 @@
     const snapshot = await History.getSnapshot(History.STORES.sourceSnapshots, id);
     if (!snapshot) throw new Error("O snapshot precisa ser registrado antes da captura do conteúdo da base.");
     const existing = await readMeta(payloadKey(id), null);
-    if (existing && existing.snapshotId === id && Array.isArray(existing.records)) return existing;
+    if (existing && existing.snapshotId === id && Array.isArray(existing.records)
+      && (system !== "pw" || !Array.isArray(base.sourceRecords) || Array.isArray(existing.sourceRecords))) return existing;
     const values = context || {};
     const appState = App() && App().state || {};
     const sigemBase = system === "sigem" ? base : values.sigemBase || appState.sigem;
@@ -161,6 +162,10 @@
       system,
       meta: clone(base.meta),
       records: clone(base.records),
+      // O histórico evolutivo mantém os atributos brutos do PW separadamente
+      // do modelo consolidado. Bases legadas sem atributos seguem legíveis.
+      ...(system === "pw" && Array.isArray(base.sourceRecords)
+        ? { sourceRecords: clone(base.sourceRecords) } : {}),
       documents: clone(History.minimalDocuments(system, model)),
       capturedAt: new Date().toISOString(),
     };
@@ -296,7 +301,9 @@
     let targetBase = null;
     let promotion = null;
     if (context.isCurrent && context.promotable) {
-      targetBase = { meta: clone(context.previousPayload.meta), records: clone(context.previousPayload.records) };
+      targetBase = { meta: clone(context.previousPayload.meta), records: clone(context.previousPayload.records),
+        ...(snapshot.system === "pw" && Array.isArray(context.previousPayload.sourceRecords)
+          ? { sourceRecords: clone(context.previousPayload.sourceRecords) } : {}) };
       promotion = { snapshot: context.previous, payload: context.previousPayload };
     }
 
