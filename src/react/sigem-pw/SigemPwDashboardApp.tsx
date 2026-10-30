@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { UiMetaPill, UiPanel } from "../core/ui/UiPrimitives";
 import { SigemPwHeader } from "./components/SigemPwHeader";
 import { SigemPwReadiness } from "./components/SigemPwReadiness";
@@ -24,6 +24,8 @@ function fmt(value: number): string {
 
 export function SigemPwDashboardApp() {
   const { state, adapter } = useSigemPwDashboard();
+  const legacyRef = useRef<HTMLDetailsElement>(null);
+  const openLegacyList = (list: SigemPwListKey) => { adapter.setActiveList(list); if (legacyRef.current) legacyRef.current.open = true; };
   const pageData = adapter.pageRows();
   const activeLabel = SIGEM_PW_LISTS[state.activeList];
   const sigemStatusOptions = useMemo(() => [...new Set((state.result?.lists?.[state.activeList] || []).map(row => row.sigemStatus).filter(Boolean))].sort(), [state.result, state.activeList]);
@@ -38,7 +40,6 @@ export function SigemPwDashboardApp() {
         ready={Boolean(state.readiness?.ready)}
         onEvolution={() => { void adapter.openEvolution(); }}
         onHistory={() => { void adapter.openHistory(); }}
-        onExport={() => { void adapter.exportCurrentList(); }}
         onCoordinatorExport={() => { void adapter.exportCoordinatorWorkbook(); }}
       />
 
@@ -72,15 +73,15 @@ export function SigemPwDashboardApp() {
           {state.pw.meta?.scopeCompanyColumnMissing ? <small role="alert">A base PW anterior não registra a coluna C. Reimporte a consulta com sigla de empresa para validar os totais.</small> : null}
           <div><strong>{fmt(state.result?.quality.pwDuplicateGroups || 0)}</strong><span>grupos de código + revisão repetidos</span></div>
           <div><strong>{fmt(state.result?.quality.pwDuplicateExtraRows || 0)}</strong><span>repetições adicionais</span></div>
-          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwDuplicates")}>Ver duplicados PW</button>
+          <button type="button" className="secondary-button" onClick={() => openLegacyList("pwDuplicates")}>Ver duplicados PW</button>
           <small>A lista de duplicados usa apenas o PW das empresas CSG/QTM. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
         </section> : null}
         {!state.ld.meta && state.sigem.meta ? <div className="spw-empty" role="alert"><strong>Referências documentais necessárias para os totais oficiais</strong><span>Sem referências válidas, o painel oficial não calcula cadastro, emissão ou postagem. Inclua as fontes do contrato antes de comparar.</span></div> : null}
         {state.result?.quality?.ldAvailable ? <div className="spw-pw-audit" role="status">
           <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> SIGEM fora das referências</span>
-          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("sigemN1710OutsideLd")}>Conferir na lista</button>
+          <button type="button" className="secondary-button" onClick={() => openLegacyList("sigemN1710OutsideLd")}>Conferir na lista</button>
           <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> PW fora das referências</span>
-          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwN1710OutsideLd")}>Conferir PW</button>
+          <button type="button" className="secondary-button" onClick={() => openLegacyList("pwN1710OutsideLd")}>Conferir PW</button>
         </div> : null}
         <details className="spw-import-options"><summary>Comparativos operacionais e situações por revisão</summary>
           <SigemPwSituationCards state={state} activeList={state.activeList} onSelect={(list) => adapter.setActiveList(list)} />
@@ -119,8 +120,9 @@ export function SigemPwDashboardApp() {
 
       </details>
 
-      <details className="spw-legacy-disclosure">
+      <details ref={legacyRef} className="spw-legacy-disclosure">
         <summary>Auditoria avançada: listas por revisão, duplicados, histórico e evolução documental</summary>
+      <div className="spw-legacy-toolbar"><button type="button" className="secondary-button" disabled={state.busy} onClick={() => { void adapter.exportCurrentList(); }}>Exportar lista por revisão</button></div>
       <UiPanel className="spw-list-card" labelledBy="spw-list-title">
         <header className="spw-list-head">
           <div>
