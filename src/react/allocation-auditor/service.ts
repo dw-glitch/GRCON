@@ -128,6 +128,10 @@ export const service={
    if(source.kind==='allocation'){
     const rows=state.rows.filter(r=>r.sourceHash===source.sha256);const events=approved.filter((e:Data)=>rows.some(r=>r.lineage===e.lineage)&&g.GrconAllocationAssistant.editable(e.field));
     if(!events.length)continue;
+    if(source.correctionMode==='audit-only'){
+     exceptions.push(source.name+': layout compatível com auditoria, mas não homologado para edição automática. Revise as alterações na LD de origem e gere o modelo oficial para produzir a cópia corrigida.');
+     continue;
+    }
     try{const result=await compute('revise-allocation',{file,rows,events,sourceHash:source.sha256,contract:cloud().membership.contract_id});current(t);files.push({name:'03_Alocacoes_Corrigidas/'+source.sha256.slice(0,8)+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/\.xlsx$/i,'')+'_CORRIGIDA.xlsx',bytes:result.bytes,changed:result.changed,changes:result.changes,official:true});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
    }else{
     const events=approved.filter((e:Data)=>state.rows.some(r=>r.lineage===e.lineage&&r.origin?.file===source.name));if(!events.length)continue;
