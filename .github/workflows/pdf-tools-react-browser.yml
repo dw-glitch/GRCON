@@ -1,29 +1,8 @@
 name: FASE B — Combinar PDFs React UI
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "src/react/pdf-tools/**"
-      - "src/react/core/ui/**"
-      - "src/react/core/mount/**"
-      - "pdf_merge_core.js"
-      - "pdf_merge_engine.js"
-      - "workers/pdf-merge.worker.js"
-      - "pdf-merge.css"
-      - "react-ui.css"
-      - "requests-phase-b.css"
-      - "analysis-history-phase-b.css"
-      - "grcon_module_loader.js"
-      - "index.html"
-      - "sw.js"
-      - "vite.config.ts"
-      - "package.json"
-      - "package-lock.json"
-      - "tests/pdf_tools_react.cjs"
-      - "scripts/validar-pdf-tools-browser.cjs"
-      - "scripts/validar-consultas-browser.cjs"
-      - "docs/phase-b-pdf-tools-parity.md"
-      - ".github/workflows/pdf-tools-react-browser.yml"
   workflow_dispatch:
 
 permissions:

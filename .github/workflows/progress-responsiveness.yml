@@ -1,33 +1,7 @@
 name: QA — Progresso e responsividade
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "operation_*"
-      - "performance_workers.js"
-      - "workers/**"
-      - "src/react/**"
-      - "allocation_*"
-      - "requests_control_app.js"
-      - "planned_documents_app.js"
-      - "sigem_posting_central_app.js"
-      - "sigem_status_monitoring_app.js"
-      - "history_report_worker.js"
-      - "posting_conference_*"
-      - "retomar.js"
-      - "emission_dashboard_report.js"
-      - "data_exports.js"
-      - "consultation_index.js"
-      - "workspace.js"
-      - "app.js"
-      - "index.html"
-      - "grcon_module_loader.js"
-      - "grcon_service_worker.js"
-      - "grcon_file_access.js"
-      - "sw.js"
-      - "scripts/validar-startup-navigation-browser.cjs"
-      - "package*.json"
-      - "scripts/validar-progress-*.cjs"
-      - ".github/workflows/progress-responsiveness.yml"
   workflow_dispatch:
 permissions:
   contents: read

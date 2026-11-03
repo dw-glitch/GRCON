@@ -1,8 +1,7 @@
 name: QA — Cofre, contratos e monitoramento integrados
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

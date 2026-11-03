@@ -1,37 +1,8 @@
 name: QA — Repostagem de GRDT
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "app.js"
-      - "app-ui.js"
-      - "emission.js"
-      - "allocation_registry_core.js"
-      - "allocation_registry_app.js"
-      - "document_allocation_context.js"
-      - "supabase/migrations/*shared_allocation_registry.sql"
-      - "tests/allocation_registry*.cjs"
-      - "package.json"
-      - "package-lock.json"
-      - "history_classification.js"
-      - "posting_flow.js"
-      - "posting_batch_planner.js"
-      - "posting-flow.css"
-      - "scripts/validar-unified-posting-browser.cjs"
-      - "history_core.js"
-      - "grcon_cloud_app.js"
-      - "tests/history_classification.cjs"
-      - "tests/cloud_history_pagination.cjs"
-      - "grdt_reissue_core.js"
-      - "grdt_reissue_app.js"
-      - "grdt-reissue.css"
-      - "index.html"
-      - "p1_ux.js"
-      - "grcon_module_loader.js"
-      - "src/react/historico-egrdt/**"
-      - "tests/grdt_reissue.cjs"
-      - "scripts/validar-grdt-reissue-browser.cjs"
-      - ".github/workflows/grdt-reissue-hardening.yml"
   workflow_dispatch:
 
 permissions:

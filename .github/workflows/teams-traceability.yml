@@ -1,14 +1,7 @@
 name: Teams — Rastreabilidade
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - '**/*teams*'
-      - 'cloudflare/**'
-      - 'history_report*'
-      - 'posting_conference*'
-      - 'requests_report.js'
-      - 'src/react/historico-egrdt/**'
-      - 'src/react/consultas/**'
   workflow_dispatch:
 permissions:
   contents: read

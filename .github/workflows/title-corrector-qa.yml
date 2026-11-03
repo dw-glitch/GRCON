@@ -1,12 +1,7 @@
 name: Corretor de títulos — regressão documental
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - 'workers/title-corrector*'
-      - 'src/react/title-corrector/**'
-      - 'vendor/recon/scon_*'
-      - 'tests/title_corrector*'
-      - '.github/workflows/title-corrector-qa.yml'
   workflow_dispatch:
 permissions:
   contents: read

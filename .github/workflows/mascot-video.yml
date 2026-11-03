@@ -1,55 +1,8 @@
 name: Validação do mascote em vídeo
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "assets/mascot/video/**"
-      - "grcon-mascot-sprite.png"
-      - "grcon_mascot_controller.js"
-      - "grcon_mascot_controller_v4.js"
-      - "grcon_mascot_runner.js"
-      - "grcon_mascot_success_pilot.js"
-      - "grcon_mascot_idle_dance.js"
-      - "egrdt_teams_notification_app.js"
-      - "sw.js"
-      - "index.html"
-      - "vercel.json"
-      - "scripts/validar-mascote-video-browser.cjs"
-      - "scripts/validar-mascote-success-pilot-browser.cjs"
-      - "scripts/validar-mascote-idle-dance-browser.cjs"
-      - "scripts/validar-consultas-browser.cjs"
-      - "src/react/consultas/**"
-      - "requests-phase-b.css"
-      - "react-ui.css"
-      - "tests/fixtures/grcon-mascot-video.html"
-      - "tests/grcon_mascot_video.cjs"
-      - "tests/grcon_mascot_success_pilot.cjs"
-      - ".github/workflows/mascot-video.yml"
-  pull_request:
-    paths:
-      - "assets/mascot/video/**"
-      - "grcon-mascot-sprite.png"
-      - "grcon_mascot_controller.js"
-      - "grcon_mascot_controller_v4.js"
-      - "grcon_mascot_runner.js"
-      - "grcon_mascot_success_pilot.js"
-      - "grcon_mascot_idle_dance.js"
-      - "egrdt_teams_notification_app.js"
-      - "sw.js"
-      - "index.html"
-      - "vercel.json"
-      - "scripts/validar-mascote-video-browser.cjs"
-      - "scripts/validar-mascote-success-pilot-browser.cjs"
-      - "scripts/validar-mascote-idle-dance-browser.cjs"
-      - "scripts/validar-consultas-browser.cjs"
-      - "src/react/consultas/**"
-      - "requests-phase-b.css"
-      - "react-ui.css"
-      - "tests/fixtures/grcon-mascot-video.html"
-      - "tests/grcon_mascot_video.cjs"
-      - "tests/grcon_mascot_success_pilot.cjs"
-      - ".github/workflows/mascot-video.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,28 +1,8 @@
 name: Histórico de eGRDTs — FASE B React
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "src/react/historico-egrdt/**"
-      - "history-phase-b.css"
-      - "grcon_mascot_header.js"
-      - "scripts/validar-mascote-video-browser.cjs"
-      - "scripts/validar-sigem-pw-react-browser.cjs"
-      - "scripts/validar-evolution-sources-browser.cjs"
-      - "src/react/sigem-pw/evolution/**"
-      - "tests/sigem_pw_evolution_sources.cjs"
-      - "history_core.js"
-      - "history_report.js"
-      - "egrdt_teams_notification_app.js"
-      - "grcon_module_loader.js"
-      - "retomar.js"
-      - "grcon_reposting_app.js"
-      - "vite.config.ts"
-      - "sw.js"
-      - "tests/historico_egrdt_react.cjs"
-      - "scripts/validar-historico-egrdt-browser.cjs"
-      - "docs/phase-b-historico-egrdt-parity.md"
-      - ".github/workflows/historico-egrdt-react-browser.yml"
   workflow_dispatch:
 
 permissions:
