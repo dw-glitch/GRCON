@@ -20,8 +20,6 @@ assert.match(html, /img-src[^;]+https:\/\/kvyrttccwzdhasplfxnr\.supabase\.co/);
 const policies = [
   ["HTML", html.match(/<meta content="([^"]+)" http-equiv="Content-Security-Policy"/)[1]],
   ["Cloudflare", read("cloudflare/_headers").match(/Content-Security-Policy: ([^\n]+)/)[1]],
-  ...JSON.parse(read("vercel.json")).headers.flatMap(rule => rule.headers
-    .filter(header => header.key === "Content-Security-Policy").map(header => ["Vercel", header.value])),
 ];
 for (const [provider, policy] of policies) {
   const images = policy.split(";").map(value => value.trim()).find(value => value.startsWith("img-src ")).split(/\s+/).slice(1);

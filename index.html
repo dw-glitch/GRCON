@@ -249,8 +249,27 @@
 <div class="progress-message-row"><span id="progress-text">Processando…</span><button class="danger-button compact" id="cancel-processing" type="button" hidden>Cancelar</button></div>
 </div>
 </section>
-<section id="grdt-support-panel" class="grdt-support-panel" aria-label="Central de Apoio" data-mode="initial">
-  <div class="grdt-support-head"><strong>Central de Apoio</strong><small>Pesquisa e conferência documental</small></div>
+<section id="grdt-support-panel" class="grdt-support-panel" aria-label="Painel da operação" data-mode="initial">
+  <div class="grdt-support-head"><strong>Painel da operação</strong><small>Pesquisa, histórico e conferência documental</small></div>
+  <div id="grdt-support-dashboard" class="grdt-support-dashboard" hidden>
+    <div class="grdt-support-kpis" id="grdt-support-kpis"></div>
+    <div class="grdt-support-dash-grid">
+      <section class="grdt-support-recent" aria-labelledby="grdt-support-recent-title">
+        <div class="grdt-support-block-head"><h3 id="grdt-support-recent-title">Últimas emissões</h3></div>
+        <ol id="grdt-support-recent-list" class="grdt-support-recent-list"></ol>
+      </section>
+      <section class="grdt-support-chart" aria-labelledby="grdt-support-chart-title">
+        <div class="grdt-support-block-head">
+          <h3 id="grdt-support-chart-title">Emissões por período</h3>
+          <div class="grdt-support-toggle" role="group" aria-label="Período do gráfico">
+            <button type="button" id="grdt-support-range-7" data-range="7" aria-pressed="true">7 dias</button>
+            <button type="button" id="grdt-support-range-4" data-range="4" aria-pressed="false">4 semanas</button>
+          </div>
+        </div>
+        <div id="grdt-support-bars" class="grdt-support-bars" role="img" aria-label="Emissões por período"></div>
+      </section>
+    </div>
+  </div>
   <div class="grdt-support-grid">
     <form id="grdt-support-search-form" class="grdt-support-search-area">
       <label for="grdt-support-search">Consulta rápida</label>

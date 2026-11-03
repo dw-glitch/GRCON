@@ -1,3 +1,7 @@
+## Em desenvolvimento — Painel da operação
+
+- A “Central de Apoio” passa a se chamar **Painel da operação** e ocupa o espaço vazio da tela Controle de GRDT com indicadores do Histórico (total, emitidas no mês com variação, documentos no mês, última emissão), últimas emissões e gráfico de emissões por 7 dias ou 4 semanas. Somente leitura; some quando a tabela de resultados é exibida. Pesquisa rápida e retomada de preparação permanecem.
+
 ## Em desenvolvimento — SIGEM × PW: estabilidade, desempenho e relatório
 
 - Histórico de bases do SIGEM × PW passa a ser gravado em índice + partes (antes: um único valor do IndexedDB). Corrige a falha “serialized keys and/or value are too large” que impedia importar uma 2ª base PW grande; mede-se (30 mil documentos) importação de PW 19,5 s → 10,7 s e abertura com bases persistidas 9,3 s → 5,5 s. Detalhes e limites em `docs/sigem-pw-estabilidade-desempenho-20261103.md`.

@@ -1,6 +1,6 @@
 # Deploy independente do GRCON na Cloudflare
 
-A Cloudflare é um caminho de publicação paralelo à Vercel. O projeto Vercel e `vercel.json` permanecem ativos; esta integração não troca a URL de produção automaticamente.
+A Cloudflare é o único destino de publicação do GRCON. A configuração da Vercel (`vercel.json`) foi removida; os previews e a produção usam somente Cloudflare.
 
 ## Arquitetura
 
@@ -41,7 +41,7 @@ A validação falha se um item obrigatório não existir, se uma referência loc
 
 ## Headers e PWA
 
-`cloudflare/_headers` replica semanticamente as políticas de cache e segurança de `vercel.json`, incluindo a CSP que libera apenas o Supabase já usado pelo GRCON. `sw.js` e `manifest.json` são servidos na nova origem Cloudflare e, portanto, criam um registro PWA independente da origem Vercel.
+`cloudflare/_headers` define as políticas de cache e segurança, incluindo a CSP que libera apenas o Supabase já usado pelo GRCON. `sw.js` e `manifest.json` são servidos na nova origem Cloudflare e, portanto, criam o registro PWA da origem Cloudflare.
 
 ## Credenciais
 
