@@ -124,18 +124,25 @@ export const assistant={
     speak('Recebi '+files.length+' alocação(ões). Algumas planilhas possuem várias abas compatíveis. Selecione as abas indicadas para iniciar a conferência preventiva sem presumir a origem.');
     return;
    }
-   await service.importMany(files);
+   const imported=await service.importMany(files) as Data;
    pendingAllocationFiles=[];
    emit({pendingSheets:[]});
    speak('Recebi e validei '+files.length+' alocação(ões). Documentos incorporados à sessão com origem e ocorrências preservadas.');
-   await audit(false,speak);
+   if(imported.checkpoint&&service.snapshot().progress<service.snapshot().total){
+    const missing=service.missingSources();
+    if(missing.length){speak('A análise parcial foi preservada. Reanexe estas fontes para continuar: '+missing.join(', '));return;}
+    await audit(true,speak);
+   }else await audit(false,speak);
   }else{
    const before=service.snapshot(),hadRows=before.rows.length>0;
    const result=await service.importAssistantLd(files) as Data;
    speak('Recebi '+files.length+' LD(s) de origem. As alocações anexadas permanecem na sessão.');
    if(result?.unchanged){
-    if(before.progress<before.total)speak('Progresso preservado. Reanexe as alocações, quando necessário, e use Retomar análise.');
-    else speak('Fontes idênticas reconectadas. Nenhum resultado ou decisão foi modificado.');
+    if(before.progress<before.total){
+     const missing=service.missingSources();
+     if(missing.length)speak('Progresso preservado. Reanexe as fontes ainda necessárias: '+missing.join(', '));
+     else await audit(true,speak);
+    }else speak('Fontes idênticas reconectadas. Nenhum resultado ou decisão foi modificado.');
    }else if(service.snapshot().records.length){
     speak(hadRows?'As referências foram atualizadas. Vou refazer a auditoria para não reutilizar resultados antigos.':'Vou iniciar a auditoria usando as LDs recebidas.');
     await audit(false,speak);
@@ -157,10 +164,14 @@ export const assistant={
    speak('Escolha uma aba válida para cada planilha antes de iniciar.');return;
   }
   const selected=Object.fromEntries(state.pendingSheets.map(x=>[x.name,x.selected]));
-  await service.importMany(pendingAllocationFiles,selected);
+  const imported=await service.importMany(pendingAllocationFiles,selected) as Data;
   speak('Abas confirmadas e arquivos validados. Vou conferir as ocorrências antes do envio à fiscalização.');
   pendingAllocationFiles=[];emit({pendingSheets:[]});
-  await audit(false,speak);
+  if(imported.checkpoint&&service.snapshot().progress<service.snapshot().total){
+   const missing=service.missingSources();
+   if(missing.length)speak('A análise parcial foi preservada. Reanexe as fontes restantes: '+missing.join(', '));
+   else await audit(true,speak);
+  }else await audit(false,speak);
  });},
  auditFiles(){return execute(async(speak)=>{
   if(state.pendingSheets.length){speak('Confirme primeiro as abas das planilhas anexadas.');return;}
