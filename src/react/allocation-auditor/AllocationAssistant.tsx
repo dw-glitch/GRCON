@@ -4,7 +4,7 @@ import {assistant} from './assistantStore';
 import {service,type Data} from './service';
 export function AllocationAssistant(){
  const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot),s=useSyncExternalStore(service.subscribe,service.snapshot);
- const [text,setText]=useState(''),[expanded,setExpanded]=useState(false),[confirmIssue,setConfirmIssue]=useState(false);const panel=useRef<HTMLElement>(null),mascot=useRef<HTMLDivElement>(null),end=useRef<HTMLDivElement>(null);
+ const [text,setText]=useState(''),[expanded,setExpanded]=useState(false),[confirmIssue,setConfirmIssue]=useState(false),[confirmDiscard,setConfirmDiscard]=useState(false);const panel=useRef<HTMLElement>(null),mascot=useRef<HTMLDivElement>(null),end=useRef<HTMLDivElement>(null);
  const busy=chat.pending||s.busy;const g=window as unknown as Data;
  const operation=useRef({busy:false,error:false});
  useLayoutEffect(()=>{
@@ -55,7 +55,7 @@ export function AllocationAssistant(){
   else if(prior.busy)g.GrconMascot?.show?.('idle',{source:'audit-chat-rest'});
   operation.current={busy,error};
  },[chat.open,busy,s.error,chat.error,s.progress,s.total]);
- useEffect(()=>{if(!chat.open)setConfirmIssue(false);},[chat.open]);
+ useEffect(()=>{if(!chat.open){setConfirmIssue(false);setConfirmDiscard(false);}},[chat.open]);
  useEffect(()=>{setConfirmIssue(false);},[s.records]);
  useEffect(()=>{
   const viewport=end.current?.parentElement;
@@ -73,7 +73,17 @@ export function AllocationAssistant(){
     <button type="button" disabled={busy} onClick={()=>void assistant.status()}>Situação</button>
     {s.rows.length>0&&<button type="button" disabled={busy} onClick={()=>void assistant.details()}>Ver pendências</button>}
     <button type="button" disabled={busy} onClick={()=>void assistant.help()}>Ajuda</button>
+    {(s.records.length>0||s.rows.length>0||Boolean(s.context.sources?.length))&&<button type="button" className="aac-danger" onClick={()=>setConfirmDiscard(true)}>Nova auditoria</button>}
    </nav>
+   {confirmDiscard&&<section className="aac-discard" role="group" aria-label="Excluir análise">
+    <strong>Excluir a análise atual?</strong>
+    <p>Os resultados e as decisões desta sessão serão descartados para você começar uma nova auditoria. Seus arquivos originais não são alterados.</p>
+    <div className="aac-sheet-controls">
+     <button className="primary-button" type="button" onClick={()=>{setConfirmDiscard(false);void assistant.discardAnalysis(false);}}>Excluir análise (manter LDs)</button>
+     <button type="button" onClick={()=>{setConfirmDiscard(false);void assistant.discardAnalysis(true);}}>Excluir análise e LDs</button>
+     <button type="button" onClick={()=>setConfirmDiscard(false)}>Cancelar</button>
+    </div>
+   </section>}
    {chat.pendingSheets.length>0&&<section className="aac-sheet-selection" aria-label="Selecionar abas das alocações">
     <strong>Confirmar abas documentais</strong>
     <p>Encontrei mais de uma aba compatível em alguns arquivos. Selecione a origem para evitar auditoria incorreta.</p>

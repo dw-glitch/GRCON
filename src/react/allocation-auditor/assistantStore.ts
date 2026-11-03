@@ -135,7 +135,7 @@ export const assistant={
    const imported=await service.importMany(files) as Data;
    pendingAllocationFiles=[];
    emit({pendingSheets:[]});
-   speak('Recebi e validei '+files.length+' alocação(ões). Documentos incorporados à sessão com origem e ocorrências preservadas.');
+   speak('Recebi e validei '+files.length+' alocação(ões).'+(imported.replaced?' Iniciei uma nova análise: as alocações anteriores foram substituídas e não se misturam a estas.':' Documentos incorporados à sessão com origem e ocorrências preservadas.'));
    if(imported.checkpoint&&service.snapshot().progress<service.snapshot().total){
     const missing=service.missingSources();
     if(missing.length){speak('A análise parcial foi preservada. Reanexe estas fontes para continuar: '+missing.join(', '));return;}
@@ -173,7 +173,7 @@ export const assistant={
   }
   const selected=Object.fromEntries(state.pendingSheets.map(x=>[x.name,x.selected]));
   const imported=await service.importMany(pendingAllocationFiles,selected) as Data;
-  speak('Abas confirmadas e arquivos validados. Vou conferir as ocorrências antes do envio à fiscalização.');
+  speak('Abas confirmadas e arquivos validados.'+(imported.replaced?' Iniciei uma nova análise: as alocações anteriores foram substituídas.':'')+' Vou conferir as ocorrências antes do envio à fiscalização.');
   pendingAllocationFiles=[];emit({pendingSheets:[]});
   if(imported.checkpoint&&service.snapshot().progress<service.snapshot().total){
    const missing=service.missingSources();
@@ -271,6 +271,16 @@ export const assistant={
   await assistant.downloadInternal(true,speak);
   speak('A nova emissão oficial foi solicitada expressamente. A Central compartilhada permanece preservada.');
  });},
+ // Exclui a análise atual (e, se pedido, as LDs desta sessão) para começar uma nova. Não altera arquivos do usuário.
+ async discardAnalysis(includeLds=false){
+  generation++;pendingAllocationFiles=[];
+  emit({pending:false,error:'',pendingSheets:[],plan:null});
+  try{
+   await service.discard(includeLds);
+   say(includeLds?'Análise e LDs excluídas desta sessão. Envie as alocações e as LDs para começar uma nova auditoria. Seus arquivos originais não foram alterados.':'Análise excluída. As LDs continuam disponíveis: envie a alocação que deseja auditar. Seus arquivos originais não foram alterados.');
+   try{await persist();}catch(e){emit({error:'Conversa ainda não salva: '+(e as Error).message});}
+  }catch(e){emit({error:(e as Error).message});}
+ },
  applySafe(){return execute(async(speak)=>{
   const count=await service.applyAutomatic();
   await refreshPlan();

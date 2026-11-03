@@ -16,7 +16,7 @@ async function call(box,operation,input){out.length=0;await box.onmessage({data:
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const mkFile=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
 const HEAD=['NOMEDOCUMENTO','DATA PREVISTA','WORKFLOW','DOCUMENTO ATIVO','ACAO','DATA DA LINHA BASE','PROPOSITO DE EMISSAO ORIGINAL','DOCUMENTO CRITICO','OBSERVACAO','CAMINHO DATA BOOK','N1','N2','N3','N4','N5','N6'];
-const DOC='RL-5290.00-22313-91A-C1O-121';
+const DOC='C1O_RNEST_U32_10.2.1.2_ELE_RIR_TR-0001';
 function allocation(rows,opts={}){
  const b=X.utils.book_new(),aoa=[[...HEAD,'RESPOSTA DA FISCAL 01'],...rows];
  const ws=X.utils.aoa_to_sheet(aoa);if(opts.formula)ws.R2={t:'n',f:'1+1',v:2};if(opts.merge)ws['!merges']=[{s:{r:1,c:2},e:{r:1,c:3}}];

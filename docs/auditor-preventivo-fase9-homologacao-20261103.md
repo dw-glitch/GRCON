@@ -35,3 +35,16 @@ O script de navegador estava desatualizado desde a Fase 2 (não montava o Gerado
 
 ## Para publicar (somente com sua autorização)
 Revisar o PR #373 → merge em `main` → `npm run build:cloudflare` + deploy do Worker `grcon-cloudflare` pelo fluxo existente.
+
+## Atualização — melhorias após teste em produção (03/11/2026)
+- **Relatório Excel** em linguagem objetiva (parecer, conclusão, guia das abas, colunas "Valor atual / Valor sugerido / Valor corrigido") e duas abas novas ao lado: **ALOCAÇÃO CORRIGIDA** (16 colunas oficiais, células alteradas em destaque, coluna "Alterações nesta linha", código sugerido) e **TÍTULOS DA LD** (título atual × sugerido, termos alterados, origem na LD; só existe quando há sugestão).
+- **Motor 1.4.0:** (1) código com `nt-` cujo TAG consta no cadastro → remover o `nt-`; (2) código sem `nt-` com TAG fora do cadastro → sugerir `nt-` (só quando o cadastro de TAGs está carregado); (3) ortografia do título por similaridade com termos recorrentes da LD (só com ≥50 registros de LD; ignora plural/gênero; exige vizinho único e muito mais frequente), espaços e palavra repetida; (4) código digitado quase igual a um da LD (priorizando trocas O/0, I/1, S/5, B/8); (5) caminho de Data Book e Workflow parecidos com os cadastrados.
+- Todas essas detecções são **sugestões a conferir** (severidade pendente), sem prova normativa, e **nunca** correção automática; mudança de código não é aplicada em arquivo.
+- **Limite honesto:** a verificação ortográfica é por similaridade com a própria LD, não um dicionário completo do português; erros em palavras raras ou que não aparecem na LD não são detectados.
+- Legenda flutuante do lançador: borda acompanha o texto.
+
+## Atualização 2 — nova auditoria, abas por alocação e escopo N-1710
+- **Anexar alocações** agora inicia uma **nova análise** (substitui a anterior; várias alocações no mesmo envio são analisadas juntas). A retomada de análise parcial (mesmos arquivos) continua funcionando. LDs permanecem.
+- **Nova auditoria** (botão no chat): *Excluir análise (manter LDs)* ou *Excluir análise e LDs*. Não altera arquivos do usuário; o histórico já salvo no servidor é imutável (trilha de auditoria) e não é apagado.
+- **Relatório com mais de uma alocação:** abas próprias por número (`DETALHAMENTO 0372-2026`, `ALOC. CORRIGIDA 0372-2026`, `TÍTULOS LD 0372-2026`), coluna **Norma** (N-1710 / ET-5290) e quadro "Resultado por alocação" no RESUMO. Com uma só alocação, as abas mantêm os nomes simples.
+- **Escopo N-1710 (motor 1.4.0):** documentos N-1710 são auditados somente quanto a **Data Book, níveis (EAP) e título**, além de verificações estruturais (revisão, duplicidade, LD ambígua, código digitado, sequencial N-1710). Não recebem: nt-/TAG/Apêndice, regras da ET, Workflow nem precedentes fiscais de categorias fora de título/Data Book/EAP.

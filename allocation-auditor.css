@@ -221,3 +221,16 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 .aac-indicators dd{margin:2px 0 0;font-size:1.25rem;font-weight:700}
 .aac-plan-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .aac-link{font-size:.85rem}
+
+/* O balão de saudação do runtime não cabe no lançador; o mascote oficial aparece sozinho. */
+.aac-launcher #grcon-mascot-context-bubble{display:none!important}
+.aac-launcher #grcon-context-mascot.grcon-mascot-runtime{width:104px;height:104px}
+@media(max-width:760px){.aac-launcher #grcon-context-mascot.grcon-mascot-runtime{width:76px;height:76px}}
+
+/* A legenda acompanha o tamanho do texto: a borda nunca fica menor que o conteúdo. */
+.aac-launcher-caption{box-sizing:border-box;width:max-content;max-width:calc(100vw - 32px);padding:7px 16px;line-height:1.3;font-size:13px;overflow:visible;text-align:center}
+
+/* Excluir análise: confirmação discreta, sem modal bloqueante */
+.aac-discard{display:grid;gap:8px;margin:10px 0;padding:12px;border:1px solid var(--border-1,#d8e1e7);border-left:4px solid #b3261e;border-radius:10px;background:var(--surface-1,#fff)}
+.aac-discard p{margin:0;font-size:.9rem}
+.aac-danger{color:#b3261e}
