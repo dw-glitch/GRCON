@@ -5,18 +5,31 @@ export function AllocationApp(){
  const state=useSyncExternalStore(service.subscribe,service.snapshot),[tab,setTab]=useState('generate'),[codes,setCodes]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[scroll,setScroll]=useState(0),[detail,setDetail]=useState<number|null>(null),[mode,setMode]=useState('discipline'),[kind,setKind]=useState<BaseKind>('databook'),[revision,setRevision]=useState(''),[message,setMessage]=useState(''),[sourceInfo,setSourceInfo]=useState(''),[historyQuery,setHistoryQuery]=useState(''),[prefix,setPrefix]=useState('C1O-ALOC-CM'),[unit,setUnit]=useState('UHDT-D'),[startNumber,setStartNumber]=useState(''),[showHidden,setShowHidden]=useState(false);
  const act=(promise:Promise<unknown>)=>{setMessage('');void promise.catch(error=>setMessage(error.message||String(error)));};
  const assistantBoot=useRef('');
- // Load the robot's React island lazily once the Generator is mounted in the active contract.
+ const [assistantContext,setAssistantContext]=useState(0);
+ // Re-evaluate enablement even when the contract changes without a Generator store update.
+ useEffect(()=>{
+  const refresh=()=>{assistantBoot.current='';setAssistantContext(v=>v+1);};
+  for(const event of ['grcon:contract-context-changed','grcon:cloud-ready','grcon:cloud-signed-out'])
+   window.addEventListener(event,refresh);
+  return()=>{
+   for(const event of ['grcon:contract-context-changed','grcon:cloud-ready','grcon:cloud-signed-out'])
+    window.removeEventListener(event,refresh);
+  };
+ },[]);
+ // Load the robot's React island lazily once in the active enabled contract.
  useEffect(()=>{
   if(!service.assistantEnabled())return;
   const runtime=(window as unknown as Record<string,any>);
+  const loader=runtime.GRCONModuleLoader;
+  if(typeof loader?.ensure!=='function')return;
   const contract=String(runtime.GrconCloud?.state?.membership?.contract_id||'default');
   if(assistantBoot.current===contract)return;
   assistantBoot.current=contract;
-  void runtime.GRCONModuleLoader?.ensure('allocation-auditor').catch((error:Error)=>{
+  void loader.ensure('allocation-auditor').catch((error:Error)=>{
    assistantBoot.current='';
    setMessage(error.message||'Não foi possível carregar o Robô Auditor.');
   });
- },[state]);
+ },[state,assistantContext]);
  useEffect(()=>{const seed=state.openRequest;if(seed){setTab('generate');setCodes(seed.document);setDetail(null);}},[state.openRequest]);
  useEffect(()=>{if(!state.rows.length)setDetail(null);},[state.rows.length]);
  const list=useMemo(()=>state.rows.map((row,index)=>({row,index})).filter(({row})=>(!query||[row.document,row.title,row.output.databook,row.identity.discipline,row.identity.eap].join(' ').toUpperCase().includes(query.toUpperCase()))&&(filter==='all'||filter==='missing'&&!row.ldLocated||filter==='notes'&&row.blockers.length>0||filter==='adjusted'&&row.adjusted)),[state.rows,query,filter]);
