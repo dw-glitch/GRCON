@@ -14,7 +14,6 @@ const verify = read("scripts/verify-cloudflare-package.mjs");
 const deploy = read(".github/workflows/deploy-cloudflare.yml");
 const validate = read(".github/workflows/validate-cloudflare.yml");
 const browser = read("scripts/validar-cloudflare-browser.cjs");
-const vercel = read("vercel.json");
 
 assert.match(wrangler, /"name"\s*:\s*"grcon-cloudflare"/);
 assert.match(wrangler, /"directory"\s*:\s*"\.\/dist-cloudflare"/);
@@ -49,8 +48,7 @@ assert.match(browser, /deployment-meta\.json/);
 assert.match(browser, /grcon-mascot-idle-alpha\.webm/);
 assert.match(browser, /MISSING_SESSION/);
 assert.doesNotMatch(validate, /CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|wrangler deploy/);
-assert.match(vercel, /grcon-ten\.vercel\.app/);
-assert.match(vercel, /"outputDirectory"\s*:\s*"\."/);
+assert.ok(!fs.existsSync(path.join(root, "vercel.json")), "Vercel removida: a publicação é somente Cloudflare");
 
 console.log("Cloudflare deploy: configuração, segurança, API parity e workflows validados.");
 require('./cloudflare_native_build.cjs');
