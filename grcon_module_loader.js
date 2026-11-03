@@ -44,7 +44,7 @@
     // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
     "additional-tools": [],
     "allocation-generator": ["react-dist/allocation-app.js"],
-    "allocation-auditor": ["allocation_auditor_core.js", "allocation_auditor_assistant.js", "allocation_auditor_corrections.js", "react-dist/allocation-auditor-app.js"],
+    "allocation-auditor": ["allocation_auditor_core.js", "allocation_auditor_assistant.js", "allocation_auditor_corrections.js", "allocation_auditor_learning.js", "react-dist/allocation-auditor-app.js"],
     "title-corrector": ["react-dist/title-corrector-app.js"],
     "allocation-dashboard": ["allocation_dashboard_core.js", "allocation_dashboard_app.js"],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core

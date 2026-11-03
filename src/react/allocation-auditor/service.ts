@@ -223,7 +223,13 @@ export const service={
  async restore(run:Data){return task(async()=>{const t=epoch;const rows:Data[]=[];let meta:Data={},events:Data[]=[];
   for(let i=0;i<run.expected_count;i+=200){const d=await rpc('detail',{id:run.id,after:i});current(t);if(!d.rows.length)break;rows.push(...d.rows.map((x:Data)=>x.payload));meta=d.run.metadata;events=d.events;}
   const grouped=await compute('summarize',{rows});current(t);
-  clearResults();saveMetadata=meta;savedEvents=events.length;emit({...grouped,groups:remainingGroups(events,rows),rows,records:rows.map(r=>({...r})),events,runId:run.id,selected:rows.map((_,i)=>i),progress:rows.length,total:run.expected_count,context:{checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions,applicability:meta.applicability,contract:cloud().membership.contract_id,saved:Boolean(run.completed_at)},message:'Análise histórica carregada com suas versões originais. Reanalise para usar bases atuais.'});
+  clearResults();saveMetadata=meta;savedEvents=events.length;// Fase 8: retomada só com contrato, permissão, motor, hashes e versões compatíveis.
+  // As versões atuais das bases só são consultadas ao retomar (analyze compara de novo); restaurar nunca carrega o Gerador.
+  const currentVersions:Data=meta.versions||{};
+  const available:Data={};for(const key of sourceFiles.keys())available[key]=key;
+  const learning=g.GrconAllocationLearning;
+  const check=learning?learning.resumeCheck({contract:cloud().membership.contract_id,engine:meta.engine,sources:meta.sources||[],versions:meta.versions||{}},{contract:cloud().membership.contract_id,permitted:['owner','admin','operator'].includes(cloud().membership.role),engine:g.GrconAllocationAuditorCore.VERSION,availableSources:available,versions:currentVersions}):{action:'reanalyze',reasons:[],reattach:[],message:'Reanalise para usar bases atuais.'};
+  emit({...grouped,groups:remainingGroups(events,rows),rows,records:rows.map(r=>({...r})),events,runId:run.id,selected:rows.map((_,i)=>i),progress:rows.length,total:run.expected_count,context:{checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions,applicability:meta.applicability,contract:cloud().membership.contract_id,saved:Boolean(run.completed_at),resume:{action:check.action,reasons:check.reasons,reattach:check.reattach}},message:'Análise histórica carregada com suas versões originais. '+check.message});
  });},
  async export(official=false){return task(async()=>{if(!state.rows.length)throw Error('Execute a auditoria primeiro.');const t=epoch;let files:Data[]=[];
   if(official){if(state.progress!==state.total)throw Error('Conclua a análise antes de gerar o pacote oficial.');const ui=await generator();files=await ui.generateAudited(state.rows.filter((_,i)=>state.selected.includes(i)),state.events,state.context.versions);current(t);}
