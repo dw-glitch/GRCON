@@ -72,4 +72,20 @@ assert.equal(s.pwApplicable, s.awaitingRegistration + s.registeredNotEmitted + 1
 }
 // Segmentos do gráfico PW somam o universo que depende do PW.
 assert.equal(s.pwApplicable - s.awaitingRegistration - s.registeredNotEmitted, 1, "emitidos = restante");
+// Gráfico SIGEM: emitidos (rev. 0 ou todas) e quantos constam nas LDs ativas.
+{
+  const x = "CR-5290.00-22313-911-C1O-010", y = "CR-5290.00-22313-911-C1O-011", z = "CR-5290.00-22313-911-C1O-012";
+  const outside = "CR-5290.00-22313-911-C1O-099", cancelled = "CR-5290.00-22313-911-C1O-013";
+  const r = reconcileManagerial(state(
+    [ref(x, { revision: "0" }), ref(y), ref(z), ref(cancelled, { status: "CANCELADO" })], [],
+    [sigem(x, "0"), sigem(y, "A"), sigem(outside, "0"), sigem(cancelled, "0")],
+  ));
+  assert.deepEqual(r.summary.sigemIssued, { rev0: 3, all: 4 }, "inclui documentos fora das LDs");
+  assert.deepEqual(r.summary.sigemInLd, { rev0: 1, all: 2 }, "só LDs ativas; cancelado não entra");
+  assert.equal(r.rows.find(row => row.code === x).sigemRev0, true);
+  assert.equal(r.rows.find(row => row.code === y).sigemRev0, false);
+  const missing = reconcileManagerial({ ...state([ref(x)], [], []), sigem: { meta: null, records: [] } });
+  assert.equal(missing.summary.sigemIssued, null);
+  assert.equal(missing.summary.sigemInLd, null);
+}
 console.log("sigem_pw_managerial_kpis: documentos controlados, cadastro, emissão, aguardando cadastro e CV/cancelados OK");

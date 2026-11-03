@@ -43,6 +43,8 @@ export interface ManagerialDocument {
   pwLastEmission: string;
   pwRevisions: string[];
   sigemPosted: boolean;
+  /** Há registro da revisão 0 na Consulta Geral. */
+  sigemRev0: boolean;
   sigemRevision: string;
   /** SIGEM status is shown only when evidence belongs to the reference revision. */
   sigemStatus: string;
@@ -51,6 +53,8 @@ export interface ManagerialDocument {
   actionCode: ManagerialActionCode;
   action: string;
 }
+/** Contagem de documentos únicos: só a revisão 0 ou qualquer revisão. */
+export interface SigemCounts { rev0: number; all: number }
 export interface ManagerialSummary {
   active: number | null;
   registered: number | null;
@@ -58,6 +62,10 @@ export interface ManagerialSummary {
   posted: number | null;
   compliant: number | null;
   pending: number | null;
+  /** Documentos emitidos (com registro) na Consulta Geral do SIGEM — inclui os fora das LDs. */
+  sigemIssued: SigemCounts | null;
+  /** Desses, quantos constam nas LDs ativas (cancelados não entram). */
+  sigemInLd: SigemCounts | null;
   /** Documentos vigentes que dependem do PW (exclui CV e cancelados). */
   pwApplicable: number | null;
   /** Dependem do PW e ainda não constam na consulta PW (CSG/QTM). */
@@ -175,11 +183,18 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     posted: referenceAvailable && sigemAvailable && state.model ? 0 : null,
     compliant: ready ? 0 : null,
     pending: ready ? 0 : null,
+    sigemIssued: null,
+    sigemInLd: referenceAvailable && sigemAvailable && state.model ? { rev0: 0, all: 0 } : null,
     pwApplicable: referenceAvailable && pwAvailable && state.model ? 0 : null,
     awaitingRegistration: referenceAvailable && pwAvailable && state.model ? 0 : null,
     registeredNotEmitted: referenceAvailable && pwAvailable && state.model ? 0 : null,
     cancelled: 0, conflicts: 0,
   };
+  const hasRev0 = (records: SigemPwRecord[]) => records.some(record => revisionKey(revision(record)) === "0");
+  if (referenceAvailable && sigemAvailable && state.model) {
+    summary.sigemIssued = { rev0: 0, all: sigemIndex.size };
+    for (const records of sigemIndex.values()) if (hasRev0(records)) summary.sigemIssued.rev0++;
+  }
   const processed = new Set<string>();
 
   for (const reference of state.ld.records) {
@@ -238,6 +253,10 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
       if (summary.registered !== null && registered) summary.registered++;
       if (summary.emitted !== null && emitted) summary.emitted++;
       if (summary.posted !== null && posted) summary.posted++;
+      if (summary.sigemInLd && posted) {
+        summary.sigemInLd.all++;
+        if (hasRev0(sigem)) summary.sigemInLd.rev0++;
+      }
       if (summary.pwApplicable !== null && !pwNotApplicable) {
         summary.pwApplicable++;
         if (!registered) summary.awaitingRegistration!++;
@@ -258,7 +277,7 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
       pwRevision, pwState: pwCurrent ? status(pwCurrent) : "",
       pwLastEmission: pwCurrent ? String(pwCurrent.lastEmission || "") : "",
       pwRevisions: [...new Set(pw.map(revision).filter(Boolean))],
-      sigemPosted: posted, sigemRevision, sigemStatus, sigemReviewOutcome,
+      sigemPosted: posted, sigemRev0: hasRev0(sigem), sigemRevision, sigemStatus, sigemReviewOutcome,
       situation, actionCode, action: MANAGERIAL_ACTIONS[actionCode],
     });
   }
