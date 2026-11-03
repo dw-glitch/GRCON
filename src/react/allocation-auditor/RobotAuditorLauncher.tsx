@@ -67,7 +67,7 @@ export function RobotAuditorLauncher(){
   return()=>{
    runtimeWatcher?.disconnect();
    // Don't release the mascot while it is being handed to the chat.
-   if(!generatorVisible())mascot()?.presentIn?.(null);
+   if(!launchAvailable())mascot()?.presentIn?.(null);
   };
  },[active,chat.open]);
 
