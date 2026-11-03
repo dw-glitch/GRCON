@@ -1,0 +1,32 @@
+'use strict';
+// Static contract checks for the phase-1 UX relocation. These do not replace browser/runtime tests.
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const read=name=>fs.readFileSync(path.join(root,name),'utf8');
+const html=read('index.html'),loader=read('grcon_module_loader.js');
+const index=read('src/react/allocation-auditor/index.tsx');
+const generator=read('src/react/allocation/AllocationApp.tsx');
+const launcher=read('src/react/allocation-auditor/RobotAuditorLauncher.tsx');
+const chat=read('src/react/allocation-auditor/AllocationAssistant.tsx');
+const css=read('allocation-auditor.css');
+const service=read('src/react/allocation-auditor/service.ts');
+
+assert.doesNotMatch(html,/data-grcon-view="allocation-auditor"/,'No standalone card');
+assert.doesNotMatch(html,/<section id="allocation-auditor-module"/,'No standalone panel');
+assert.match(html,/<section id="allocation-generator-module"[^>]*>[\s\S]*?id="grcon-allocation-root"[\s\S]*?id="grcon-allocation-auditor-root"[\s\S]*?<\/section>/,'Audit mount belongs to Generator');
+assert.match(loader,/if \(view === "allocation-auditor"\) \{\s*await ensureModule\("allocation-generator"\)/,'Legacy navigation redirects to Generator');
+assert.match(loader,/GrconAllocationGeneratorUi\?\.assistantEnabled/,'Legacy path respects contract gate');
+assert.match(index,/<RobotAuditorLauncher\/>/);
+assert.match(index,/<AllocationAssistant\/>/);
+assert.match(index,/legacyFixture\?<AllocationAuditorApp\/>/,'Legacy browser fixtures remain supported');
+assert.match(generator,/GRCONModuleLoader\?\.ensure\('allocation-auditor'\)/,'Generator lazy-loads the bot');
+assert.match(launcher,/GrconMascot/,'Mascot runtime reused');
+assert.match(launcher,/presentIn/,'One mascot relocated by official runtime');
+assert.match(launcher,/MutationObserver/,'Launcher responds to view changes');
+assert.match(chat,/aria-modal=\{false\}/,'Chat must not trap the Generator');
+assert.doesNotMatch(chat,/e\.key==='Tab'/,'No modal keyboard trap');
+assert.match(css,/\.aac-backdrop\{position:fixed;inset:0;z-index:12000;background:transparent/);
+assert.match(css,/\.aac-launcher\{position:fixed/);
+assert.match(service,/assistantPackage\(sessionId:string,generateOfficial=false\)/,'Audit package must not issue new numbering by default');
+console.log('allocation-auditor preventive shell: static contracts passed');
