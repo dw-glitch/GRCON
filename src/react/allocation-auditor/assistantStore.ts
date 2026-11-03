@@ -49,9 +49,10 @@ async function execute(action:(speak:typeof say)=>Promise<unknown>){
 const snapshotStatus=()=>{
  const s=service.snapshot(),sources=s.context.sources||[];
  const progress=s.total>0?s.progress+' de '+s.total+' documentos':s.records.length+' documento(s) recebido(s)';
- const context=s.rows.length?' Inconsistências confirmadas: '+(s.summary.errors||0)+'. Verificações pendentes: '+(s.summary.pending||0)+'.':'';
+ const context=s.rows.length?' Inconsistências confirmadas: '+(s.summary.errors||0)+'. Verificações pendentes: '+(s.summary.pending||0)+'. Sugestões preventivas: '+(s.summary.suggestions||0)+'.':'';
  return 'Situação da auditoria preventiva: '+progress+'. Arquivos identificados: '+sources.length+'.'+context+
-  (s.progress===s.total&&s.total>0?' A análise está concluída para as fontes disponíveis.':'');
+  (s.progress===s.total&&s.total>0?' A análise está concluída para as fontes disponíveis, mas isso não equivale à aprovação fiscal.':'')+
+  (s.context.contextWarning?' Há limitações de acesso às bases complementares; confira as fontes no relatório.':'');
 };
 async function audit(resume=false,speak:typeof say=say){
  if(!service.snapshot().records.length){
@@ -76,7 +77,8 @@ async function audit(resume=false,speak:typeof say=say){
  const summary=service.core().summary(service.snapshot().rows);
  speak('Analisei '+summary.total+' documento'+(summary.total===1?'':'s')+' antes do envio à fiscalização. Foram autorizadas '+count+
   ' correções por regras ativas e existem '+summary.pending+
-  ' documentos com verificações pendentes. O pacote final indicará as evidências, as cópias geradas e as exceções.');
+  ' documentos com verificações pendentes e '+summary.suggestions+
+  ' com sugestões preventivas. Os precedentes fiscais não são provas normativas nem garantem aprovação pela fiscalização. O pacote indicará as evidências e as exceções.');
 }
 const help=()=>[
  'Posso conferir os arquivos antes do envio à fiscalização. Escolha uma ação:',
