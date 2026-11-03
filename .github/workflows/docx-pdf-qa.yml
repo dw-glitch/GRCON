@@ -1,24 +1,8 @@
 name: QA — Conversor PDF para DOCX
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - 'docx_pdf_*.js'
-      - 'docx-pdf.css'
-      - 'grcon_module_loader.js'
-      - 'index.html'
-      - 'scripts/validar-docx-pdf-browser.cjs'
-      - 'scripts/prepare-pdfjs-assets.mjs'
-      - '.github/workflows/docx-pdf-qa.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'docx_pdf_*.js'
-      - 'docx-pdf.css'
-      - 'grcon_module_loader.js'
-      - 'index.html'
-      - 'scripts/validar-docx-pdf-browser.cjs'
-      - 'scripts/prepare-pdfjs-assets.mjs'
   workflow_dispatch:
 
 permissions:

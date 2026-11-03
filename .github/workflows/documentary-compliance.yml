@@ -1,26 +1,8 @@
 name: QA — Conformidade documental
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "documentary_compliance*.js"
-      - "documentary-compliance.css"
-      - "normative_*.js"
-      - "n1710_*.js"
-      - "n2064_*.js"
-      - "app.js"
-      - "emission.js"
-      - "history_core.js"
-      - "history_report.js"
-      - "grdt_reissue*.js"
-      - "grcon_module_loader.js"
-      - "grcon-ui.css"
-      - "index.html"
-      - "sw.js"
-      - "src/react/historico-egrdt/**"
-      - "tests/documentary_compliance.cjs"
-      - "scripts/validar-documentary-compliance-browser.cjs"
-      - ".github/workflows/documentary-compliance.yml"
   workflow_dispatch:
 
 permissions:

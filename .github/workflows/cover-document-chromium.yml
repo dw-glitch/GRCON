@@ -1,26 +1,8 @@
 name: QA — Ferramentas documentais Chromium
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "index.html"
-      - "grcon_module_loader.js"
-      - "grcon-ui-fix.css"
-      - "src/react/cover-document/**"
-      - "assets/templates/CAPA_PAGE1_*"
-      - "performance_workers.js"
-      - "workers/ld.worker.js"
-      - "ld_memory.js"
-      - "cover-document.css"
-      - "sw.js"
-      - "vite.config.ts"
-      - "package.json"
-      - "package-lock.json"
-      - "tests/additional_tools_navigation.cjs"
-      - "tests/cover_document_react.cjs"
-      - "tests/cover_document_hardening.cjs"
-      - "scripts/validar-cover-document-browser.cjs"
-      - ".github/workflows/cover-document-chromium.yml"
   workflow_dispatch:
 
 permissions:

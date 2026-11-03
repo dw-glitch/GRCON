@@ -1,12 +1,7 @@
 name: QA — Administração e datas SIGEM integradas
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - 'shared_sigem_query_app.js'
-      - 'contract_admin_app.js'
-      - 'src/react/sigem-pw/**'
-      - 'scripts/validar-owner-shared-sigem-browser.cjs'
-      - '.github/workflows/owner-shared-sigem-browser.yml'
   workflow_dispatch:
 permissions:
   contents: read

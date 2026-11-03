@@ -1,5 +1,5 @@
 import type { SigemPwRecord, SigemPwState } from "../types/domain";
-import { managerialDocumentKey, reconcileManagerial, type ManagerialDocument } from "./sigemPwManagerial";
+import { managerialDocumentKey, pwRegistrationRecords, reconcileManagerial, type ManagerialDocument } from "./sigemPwManagerial";
 import { getPwOriginalMatrix } from "./sigemPwRawPw";
 
 type CellValue = string | number;
@@ -94,7 +94,8 @@ function findSourceColumn(state: SigemPwState, field: string): number {
 }
 function indexPwRecords(state: SigemPwState): Map<string, SigemPwRecord[]> {
   const map = new Map<string, SigemPwRecord[]>();
-  for (const record of state.model?.normalizedPw || []) {
+  // Mesma fonte do cadastro nos cartões: inclui linhas de outras empresas, que existem na aba REL. PW.
+  for (const record of pwRegistrationRecords(state)) {
     const key = managerialDocumentKey(record);
     if (!key) continue;
     if (!map.has(key)) map.set(key, []);

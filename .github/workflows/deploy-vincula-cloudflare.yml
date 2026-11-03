@@ -1,10 +1,8 @@
 name: Vincula — bootstrap Cloudflare Workers
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/deploy-vincula-cloudflare.yml'
   workflow_dispatch:
 
 permissions:

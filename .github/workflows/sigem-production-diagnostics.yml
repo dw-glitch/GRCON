@@ -1,11 +1,8 @@
 name: SIGEM Turso — diagnóstico seguro de produção
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - 'scripts/diagnose-sigem-workflow.mjs'
-      - 'tests/sigem_workflow_diagnosis.cjs'
-      - '.github/workflows/sigem-production-diagnostics.yml'
   workflow_dispatch:
 
 permissions:

@@ -1,39 +1,8 @@
 name: QA — Consulta Geral SIGEM compartilhada
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "app.js"
-      - "posting_conference_app.js"
-      - "posting_conference_core.js"
-      - "shared_sigem_query_app.js"
-      - "sigem_general_query_app.js"
-      - "tests/sigem_general_query.cjs"
-      - "scripts/validar-sigem-general-query-browser.cjs"
-      - "shared_sigem_query_core.js"
-      - "grdt_reissue_app.js"
-      - "src/react/sigem-pw/**"
-      - "workers/shared_sigem_query.worker.js"
-      - "tests/shared_sigem_query.cjs"
-      - "scripts/validar-shared-sigem-browser.cjs"
-      - ".github/workflows/shared-sigem-query.yml"
-  push:
-    branches: [main]
-    paths:
-      - "app.js"
-      - "posting_conference_app.js"
-      - "posting_conference_core.js"
-      - "shared_sigem_query_app.js"
-      - "sigem_general_query_app.js"
-      - "tests/sigem_general_query.cjs"
-      - "scripts/validar-sigem-general-query-browser.cjs"
-      - "shared_sigem_query_core.js"
-      - "grdt_reissue_app.js"
-      - "src/react/sigem-pw/**"
-      - "workers/shared_sigem_query.worker.js"
-      - "tests/shared_sigem_query.cjs"
-      - "scripts/validar-shared-sigem-browser.cjs"
-      - ".github/workflows/shared-sigem-query.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,48 +1,8 @@
 name: SIGEM × PW — Evolução React hardening
 
+# Gatilhos automaticos (pull_request/push/schedule) desativados para nao consumir minutos pagos do GitHub Actions.
+# Execute manualmente em Actions > Run workflow quando precisar. A publicacao e feita pelo Cloudflare Workers Builds.
 on:
-  pull_request:
-    paths:
-      - "src/react/sigem-pw/**"
-      - "sigem-pw-dashboard.css"
-      - "sigem-pw-revision.css"
-      - "sigem-pw-evolution.css"
-      - "sigem_pw_dashboard_core.js"
-      - "sigem_pw_readiness_core.js"
-      - "sigem_pw_scope_fix.js"
-      - "performance_workers.js"
-      - "workers/export.worker.js"
-      - "shared_sigem_query_app.js"
-      - "shared_pw_query_app.js"
-      - "tests/shared_pw*.cjs"
-      - "scripts/validar-shared-pw-browser.cjs"
-      - "scripts/validar-import-backup-browser.cjs"
-      - "import_review.js"
-      - "grcon_backup.js"
-      - "managerial_report.js"
-      - "scripts/validar-performance-browser.cjs"
-      - "workers/sigem_pw_dashboard.worker.js"
-      - "workers/sigem_pw_evolution.worker.js"
-      - "sigem_pw_dashboard_bootstrap.js"
-      - "sigem_pw_revision_core.js"
-      - "sigem_pw_revision_section.js"
-      - "sigem_pw_history_core.js"
-      - "sigem_pw_history_management.js"
-      - "sigem_pw_evolution_core.js"
-      - "sigem_pw_dashboard_ui_audit.js"
-      - "posting_conference_core.js"
-      - "grcon_module_loader.js"
-      - "vite.config.ts"
-      - "package.json"
-      - "sw.js"
-      - "tests/sigem_pw_*.cjs"
-      - "scripts/validar-sigem-pw-react-browser.cjs"
-      - "docs/react-phase-a-sigem-pw-parity.md"
-      - "docs/react-phase-a-sigem-pw-revision-parity.md"
-      - "docs/react-phase-a-sigem-pw-evolution-parity.md"
-      - "docs/phase-b-sigem-pw-parity.md"
-      - "docs/phase-b-sigem-pw-revision-parity.md"
-      - ".github/workflows/sigem-pw-react-browser.yml"
   workflow_dispatch:
 
 permissions:
