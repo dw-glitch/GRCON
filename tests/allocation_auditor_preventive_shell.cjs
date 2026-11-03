@@ -20,7 +20,7 @@ assert.match(loader,/GrconAllocationGeneratorUi\?\.assistantEnabled/,'Legacy pat
 assert.match(index,/<RobotAuditorLauncher\/>/);
 assert.match(index,/<AllocationAssistant\/>/);
 assert.match(index,/legacyFixture\?<AllocationAuditorApp\/>/,'Legacy browser fixtures remain supported');
-assert.match(generator,/GRCONModuleLoader\?\.ensure\('allocation-auditor'\)/,'Generator lazy-loads the bot');
+assert.match(generator,/loader\.ensure\('allocation-auditor'\)/,'Generator lazy-loads the bot');
 assert.match(launcher,/GrconMascot/,'Mascot runtime reused');
 assert.match(launcher,/presentIn/,'One mascot relocated by official runtime');
 assert.match(launcher,/MutationObserver/,'Launcher responds to view changes');
