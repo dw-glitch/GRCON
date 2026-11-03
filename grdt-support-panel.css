@@ -1,4 +1,4 @@
-/* GRCON — Central de Apoio: baixa densidade, contexto isolado, sem novo dashboard. */
+/* GRCON — Painel da operação: baixa densidade, contexto isolado, somente leitura do Histórico. */
 html[data-app="GRCON"] #grdt-support-panel {
   --support-border: var(--border-color, #d7e0e9);
   --support-muted: var(--text-muted, #64748b);
@@ -91,7 +91,40 @@ html[data-app="GRCON"] #grdt-support-panel [hidden] { display: none !important; 
 #grdt-support-panel .grdt-support-revision { border: 1px solid var(--support-border); border-radius: 8px; padding: 9px; display: grid; gap: 3px; font-size: 12px; }
 #grdt-support-panel .grdt-support-revision small { color: var(--support-muted); }
 #grdt-support-panel :is(button,textarea):focus-visible { outline: 2px solid var(--primary, #155c8a); outline-offset: 2px; }
+#grdt-support-panel .grdt-support-dashboard { display: grid; gap: 12px; }
+#grdt-support-panel .grdt-support-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+#grdt-support-panel .grdt-support-kpi {
+  display: grid; gap: 3px; padding: 12px 14px; border: 1px solid var(--support-border); border-radius: 10px;
+}
+#grdt-support-panel .grdt-support-kpi span { font-size: 11px; font-weight: 650; color: var(--support-muted); }
+#grdt-support-panel .grdt-support-kpi strong { font-size: 26px; line-height: 1.1; font-weight: 800; letter-spacing: -.5px; }
+#grdt-support-panel .grdt-support-kpi small { font-size: 11px; color: var(--support-muted); }
+#grdt-support-panel .grdt-support-dash-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: 12px; }
+#grdt-support-panel .grdt-support-recent,
+#grdt-support-panel .grdt-support-chart { border: 1px solid var(--support-border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+#grdt-support-panel .grdt-support-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+#grdt-support-panel .grdt-support-block-head h3 { margin: 0; font-size: 13px; font-weight: 700; }
+#grdt-support-panel .grdt-support-recent-list { list-style: none; margin: 0; padding: 0; display: grid; }
+#grdt-support-panel .grdt-support-recent-list li {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: center;
+  padding: 8px 2px; border-bottom: 1px solid var(--support-border); font-size: 12px;
+}
+#grdt-support-panel .grdt-support-recent-list li:last-child { border-bottom: 0; }
+#grdt-support-panel .grdt-support-recent-list strong { font-weight: 700; overflow-wrap: anywhere; }
+#grdt-support-panel .grdt-support-recent-list span { color: var(--support-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#grdt-support-panel .grdt-support-recent-list time { color: var(--support-muted); font-size: 11px; white-space: nowrap; }
+#grdt-support-panel .grdt-support-toggle { display: inline-flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--hover-bg, rgba(100,116,139,.12)); }
+#grdt-support-panel .grdt-support-toggle button {
+  min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; font-size: 11px; font-weight: 650;
+}
+#grdt-support-panel .grdt-support-toggle button[aria-pressed="true"] { background: var(--card-bg, #fff); box-shadow: 0 1px 3px rgba(15,27,45,.18); }
+#grdt-support-panel .grdt-support-bars { display: flex; align-items: flex-end; gap: 8px; height: 150px; }
+#grdt-support-panel .grdt-support-bar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+#grdt-support-panel .grdt-support-bar i { display: block; width: 100%; min-height: 3px; border-radius: 5px 5px 2px 2px; background: var(--primary, #155c8a); }
+#grdt-support-panel .grdt-support-bar b { font-size: 11px; font-weight: 700; }
+#grdt-support-panel .grdt-support-bar small { font-size: 10px; color: var(--support-muted); }
 @media (max-width: 1150px) {
+  #grdt-support-panel .grdt-support-dash-grid { grid-template-columns: minmax(0, 1fr); }
   #grdt-support-panel .grdt-support-grid { grid-template-columns: minmax(0, 1fr); }
   #grdt-support-panel .grdt-support-resume { border-left: 0; border-top: 1px solid var(--support-border); padding: 9px 0 0; }
 }

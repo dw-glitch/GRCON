@@ -49,5 +49,10 @@ assert.match(ui, /PREPARATION_TTL/, "rascunhos possuem prazo máximo");
 assert.match(ui, /root\.localStorage\.removeItem\(key\)/, "limpeza após reset");
 assert.match(ui, /prepareRelationDraft\(candidate\)/, "retomada exige reconferência pelo operador");
 assert.doesNotMatch(ui, /manualForceInclude\.add\(|state\.selected\.add\(/, "não reautorizar seleção antiga");
+for (const id of ["grdt-support-dashboard", "grdt-support-kpis", "grdt-support-recent-list", "grdt-support-bars"]) {
+  assert.match(html, new RegExp('id="' + id + '"'), "painel da operação presente: " + id);
+}
+assert.match(ui, /GrconHistory/, "painel lê o Histórico oficial de eGRDTs");
+assert.doesNotMatch(ui, /saveMany|deleteOne|replaceWorkspaceSnapshot/, "painel é somente leitura");
 new vm.Script(source("grdt_support_panel.js"), { filename: "grdt_support_panel.js" });
 console.log("Central de Apoio: identidade exata, revisões, layout, integração de triagem e syntax OK.");

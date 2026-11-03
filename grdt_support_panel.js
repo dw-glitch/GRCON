@@ -1,4 +1,4 @@
-/* GRCON — Central de Apoio contextual. Apenas leitura; nunca altera a elegibilidade de uma GRDT. */
+/* GRCON — Painel da operação (antiga Central de Apoio). Apenas leitura; nunca altera a elegibilidade de uma GRDT. */
 (function (root) {
   "use strict";
   const doc = root.document;
@@ -201,12 +201,102 @@
       return textValue && !/^(selecionar|excel ou texto|nenhum)/.test(textValue);
     });
   }
+  // ── Painel da operação: leitura do Histórico de eGRDTs, nunca altera dados ──
+  let dashRange = "7";
+  const DAY = 86400000;
+  function historyRecords() {
+    try {
+      const history = root.GrconHistory;
+      const rows = history && typeof history.read === "function" ? history.read() : [];
+      return Array.isArray(rows) ? rows : [];
+    } catch (_) { return []; }
+  }
+  function startOfDay(date) { return new Date(date.getFullYear(), date.getMonth(), date.getDate()); }
+  function whenLabel(date, now) {
+    const diff = now - date.getTime();
+    if (diff < 60000) return "agora";
+    if (diff < 3600000) return "há " + Math.floor(diff / 60000) + " min";
+    if (diff < DAY && startOfDay(date).getTime() === startOfDay(new Date(now)).getTime()) return "há " + Math.floor(diff / 3600000) + " h";
+    if (startOfDay(date).getTime() === startOfDay(new Date(now)).getTime() - DAY) return "ontem";
+    return date.toLocaleDateString("pt-BR");
+  }
+  function buildDashboard(records, now) {
+    const dated = records.map(function (r) { return { r: r, d: new Date(r.generatedAt) }; })
+      .filter(function (x) { return !isNaN(x.d.getTime()); });
+    const today = startOfDay(new Date(now));
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const prevStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const inMonth = dated.filter(function (x) { return x.d >= monthStart; });
+    const inPrev = dated.filter(function (x) { return x.d >= prevStart && x.d < monthStart; });
+    const docs = inMonth.reduce(function (sum, x) { return sum + (Array.isArray(x.r.files) ? x.r.files.length : 0); }, 0);
+    let bars;
+    if (dashRange === "7") {
+      bars = [];
+      for (let i = 6; i >= 0; i--) {
+        const from = new Date(today.getTime() - i * DAY), to = new Date(from.getTime() + DAY);
+        bars.push({ label: from.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", ""),
+          count: dated.filter(function (x) { return x.d >= from && x.d < to; }).length });
+      }
+    } else {
+      bars = [];
+      for (let i = 3; i >= 0; i--) {
+        const to = new Date(today.getTime() + DAY - i * 7 * DAY), from = new Date(to.getTime() - 7 * DAY);
+        bars.push({ label: i === 0 ? "Esta sem." : "−" + i + " sem.",
+          count: dated.filter(function (x) { return x.d >= from && x.d < to; }).length });
+      }
+    }
+    const recent = dated.slice().sort(function (a, b) { return b.d - a.d; }).slice(0, 5);
+    return { total: records.length, month: inMonth.length, prev: inPrev.length, docs: docs, bars: bars, recent: recent };
+  }
+  function kpi(label, value, note) {
+    const box = element("div", "grdt-support-kpi");
+    box.append(element("span", "", label), element("strong", "", value), element("small", "", note));
+    return box;
+  }
+  function renderDashboard() {
+    if (!el.dash) return;
+    const now = Date.now(), data = buildDashboard(historyRecords(), now);
+    let trend = "sem comparação com o mês anterior";
+    if (data.prev > 0) {
+      const pct = Math.round((data.month - data.prev) / data.prev * 100);
+      trend = (pct >= 0 ? "▲ " : "▼ ") + Math.abs(pct) + "% sobre o mês anterior";
+    }
+    el.kpis.replaceChildren(
+      kpi("eGRDTs no histórico", String(data.total), "total registrado"),
+      kpi("Emitidas no mês", String(data.month), trend),
+      kpi("Documentos no mês", String(data.docs), "arquivos em eGRDTs emitidas"),
+      kpi("Última emissão", data.recent.length ? whenLabel(data.recent[0].d, now) : "—", data.recent.length ? String(data.recent[0].r.egrdtNumber || "") : "nenhuma emissão ainda")
+    );
+    el.recent.replaceChildren();
+    if (!data.recent.length) el.recent.append(element("li", "", "Nenhuma eGRDT emitida neste contrato ainda."));
+    data.recent.forEach(function (x) {
+      const files = Array.isArray(x.r.files) ? x.r.files.length : 0;
+      const item = element("li", "");
+      const when = element("time", "", whenLabel(x.d, now));
+      when.dateTime = x.d.toISOString();
+      item.append(element("strong", "", x.r.egrdtNumber || "—"),
+        element("span", "", [x.r.ldName, files ? files + " documento(s)" : ""].filter(Boolean).join(" · ") || x.r.outputType || ""), when);
+      el.recent.append(item);
+    });
+    const max = Math.max.apply(null, data.bars.map(function (b) { return b.count; }).concat(1));
+    el.bars.replaceChildren();
+    data.bars.forEach(function (b) {
+      const col = element("div", "grdt-support-bar");
+      const fill = element("i", ""); fill.style.height = Math.max(3, Math.round(b.count / max * 100)) + "px";
+      col.append(element("b", "", b.count), fill, element("small", "", b.label));
+      el.bars.append(col);
+    });
+    el.bars.setAttribute("aria-label", "Emissões: " + data.bars.map(function (b) { return b.label + " " + b.count; }).join(", "));
+    ["7", "4"].forEach(function (r) { byId("grdt-support-range-" + r).setAttribute("aria-pressed", String(r === dashRange)); });
+  }
   function renderStage() {
     const hasResults = Boolean(byId("results-section") && !byId("results-section").hidden);
     const running = byId("progress") && !byId("progress").hidden;
     const emitting = byId("grdt-download-progress") && !byId("grdt-download-progress").hidden;
     el.panel.dataset.mode = hasResults ? "review" : running || emitting ? "processing" : prepared() ? "prepared" : "initial";
     el.searchArea.hidden = Boolean(hasResults || running || emitting);
+    el.dash.hidden = Boolean(hasResults);
+    if (!hasResults) renderDashboard();
     el.resume.hidden = Boolean(hasResults || running || emitting);
     if (!hasResults && !running && !emitting) updateResume();
     el.attention.hidden = !hasResults || !latestSummary;
@@ -266,6 +356,12 @@
     el.resumeAction = byId("grdt-support-resume-button"); el.attention = byId("grdt-support-attention");
     el.stageInfo = byId("grdt-support-stage"); el.detail = byId("grdt-support-detail");
     el.detailBody = byId("grdt-support-detail-body");
+    el.dash = byId("grdt-support-dashboard"); el.kpis = byId("grdt-support-kpis");
+    el.recent = byId("grdt-support-recent-list"); el.bars = byId("grdt-support-bars");
+    ["7", "4"].forEach(function (r) {
+      byId("grdt-support-range-" + r).addEventListener("click", function () { dashRange = r; renderDashboard(); });
+    });
+    ["grcon:history-updated", "grcon:egrdt-generated"].forEach(function (name) { root.addEventListener(name, renderDashboard); });
     activeScope = scope();
     byId("grdt-support-search-form").addEventListener("submit", function (event) {
       event.preventDefault(); root.clearTimeout(debounce); void search();
