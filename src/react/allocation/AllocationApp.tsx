@@ -88,7 +88,7 @@ export function AllocationApp(){
   </div>
   <small>Somente alocações reconhecidas na Central de Alocação publicada. Os status acompanham a base oficial.</small>
   {history.map(run=><article className="ag-history-row" key={run.id}><header>
-   <strong>{run.allocation_code}</strong><button className="text-button" disabled={state.busy} onClick={()=>act(service.auditSavedRun(run))}>Auditar Alocação</button><span>{run.control_status||'Não informado'}</span>
+   <strong>{run.allocation_code}</strong>{service.assistantEnabled()&&<button className="text-button" disabled={state.busy} onClick={()=>act(service.auditSavedRun(run))}>Auditar com o Robô</button>}<span>{run.control_status||'Não informado'}</span>
    <time>{run.control_published_at?new Date(run.control_published_at).toLocaleString('pt-BR'):'Sem data de publicação'}</time>
    </header>
    <p>{(run.documents||[]).map((d:Data)=>d.document+' Rev. '+d.revision).join(' · ')}{run.document_count>20?' · …':''}</p>
