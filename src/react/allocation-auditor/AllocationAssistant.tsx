@@ -90,7 +90,7 @@ export function AllocationAssistant(){
     </div>
    </section>}
    {Boolean(s.context.sources?.length)&&<details><summary>Arquivos recebidos ({s.context.sources.length})</summary>{s.context.sources.map((f:Data)=><p key={f.sha256}>{f.name} · {f.kind==='ld'?'LD':'Alocação'}{f.model==='mapped'?' · layout mapeado (sem correção automática da planilha)':''}</p>)}</details>}
-   {s.rows.length>0&&<div className="aac-result"><strong>{s.progress} de {s.total} documentos analisados</strong><p>{s.summary.errors||0} com erros confirmados · {s.summary.pending||0} com verificações pendentes</p><button className="primary-button" disabled={busy||s.progress!==s.total} onClick={()=>void assistant.download()}>Baixar pacote completo</button>
+   {s.rows.length>0&&<div className="aac-result"><strong>{s.progress} de {s.total} documentos analisados</strong><p>{s.summary.errors||0} com não conformidades confirmadas · {s.summary.pending||0} verificações pendentes · {s.summary.suggestions||0} sugestões preventivas</p><button className="primary-button" disabled={busy||s.progress!==s.total} onClick={()=>void assistant.download()}>Baixar pacote completo</button>
    <details><summary>Nova alocação e linhas da Central</summary><p>Emissão opcional, separada da auditoria preventiva. Esta ação cria nova numeração oficial no Gerador e não altera a Central compartilhada.</p>
     {confirmIssue?<div className="aac-issue-confirm" role="group" aria-label="Confirmar nova emissão">
      <p>Confirme somente se deseja emitir uma nova alocação oficial. Para corrigir uma alocação externa, utilize Baixar pacote completo.</p>
