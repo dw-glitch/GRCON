@@ -221,3 +221,8 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 .aac-indicators dd{margin:2px 0 0;font-size:1.25rem;font-weight:700}
 .aac-plan-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .aac-link{font-size:.85rem}
+
+/* O balão de saudação do runtime não cabe no lançador; o mascote oficial aparece sozinho. */
+.aac-launcher #grcon-mascot-context-bubble{display:none!important}
+.aac-launcher #grcon-context-mascot.grcon-mascot-runtime{width:104px;height:104px}
+@media(max-width:760px){.aac-launcher #grcon-context-mascot.grcon-mascot-runtime{width:76px;height:76px}}
