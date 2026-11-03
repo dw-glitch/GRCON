@@ -122,7 +122,7 @@ export function SigemPwKpiCharts({ summary, selection, onSelect, allRevisions, o
   const pwSegments: Segment[] | null = pwBase !== null && emitted !== null ? [
     { key: "emitted", label: "Emitidos", value: emitted, tone: "ok", hint: "Cadastrados no PW e com evidência de emissão." },
     { key: "notEmitted", label: "Cadastrados, não emitidos", value: summary.registeredNotEmitted || 0, tone: "warn", hint: "Já constam no PW, mas ainda sem emissão." },
-    { key: "awaiting", label: "Aguardando cadastro", value: summary.awaitingRegistration || 0, tone: "bad", hint: "Ainda não constam na consulta PW (CSG/QTM)." },
+    { key: "awaiting", label: "Aguardando cadastro", value: summary.awaitingRegistration || 0, tone: "bad", hint: "Não constam em nenhuma linha da consulta PW." },
   ] : null;
   const issued = summary.sigemIssued ? (allRevisions ? summary.sigemIssued.all : summary.sigemIssued.rev0) : null;
   const inLd = summary.sigemInLd ? (allRevisions ? summary.sigemInLd.all : summary.sigemInLd.rev0) : null;
