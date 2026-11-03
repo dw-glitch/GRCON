@@ -1,14 +1,20 @@
-import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,useSyncExternalStore} from 'react';
 import {assistant} from './assistantStore';
 
-type MascotHost = {presentIn?:(host:HTMLElement|null)=>boolean;show?:(state:string,options?:Record<string,unknown>)=>void};
+type MascotHost = {
+ presentIn?:(host:HTMLElement|null)=>boolean;
+ show?:(state:string,options?:Record<string,unknown>)=>void;
+};
 const mascot=()=>((window as unknown as {GrconMascot?:MascotHost}).GrconMascot);
-const generatorVisible=()=>{
+export const generatorVisible=()=>{
  const panel=document.getElementById('allocation-generator-module');
- return Boolean(panel&&!panel.hidden);
+ return Boolean(panel&&!panel.hidden&&panel.getAttribute('aria-hidden')!=='true');
 };
 
-/** One official mascot instance; its DOM moves between header, launcher and chat. */
+/**
+ * The launcher is kept mounted while chat is open: removing its DOM host before
+ * transferring the mascot could cause the official runtime to recreate its overlay.
+ */
 export function RobotAuditorLauncher(){
  const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot);
  const [active,setActive]=useState(generatorVisible);
@@ -18,25 +24,39 @@ export function RobotAuditorLauncher(){
   const panel=document.getElementById('allocation-generator-module');
   if(!panel)return;
   const observe=new MutationObserver(()=>setActive(generatorVisible()));
-  observe.observe(panel,{attributes:true,attributeFilter:['hidden']});
+  observe.observe(panel,{attributes:true,attributeFilter:['hidden','aria-hidden']});
   setActive(generatorVisible());
   return()=>observe.disconnect();
  },[]);
 
- useEffect(()=>{if(!active&&chat.open)assistant.close();},[active,chat.open]);
-
  useEffect(()=>{
-  if(!active||chat.open||!host.current)return;
-  mascot()?.presentIn?.(host.current);
-  mascot()?.show?.('idle',{source:'allocation-preventive-launcher'});
-  return()=>{mascot()?.presentIn?.(null);};
+  if(!active&&chat.open)assistant.close();
  },[active,chat.open]);
 
- if(!active||chat.open)return null;
- return <button type="button" className="aac-launcher"
-   aria-label="Abrir Robô Auditor preventivo" title="Robô Auditor — confira antes de enviar à fiscalização"
+ useLayoutEffect(()=>{
+  if(active&&!chat.open&&host.current){
+   mascot()?.presentIn?.(host.current);
+   mascot()?.show?.('idle',{source:'allocation-preventive-launcher'});
+  }
+  return()=>{
+   // Do not take the mascot away from the chat while transitioning between hosts.
+   // Only return it to the global header when leaving the Generator altogether.
+   if(!generatorVisible())mascot()?.presentIn?.(null);
+  };
+ },[active,chat.open]);
+
+ if(!active)return null;
+ return <button type="button"
+   className={'aac-launcher'+(chat.open?' aac-launcher-hidden':'')}
+   aria-label="Abrir Robô Auditor preventivo"
+   aria-controls="aac-panel"
+   aria-expanded={chat.open}
+   aria-hidden={chat.open}
+   tabIndex={chat.open?-1:0}
+   disabled={chat.open}
+   title="Audite a alocação antes de enviar à fiscalização"
    onClick={()=>assistant.show()}>
    <span ref={host} className="aac-launcher-mascot" aria-hidden="true"/>
-   <span className="aac-launcher-caption">Auditar alocação</span>
+   <span className="aac-launcher-caption">Auditar antes do envio</span>
  </button>;
 }
