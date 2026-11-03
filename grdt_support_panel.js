@@ -248,22 +248,25 @@
     const recent = dated.slice().sort(function (a, b) { return b.d - a.d; }).slice(0, 5);
     return { total: records.length, month: inMonth.length, prev: inPrev.length, docs: docs, bars: bars, recent: recent };
   }
-  function kpi(label, value, note) {
+  function kpi(label, value, note, trend) {
     const box = element("div", "grdt-support-kpi");
-    box.append(element("span", "", label), element("strong", "", value), element("small", "", note));
+    const small = element("small", "", note);
+    if (trend) small.dataset.trend = trend;
+    box.append(element("span", "", label), element("strong", "", value), small);
     return box;
   }
   function renderDashboard() {
     if (!el.dash) return;
     const now = Date.now(), data = buildDashboard(historyRecords(), now);
-    let trend = "sem comparação com o mês anterior";
+    let trend = "sem comparação com o mês anterior", dir = "";
     if (data.prev > 0) {
       const pct = Math.round((data.month - data.prev) / data.prev * 100);
       trend = (pct >= 0 ? "▲ " : "▼ ") + Math.abs(pct) + "% sobre o mês anterior";
+      dir = pct > 0 ? "up" : pct < 0 ? "down" : "";
     }
     el.kpis.replaceChildren(
-      kpi("eGRDTs no histórico", String(data.total), "total registrado"),
-      kpi("Emitidas no mês", String(data.month), trend),
+      kpi("Total no histórico", String(data.total), "eGRDTs registradas"),
+      kpi("Emitidas no mês", String(data.month), trend, dir),
       kpi("Documentos no mês", String(data.docs), "arquivos em eGRDTs emitidas"),
       kpi("Última emissão", data.recent.length ? whenLabel(data.recent[0].d, now) : "—", data.recent.length ? String(data.recent[0].r.egrdtNumber || "") : "nenhuma emissão ainda")
     );
@@ -282,6 +285,7 @@
     el.bars.replaceChildren();
     data.bars.forEach(function (b) {
       const col = element("div", "grdt-support-bar");
+      if (!b.count) col.dataset.empty = "true";
       const fill = element("i", ""); fill.style.height = Math.max(3, Math.round(b.count / max * 100)) + "px";
       col.append(element("b", "", b.count), fill, element("small", "", b.label));
       el.bars.append(col);
