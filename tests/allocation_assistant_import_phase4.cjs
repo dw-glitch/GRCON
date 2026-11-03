@@ -62,7 +62,7 @@ const service=qaModule.exports.service;
  assert.equal(service.snapshot().records.length,0,'Inspection never imports data');
 
  await assert.rejects(service.inspectBatch([a,other(a,a.name)]),/nomes repetidos/);
- await assert.rejects(service.importMany([a,unrecognized]),/aba documental/);
+ await assert.rejects(service.importMany([a,unrecognized]),/não encontrei uma aba/);
  assert.equal(service.snapshot().records.length,0,'A failed batch must not partially import data');
  const fiscal={...b,name:'DEVOLVIDA.xlsx',sha:'f'.repeat(64),explicitFiscalComment:true,
   records:[{document:'DOC-REC',revision:'0',fiscalComment:'CORRIGIR',returnedAt:''}]};
