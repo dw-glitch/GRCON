@@ -53,28 +53,32 @@
   const book=new root.ExcelJS.Workbook();book.creator='GRCON';book.created=generatedAt;
   const header=(ws,fill='FF15546E')=>{const r=ws.getRow(1);r.font={bold:true,color:{argb:'FFFFFFFF'}};r.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};r.alignment={vertical:'middle',wrapText:true};r.height=30;};
 
-  // ABA 2 primeiro (necessária para contagens do RESUMO); inserida depois na ordem correta.
+  // --- Montagem do relatório (linguagem objetiva e profissional) ---
   const detailRows=[];
   const allocationOf=r=>r.allocation||r.sourceFile||'';
   const where=r=>[r.sourceFile,r.sourceSheet].filter(Boolean);
+  const fieldLabel={title:'Título',workflow:'Workflow',databook:'Caminho do Data Book',document:'Código do documento',tag:'TAG',levels:'Níveis da EAP',fiscalComment:'Histórico fiscal',plannedDate:'Data prevista',action:'Ação',purpose:'Propósito de emissão',revision:'Revisão',ld:'LD de origem',eap:'EAP'};
+  const labelOf=f=>fieldLabel[f]||(/^N[1-6]$/.test(f)?'Nível '+f.slice(1)+' da EAP':f||'');
+  const humanDecision=e=>e.ruleId?'Não (regra ativa)':'Sim — decisão de '+(e.actor||'responsável');
   let proposalsOpen=0,clearDocs=0;
   for(const row of rows){
    const [file,sheet]=where(row),line=row.sourceRow?'linha '+row.sourceRow:'';
    for(const f of row.findings||[]){
-    detailRows.push({tone:f.severity,cells:[allocationOf(row),row.document,row.revision,labels[f.category]||f.category,f.id+' · motor '+(f.ruleVersion||row.ruleVersion),SEVERITY[f.severity]||f.severity,f.message,f.field,'','','',evidenceText(f.evidence)||f.source,file,sheet,line,f.severity==='suggestion'?'Sugestão a avaliar':f.severity==='pending'?'Aguardando verificação':'Aguardando correção','',f.source||'',f.humanReview===false?'Não':'Sim']});
+    const sug=f.suggestion;
+    detailRows.push({tone:f.severity,cells:[allocationOf(row),row.document,row.revision,labels[f.category]||f.category,f.id+' · motor '+(f.ruleVersion||row.ruleVersion),SEVERITY[f.severity]||f.severity,f.message,labelOf(f.field),sug?sug.before:'',sug?sug.after:'','',evidenceText(f.evidence)||f.source,file,sheet,line,f.severity==='suggestion'?'Sugestão a avaliar':f.severity==='pending'?'Aguardando verificação':'Aguardando correção',sug?'Correção sugerida (a confirmar)':'—',f.source||'',f.humanReview===false?'Não':'Sim']});
    }
    for(const rec of row.recommendations||[]){
     const key=JSON.stringify([row.lineage,rec.field,rec.after]),item=planByKey.get(key);
     if(events.some(e=>e.lineage===row.lineage&&e.field===rec.field&&e.after===rec.after))continue; // aparece como decisão abaixo
     proposalsOpen++;
-    detailRows.push({tone:'proposal',cells:[allocationOf(row),row.document,row.revision,labels[rec.field==='workflow'?'workflow':rec.field==='databook'?'databook':'hierarchy'],item?.ruleId||'Proposta determinística',SEVERITY.pending,rec.justification,rec.field,rec.before,rec.after,'',evidenceText(rec.evidence),file,sheet,item?.cell||line,'Proposta aguardando decisão',CORRECTION_TYPE[item?.klass||'B'],rec.justification,'Sim']});
+    detailRows.push({tone:'proposal',cells:[allocationOf(row),row.document,row.revision,labels[rec.field==='title'?'title':rec.field==='workflow'?'workflow':rec.field==='databook'?'databook':'hierarchy'],item?.ruleId||'Proposta determinística',SEVERITY.pending,rec.justification,labelOf(rec.field),rec.before,rec.after,'',evidenceText(rec.evidence),file,sheet,item?.cell||line,'Proposta aguardando decisão',CORRECTION_TYPE[item?.klass||'B'],rec.justification,'Sim']});
    }
    for(const e of events.filter(x=>x.lineage===row.lineage)){
     const done=appliedKey.has(JSON.stringify([e.lineage,e.field,e.after])),change=verifiedChanges.find(c=>c.lineage===e.lineage&&c.field===e.field&&c.after===e.after);
     const item=planByKey.get(JSON.stringify([e.lineage,e.field,e.after]));
-    detailRows.push({tone:done?'done':'authorized',cells:[allocationOf(row),row.document,row.revision,labels[e.field==='title'?'title':e.field==='workflow'?'workflow':e.field==='databook'?'databook':'hierarchy'],e.ruleId?e.ruleId+' v'+(e.ruleVersion||''):'Decisão humana',done?'Corrigido':'Autorizado',e.justification,e.field,e.before,e.after,done?e.after:'',evidenceText(e.evidence),change?.file||file,change?.sheet||sheet,change?.cell||line,done?'Corrigido e verificado em cópia':'Autorizado; cópia não produzida',CORRECTION_TYPE[item?.klass||(e.ruleId?'A':'B')],e.justification,e.ruleId?'Não (regra ativa)':'Sim — decisão de '+(e.actor||'responsável')]});
+    detailRows.push({tone:done?'done':'authorized',cells:[allocationOf(row),row.document,row.revision,labels[e.field==='title'?'title':e.field==='workflow'?'workflow':e.field==='databook'?'databook':'hierarchy'],e.ruleId?e.ruleId+' v'+(e.ruleVersion||''):'Decisão humana',done?'Corrigido':'Autorizado',e.justification,labelOf(e.field),e.before,e.after,done?e.after:'',evidenceText(e.evidence),change?.file||file,change?.sheet||sheet,change?.cell||line,done?'Corrigida e verificada em cópia':'Autorizada — cópia não produzida',CORRECTION_TYPE[item?.klass||(e.ruleId?'A':'B')],e.justification,humanDecision(e)]});
    }
-   if(!(row.findings||[]).length&&!(row.recommendations||[]).length){clearDocs++;detailRows.push({tone:'clear',cells:[allocationOf(row),row.document,row.revision,'Verificação','','Sem problema detectado','Nenhum problema detectado nas referências disponíveis','','','','','',file,sheet,line,'Verificado',CORRECTION_TYPE.D,'Ausência de apontamentos não é aprovação fiscal','Não']});}
+   if(!(row.findings||[]).length&&!(row.recommendations||[]).length){clearDocs++;detailRows.push({tone:'clear',cells:[allocationOf(row),row.document,row.revision,'Verificação','','Sem apontamentos','Nenhum apontamento nas referências disponíveis.','','','','','',file,sheet,line,'Verificado — sem apontamentos',CORRECTION_TYPE.D,'A ausência de apontamentos não equivale à aprovação da fiscalização.','Não']});}
   }
   const order={error:0,pending:1,proposal:2,authorized:3,done:4,suggestion:5,clear:6};
   detailRows.sort((a,b)=>(order[a.tone]??9)-(order[b.tone]??9));
@@ -85,32 +89,93 @@
   const ldCopies=files.filter(f=>/^02_/.test(f.name)).length,allocCopies=files.filter(f=>/^03_/.test(f.name)).length;
   const executed=verifiedChanges.length;
   const authorized=events.length;
-  resumo.columns=[{width:34},{width:96}];
-  resumo.mergeCells('A1:B1');resumo.getCell('A1').value='GRCON · Auditoria Preventiva de Alocações';resumo.getCell('A1').font={size:16,bold:true,color:{argb:'FFFFFFFF'}};
+  resumo.columns=[{width:40},{width:96}];
+  resumo.mergeCells('A1:B1');resumo.getCell('A1').value='GRCON · Relatório de Auditoria Preventiva de Alocações';resumo.getCell('A1').font={size:16,bold:true,color:{argb:'FFFFFFFF'}};
   resumo.getCell('A1').fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF15546E'}};resumo.getRow(1).height=34;resumo.getCell('A1').alignment={vertical:'middle'};
+  const verdict=state.state===STATES.ready?'Não foram encontradas pendências nas referências disponíveis. A alocação pode seguir para a conferência final antes do envio. Este resultado não representa aprovação da fiscalização.'
+   :state.state===STATES.fix?state.uncorrectedErrors+' não conformidade(s) confirmada(s) ainda sem correção verificada. Corrija antes de enviar a alocação à fiscalização.'
+   :'Há '+state.inconclusive+' verificação(ões) em aberto. Conclua a conferência indicada no detalhamento antes do envio; a alocação não deve ser considerada pronta enquanto houver pendências.';
   const sections=[
-   ['Identificação',[['Contrato',input.contract],['Identificação da auditoria',input.runId||input.sessionId||''],['Data de geração',generatedAt],['Alocações analisadas',allocations.join('; ')||'—'],['Versão do motor',C.VERSION]]],
-   ['Resultado',[['Estado final',state.state],['Documentos analisados',rows.length],['Correções executadas (verificadas em cópia)',executed],['Correções autorizadas',authorized],['Propostas pendentes de decisão',proposalsOpen],['Verificações inconclusivas',state.inconclusive],['Não conformidades confirmadas sem correção',state.uncorrectedErrors],['Sugestões preventivas (precedentes, não normativas)',summary.suggestions],['Documentos sem problemas detectados',clearDocs],['LDs corrigidas (cópias)',ldCopies],['Alocações corrigidas (cópias)',allocCopies]]],
+   ['Parecer',[['Estado da auditoria',state.state],['Conclusão',verdict]]],
+   ['Identificação',[['Contrato',input.contract],['Identificação da auditoria',input.runId||input.sessionId||''],['Data de geração',generatedAt],['Alocações analisadas',allocations.join('; ')||'—'],['Versão do motor de auditoria',C.VERSION]]],
+   ['Indicadores',[['Documentos analisados',rows.length],['Documentos sem apontamentos',clearDocs],['Não conformidades confirmadas sem correção',state.uncorrectedErrors],['Verificações pendentes',state.inconclusive],['Sugestões preventivas (precedentes, não normativas)',summary.suggestions],['Propostas aguardando decisão',proposalsOpen],['Correções autorizadas',authorized],['Correções aplicadas e verificadas em cópia',executed],['Cópias de LD geradas',ldCopies],['Cópias de alocação geradas',allocCopies]]],
+   ['Como usar este relatório',[['DETALHAMENTO','Todos os apontamentos, com valor atual, valor sugerido, evidência e situação.'],['ALOCAÇÃO CORRIGIDA','A alocação com as correções sugeridas ou aplicadas. Células destacadas foram alteradas; a coluna "Alterações nesta linha" mostra o valor anterior.'],['TÍTULOS DA LD','Quando houver, o título atual e o título sugerido para ajuste na LD de origem.']]],
    ['Fontes e referências',[['Fontes utilizadas',(input.sources||[]).map(s=>s.name+' ('+(s.kind==='ld'?'LD':'alocação')+', SHA-256 '+String(s.sha256||'').slice(0,12)+'…)').join('\n')||'—'],['Versões das referências',Object.entries(input.versions||{}).map(([k,v])=>k+': '+v).join('\n')||'Não informadas'],['Bases complementares',input.contextWarning||'Consultadas']]],
-   ['Limitações',[['Limitações relevantes',[...LIMITS,...(input.contextWarning?[input.contextWarning]:[]),...exceptions.map(e=>'Arquivo não produzido: '+e)].join('\n')]]]
+   ['Limitações',[['Observações importantes',[...LIMITS,...(input.contextWarning?[input.contextWarning]:[]),...exceptions.map(e=>'Arquivo não produzido: '+e)].join('\n')]]]
   ];
   let at=2;
   for(const [title,pairs] of sections){
    const t=resumo.getRow(++at);t.getCell(1).value=title.toUpperCase();t.font={bold:true,color:{argb:'FF15546E'}};t.border={bottom:{style:'thin',color:{argb:'FF15546E'}}};resumo.mergeCells(at,1,at,2);
    for(const [k,v] of pairs){const r=resumo.getRow(++at);r.getCell(1).value=safe(k);r.getCell(1).font={bold:true,color:{argb:'FF20384D'}};r.getCell(2).value=v instanceof Date?v:typeof v==='number'?v:safe(String(v));
     if(v instanceof Date)r.getCell(2).numFmt='dd/mm/yyyy hh:mm';r.alignment={vertical:'top',wrapText:true,horizontal:'left'};
-    if(k==='Estado final'){r.getCell(2).font={bold:true,color:{argb:state.state===STATES.ready?'FF1B6B3A':state.state===STATES.fix?'FFB3261E':'FF8A5A00'}};}}
+    if(k==='Estado da auditoria'){r.getCell(2).font={bold:true,size:12,color:{argb:state.state===STATES.ready?'FF1B6B3A':state.state===STATES.fix?'FFB3261E':'FF8A5A00'}};}}
    at++;
   }
 
-  detail.addRow(['Alocação','Documento','Revisão','Categoria','Regra','Severidade','Problema','Campo','Valor original','Valor proposto','Valor efetivamente corrigido','Fonte da evidência','Arquivo','Aba','Linha/célula','Situação','Tipo de correção','Justificativa','Revisão humana'].map(safe));
+  detail.addRow(['Alocação','Código do documento','Revisão','Categoria','Regra / critério','Classificação','Descrição do apontamento','Campo','Valor atual','Valor sugerido','Valor corrigido (aplicado)','Evidência','Arquivo de origem','Aba','Local (linha/célula)','Situação','Tipo de tratamento','Fundamento','Requer decisão humana'].map(safe));
   header(detail);
   const fills={error:'FFFDE2E1',pending:'FFFFF3D6',proposal:'FFFFF3D6',suggestion:'FFE6F0FA',done:'FFE3F4E8',authorized:'FFEAF4E4',clear:'FFFFFFFF'};
   for(const d of detailRows){const r=detail.addRow(d.cells.map(safe));if(fills[d.tone]&&d.tone!=='clear')r.getCell(6).fill={type:'pattern',pattern:'solid',fgColor:{argb:fills[d.tone]}};}
-  detail.columns=[22,38,9,18,26,24,60,12,28,28,28,44,28,12,14,28,26,50,18].map(width=>({width}));
+  detail.columns=[22,38,9,18,26,24,60,18,30,30,28,44,28,12,16,28,26,50,20].map(width=>({width}));
   detail.views=[{state:'frozen',ySplit:1,xSplit:2}];
   detail.autoFilter={from:{row:1,column:1},to:{row:Math.max(1,detail.rowCount),column:19}};
   detail.eachRow((r,i)=>{if(i>1){r.alignment={vertical:'top',wrapText:true};r.font={color:{argb:'FF20384D'}};}});
+
+  // --- ALOCAÇÃO CORRIGIDA: a alocação com as correções, ao lado do relatório ---
+  const fmtDate=v=>{const t=String(v??'').trim();if(/^\d{4}-\d{2}-\d{2}T/.test(t)){const d=new Date(t);return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0')+'/'+d.getUTCFullYear();}
+   if(/^\d{5}$/.test(t)&&Number(t)>30000&&Number(t)<80000){const d=new Date(Math.round((Number(t)-25569)*86400000));return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0')+'/'+d.getUTCFullYear();}return t;};
+  const corrected=book.addWorksheet('ALOCAÇÃO CORRIGIDA');
+  corrected.addRow(['Nome do documento','Data prevista','Workflow','Documento ativo','Ação','Data da linha base','Propósito de emissão original','Documento crítico','Observação','Caminho do Data Book','N1','N2','N3','N4','N5','N6','Revisão','Código sugerido (conferir)','Alterações nesta linha','Situação das alterações'].map(safe));
+  header(corrected,'FF1F4E78');
+  const editable=['workflow','databook','N1','N2','N3','N4','N5','N6'],cellOf={workflow:3,databook:10,N1:11,N2:12,N3:13,N4:14,N5:15,N6:16};
+  const current=(row,f)=>/^N[1-6]$/.test(f)?String((row.levels||[])[Number(f.slice(1))-1]??''):String(row[f]??'');
+  const highlights=[],codeCells=[];
+  rows.forEach(row=>{
+   const values=[row.document,fmtDate(row.plannedDate),row.workflow,row.activeDocument,row.action,fmtDate(row.baselineDate),row.purpose,row.criticalDocument,row.observation,row.databook,...Array.from({length:6},(_,i)=>(row.levels||[])[i]??'')].map(v=>v??'');
+   const changed=[];
+   for(const f of editable){
+    const decided=events.filter(e=>e.lineage===row.lineage&&e.field===f).pop();
+    const afters=[...new Set((row.recommendations||[]).filter(x=>x.field===f).map(x=>x.after))];
+    const after=decided?decided.after:afters.length===1?afters[0]:null;
+    if(after==null||after===current(row,f))continue;
+    const applied=appliedKey.has(JSON.stringify([row.lineage,f,after]));
+    values[cellOf[f]-1]=after;changed.push({f,before:current(row,f),after,applied,authorized:Boolean(decided)});
+   }
+   const codeSuggestion=(row.findings||[]).map(x=>x.suggestion).find(x=>x&&x.field==='document');
+   const status=!changed.length?'—':changed.every(c=>c.applied)?'Aplicadas em cópia verificada':changed.some(c=>c.authorized)?'Autorizadas; cópia pendente':'Sugeridas — aguardam decisão';
+   const r=corrected.addRow([...values,row.revision,codeSuggestion?codeSuggestion.after:'',changed.map(c=>labelOf(c.f)+': «'+c.before+'» → «'+c.after+'»').join('\n'),status].map(safe));
+   for(const c of changed)highlights.push([r.number,cellOf[c.f],c.applied]);
+   if(codeSuggestion)codeCells.push(r.number);
+  });
+  corrected.columns=[44,13,40,12,12,14,22,12,30,60,14,14,14,14,14,14,9,44,60,28].map(width=>({width}));
+  corrected.views=[{state:'frozen',ySplit:1,xSplit:1}];
+  corrected.autoFilter={from:{row:1,column:1},to:{row:Math.max(1,corrected.rowCount),column:20}};
+  corrected.eachRow((r,i)=>{if(i>1){r.alignment={vertical:'top',wrapText:true};r.font={color:{argb:'FF20384D'}};}});
+  for(const rn of codeCells)corrected.getRow(rn).getCell(18).font={bold:true,color:{argb:'FFB3261E'}};
+  for(const [rn,cn,applied] of highlights){const c=corrected.getRow(rn).getCell(cn);c.fill={type:'pattern',pattern:'solid',fgColor:{argb:applied?'FFC8E6C9':'FFFFE08A'}};c.font={bold:true,color:{argb:'FF20384D'}};}
+
+  // --- TÍTULOS DA LD: título atual × título sugerido (somente quando houver) ---
+  const titleItems=[];
+  for(const row of rows){
+   const titleEvents=events.filter(e=>e.lineage===row.lineage&&e.field==='title');
+   const seen=new Set();
+   for(const e of titleEvents){seen.add(e.after);titleItems.push({row,before:e.before,after:e.after,reason:e.justification,state:appliedKey.has(JSON.stringify([e.lineage,'title',e.after]))?'Aplicada em cópia verificada da LD':'Autorizada; cópia da LD pendente'});}
+   for(const rec of (row.recommendations||[]).filter(x=>x.field==='title')){
+    if(seen.has(rec.after))continue;
+    let terms='';try{terms=(JSON.parse(rec.evidence?.[0]||'{}').ajustes||[]).map(a=>a.de+' → '+a.para).join('; ');}catch{terms='';}
+    titleItems.push({row,before:rec.before,after:rec.after,reason:rec.justification,terms,state:'Sugerida — aguarda decisão'});
+   }
+  }
+  if(titleItems.length){
+   const titles=book.addWorksheet('TÍTULOS DA LD');
+   titles.addRow(['Código do documento','Revisão','LD de origem','Aba da LD','Linha','Título atual','Título sugerido','Termos alterados','Motivo da sugestão','Situação'].map(safe));
+   header(titles,'FF1F4E78');
+   for(const it of titleItems){const o=it.row.origin||{};titles.addRow([it.row.document,it.row.revision,o.file||it.row.ld||'',o.sheet||it.row.ldSheet||'',o.row||'',it.before,it.after,it.terms||'',it.reason,it.state].map(safe));}
+   titles.columns=[44,9,30,14,8,60,60,34,50,30].map(width=>({width}));
+   titles.views=[{state:'frozen',ySplit:1,xSplit:1}];
+   titles.autoFilter={from:{row:1,column:1},to:{row:Math.max(1,titles.rowCount),column:10}};
+   titles.eachRow((r,i)=>{if(i>1){r.alignment={vertical:'top',wrapText:true};r.font={color:{argb:'FF20384D'}};r.getCell(7).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3D6'}};r.getCell(7).font={bold:true,color:{argb:'FF20384D'}};}});
+  }
 
   const zip=new JSZip(),outputs=[],omitted=[];
   const folder=zip.folder(ROOT);
@@ -126,7 +191,7 @@
    folder.file(name,bytes,{createFolders:true});outputs.push({path:ROOT+'/'+name,name,bytes:bytes.length,sha256:await hash(bytes),...meta,changes:undefined,changed:meta.changed||0});
   }
   const reportBytes=new Uint8Array(await book.xlsx.writeBuffer());
-  const readReport=XLSX.read(reportBytes,{type:'array'});if(readReport.SheetNames.join('|')!=='RESUMO|DETALHAMENTO')throw Error('Relatório fora do contrato de duas abas.');
+  const readReport=XLSX.read(reportBytes,{type:'array'});if(readReport.SheetNames.join('|')!==['RESUMO','DETALHAMENTO','ALOCAÇÃO CORRIGIDA',...(titleItems.length?['TÍTULOS DA LD']:[])].join('|'))throw Error('Relatório fora do contrato de abas.');
   await add('01_Relatorio_Auditoria.xlsx',reportBytes,{kind:'report'});
   for(const file of files)await add(file.name,file.bytes,{kind:/^02_/.test(file.name)?'ld':/^03_/.test(file.name)?'allocation':/^04_/.test(file.name)?'central':'file',official:Boolean(file.official),changed:file.changed||0,changes:file.changes||[]});
   if(!ldCopies)omitted.push({path:'02_LDs_Corrigidas/',reason:'Nenhuma LD foi corrigida nesta auditoria.'});

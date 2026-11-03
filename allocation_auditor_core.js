@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.3.0';
+ const VERSION='1.4.0';
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
  const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet,text(r.sourceFile),text(r.sourceSheet),text(r.sourceRow),text(r.allocation),text(r.sourceHash)]);
@@ -75,6 +75,115 @@
   return norm(parsed.discipline)+'|'+norm(parsed.report);
  }
  const FISCAL_FAMILY_CATEGORIES=new Set(['title','code','tag','databook','hierarchy','workflow','scope']);
+
+ // ---- Verificações de digitação e de nt- (motor 1.4.0) ----
+ // Distância de Damerau-Levenshtein (alinhamento ótimo) com corte antecipado.
+ function editDistance(a,b,max){
+  if(a===b)return 0;
+  if(Math.abs(a.length-b.length)>max)return max+1;
+  const prev2=new Array(b.length+1).fill(0);let prev=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+   const cur=[i];let rowMin=i;
+   for(let j=1;j<=b.length;j++){
+    const cost=a[i-1]===b[j-1]?0:1;
+    let v=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+cost);
+    if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])v=Math.min(v,(prev2[j-2]??Infinity)+1);
+    cur[j]=v;if(v<rowMin)rowMin=v;
+   }
+   if(rowMin>max)return max+1;
+   for(let j=0;j<=b.length;j++)prev2[j]=prev[j];
+   prev=cur;
+  }
+  return prev[b.length];
+ }
+ const WORD=/[A-Za-zÀ-ÿ]{5,}/g;
+ function buildVocabulary(ldRecords){
+  const counts=new Map(),display=new Map();
+  if((ldRecords||[]).length<50)return null; // vocabulário insuficiente: nada é afirmado
+  for(const rec of ldRecords){
+   const title=text(rec.title);if(!title)continue;
+   for(const w of title.match(WORD)||[]){
+    const n=norm(w);counts.set(n,(counts.get(n)||0)+1);
+    const d=display.get(n)||new Map();d.set(w,(d.get(w)||0)+1);display.set(n,d);
+   }
+  }
+  const good=new Map();
+  for(const [n,c] of counts)if(c>=5){const len=n.length,l=good.get(len)||[];l.push(n);good.set(len,l);}
+  const shown=n=>[...display.get(n).entries()].sort((a,b)=>b[1]-a[1])[0][0];
+  return {counts,good,shown};
+ }
+ // Sugere correção de palavra apenas quando há um único vizinho muito mais frequente na LD.
+ function suggestWord(word,vocab){
+  const n=norm(word),c=vocab.counts.get(n)||0;
+  if(c>=3||/\d/.test(n))return null;
+  const max=n.length>=11?2:1;let best=null,tie=false;
+  for(let len=n.length-max;len<=n.length+max;len++)for(const cand of vocab.good.get(len)||[]){
+   const cc=vocab.counts.get(cand);
+   if(cc<Math.max(5,5*Math.max(c,1)))continue;
+   if(cand.startsWith(n)||n.startsWith(cand))continue;           // plural/flexão
+   if(cand.slice(0,-1)===n.slice(0,-1))continue;                  // só a última letra: gênero/número
+   const d=editDistance(n,cand,max);
+   if(d>max)continue;
+   if(!best||d<best.d||(d===best.d&&cc>best.cc*3)){best={cand,d,cc};tie=false;}
+   else if(d===best.d&&cc*3>best.cc)tie=true;
+  }
+  if(!best||tie)return null;
+  const target=vocab.shown(best.cand);
+  // preserva a caixa da palavra original
+  const out=word===word.toUpperCase()?target.toUpperCase():word[0]===word[0].toUpperCase()?target[0].toUpperCase()+target.slice(1).toLowerCase():target.toLowerCase();
+  return {from:word,to:out,distance:best.d,occurrences:best.cc};
+ }
+ // Defeitos de digitação do título. Retorna o título corrigido e a lista de ajustes.
+ function checkTitle(title,vocab,memo){
+  if(memo&&memo.has(title))return memo.get(title);
+  const changes=[];let fixed=title;
+  const trimmed=fixed.replace(/\s{2,}/g,' ').replace(/\s+([,.;:])/g,'$1').trim();
+  if(trimmed!==fixed){changes.push({kind:'espacos',from:fixed,to:trimmed,note:'Espaços duplicados, antes de pontuação ou nas extremidades.'});fixed=trimmed;}
+  const dedup=fixed.replace(/\b([A-Za-zÀ-ÿ]{2,})\s+\1\b/gi,'$1');
+  if(dedup!==fixed){changes.push({kind:'palavra-repetida',from:fixed,to:dedup,note:'Palavra repetida em sequência.'});fixed=dedup;}
+  if(vocab){
+   const swaps=[];
+   fixed=fixed.replace(WORD,w=>{const s=suggestWord(w,vocab);if(s){swaps.push(s);return s.to;}return w;});
+   for(const s of swaps)changes.push({kind:'ortografia',from:s.from,to:s.to,note:'"'+s.from+'" ocorre raramente na LD; "'+s.to+'" ocorre '+s.occurrences+' vezes (distância '+s.distance+').'});
+  }
+  const result={fixed,changes,changed:fixed!==title};
+  if(memo)memo.set(title,result);
+  return result;
+ }
+ function withNt(document,stripNt){
+  const p=text(document).split('_');if(p.length<7)return '';
+  const tag=p.slice(6).join('_');
+  const next=stripNt?tag.replace(/^nt-/i,''):(/^nt-/i.test(tag)?tag:'nt-'+tag);
+  return next===tag?'':[...p.slice(0,6),next].join('_');
+ }
+ function indexLdCodes(ldRecords){
+  const byLen=new Map(),seen=new Set();
+  for(const rec of ldRecords||[]){const d=text(rec.document);if(!d||seen.has(d))continue;seen.add(d);const l=byLen.get(d.length)||[];l.push(d);byLen.set(d.length,l);}
+  return byLen;
+ }
+ // Códigos da LD a 1 caractere (troca) ou 1 transposição do código digitado.
+ function nearLdCodes(document,byLen){
+  const code=text(document),out=[];
+  for(const cand of byLen.get(code.length)||[]){
+   let diff=0,first=-1;
+   for(let i=0;i<code.length&&diff<3;i++)if(code[i]!==cand[i]){if(first<0)first=i;diff++;}
+   if(diff===1||(diff===2&&code[first]===cand[first+1]&&code[first+1]===cand[first]))out.push(cand);
+   if(out.length>3)break;
+  }
+  return out;
+ }
+ // Pares de caracteres que se confundem ao digitar (O/0, I/1/L, S/5, B/8, Z/2).
+ const CONFUSABLE=new Set(['O0','0O','I1','1I','L1','1L','S5','5S','B8','8B','Z2','2Z']);
+ function confusableOnly(a,b){
+  let diff=0;for(let i=0;i<a.length;i++)if(a[i]!==b[i]){diff++;if(!CONFUSABLE.has(a[i].toUpperCase()+b[i].toUpperCase()))return false;}
+  return diff===1;
+ }
+ function closest(value,list,ratio){
+  const n=norm(value);if(!n)return null;
+  const max=Math.max(2,Math.floor(n.length*ratio));let best=null,tie=false;
+  for(const item of list){const m=norm(item),d=editDistance(n,m,max);if(d>max)continue;if(!best||d<best.d){best={item,d};tie=false;}else if(d===best.d)tie=true;}
+  return best&&!tie?best:null;
+ }
  function prepare(context){
   const byDocument=new Map(),byFamilyCategory=new Map(),batches=new Map(),tags=new Map(),paths=new Map(),eaps=new Map(),ld=new Map();
   for(const h of context.history||[]){
@@ -109,7 +218,7 @@
     samples:[...distinct.values()].slice(0,3).map(h=>({document:h.document,revision:h.revision,comment:h.fiscalComment,allocation:h.allocation,source:h.sourceFile,sourceVersion:h.sourceVersion||h.sourceHash||'',sheet:h.sourceSheet||h.ldSheet||'',row:h.sourceRow||'',returnedAt:h.returnedAt||''}))
    });
   }
-  return {byDocument,byFamilyCategory:recurringFamilies,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
+  return {byDocument,byFamilyCategory:recurringFamilies,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook),vocab:buildVocabulary(context.ldRecords),titleMemo:new Map(),ldCodes:indexLdCodes(context.ldRecords),workflows:(context.bases?.workflows||[]).map(w=>text(w.workflow)).filter(Boolean)};
  }
 
  // Compatibiliza um código documental longo com seu último ancestral cadastrado.
@@ -142,9 +251,25 @@
    if(text(source.workflow)&&text(source.workflow)!==text(r.workflow))recommendations.push({field:'workflow',before:text(r.workflow),after:text(source.workflow),justification:'Diferença de Workflow frente à linha exata da LD. Verifique a versão e a disciplina antes de aprovar.',evidence:[JSON.stringify(reference)],confidence:'fonte documental exata',humanReview:true});
    if(text(source.databook)&&text(source.databook)!==text(r.databook)&&index.paths.has(text(source.databook)))recommendations.push({field:'databook',before:text(r.databook),after:text(source.databook),justification:'Caminho da LD encontrado na base Data Book ativa. Confirme a adequação ao serviço antes de aprovar.',evidence:[JSON.stringify({...reference,databookVersion:context.versions?.databook})],confidence:'fonte documental exata',humanReview:true});
   }
+  if(!originals.length&&index.ldCodes.size){
+   const near=nearLdCodes(r.document,index.ldCodes);
+   const likely=near.length===1?near:near.filter(c=>confusableOnly(r.document,c));
+   if(near.length)add('CODE-TYPO-SUSPECT','code','document','O código não consta na LD, mas é quase idêntico a '+(near.length===1?'um código cadastrado':'mais de um código cadastrado')+'. Verifique erro de digitação'+(likely.length===1&&near.length>1?' (letra e número parecidos trocados).':'.'),[{digitado:r.document,semelhantes:near.slice(0,3)}],{severity:'pending',source:'Comparação do código com a LD carregada',origin:'Alocação',normativeProof:false,...(likely.length===1?{suggestion:{field:'document',before:r.document,after:likely[0]}}:{})});
+  }
   if(compatible.length>1)add('LD-AMBIGUOUS','history','ld','Mais de uma linha da LD corresponde ao documento. Confirme a origem.',compatible.map(x=>({file:x.source,sheet:x.sheet,row:x.row})));
   if(!text(r.revision))add('REVISION-UNKNOWN','history','revision','Revisão não informada; não foi presumida revisão 0.',[{file:r.sourceFile,row:r.sourceRow}]);
   if(!text(r.title))add('TITLE-MISSING','title','title',r.officialAllocation?'O modelo oficial não contém título. Consulte a LD correspondente para validar o conteúdo.':'Título não disponível. Importe a LD para verificar.',[{file:r.sourceFile,row:r.sourceRow}]);
+  if(text(r.title)){
+   const check=checkTitle(r.title,index.vocab,index.titleMemo);
+   if(check.changed){
+    const spelling=check.changes.some(c=>c.kind==='ortografia');
+    add(spelling?'TITLE-TYPO-SUSPECT':'TITLE-FORMAT','title','title',
+     spelling?'Possível erro de digitação no título. Confira e, se confirmado, aplique o título sugerido na LD.':'O título tem defeito de formatação (espaços ou palavra repetida).',
+     [{title:r.title,suggested:check.fixed,adjustments:check.changes.map(c=>c.note)}],
+     {severity:spelling?'pending':'error',source:spelling?'Verificação ortográfica por similaridade com os títulos da LD':'Padronização do título',origin:'LD',normativeProof:false,suggestion:{field:'title',before:r.title,after:check.fixed}});
+    recommendations.push({field:'title',before:r.title,after:check.fixed,justification:check.changes.map(c=>c.note).join(' '),evidence:[JSON.stringify({origem:'ortografia/formatação',ajustes:check.changes.map(c=>({de:c.from,para:c.to}))})],confidence:spelling?'similaridade com termos recorrentes da LD':'regra de formatação',humanReview:true});
+   }
+  }
    if(r.officialAllocation){
     if(!text(r.plannedDate))add('ALLOCATION-DATE-MISSING','history','plannedDate','A Data Prevista está vazia no modelo oficial.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
     if(!text(r.action))add('ALLOCATION-ACTION-MISSING','history','action','A ação da alocação está vazia.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
@@ -174,7 +299,14 @@
    const nonTagged=r.nonTagged===true||/^nt-/i.test(p.tag);
    if(nonTagged&&!p.tag.startsWith('nt-'))rule('ET-7173-NT','7.1.7.3','Item não tagueado: o Grupo 7 deve iniciar com nt- minúsculo.');
    if(nonTagged&&p.tag.includes('_'))rule('ET-7171-SEPARATOR','7.1.7.1','Confira a separação dos nomes do item não tagueado por hífen.');
-   if(!nonTagged){const tag=index.tags.get(p.tag);if(!tag)add('TAG-NOT-PROVEN','tag','tag','TAG não comprovado nas referências carregadas. Verifique outras fontes autorizadas.',[{tag:p.tag,version:context.versions?.appendix}],{origin:'Cadastro de TAGs / LD'});}
+   if(/^nt-/i.test(p.tag)&&index.tags.size){
+    const stripped=p.tag.replace(/^nt-/i,''),exact=index.tags.get(stripped);
+    const partial=exact?null:[...index.tags.keys()].filter(k=>k.length>=6&&(stripped===k||stripped.startsWith(k+'-'))).slice(0,3);
+    const suggestion=withNt(r.document,true);
+    if(exact)add('NT-PREFIX-IN-REFERENCE','tag','document','O código usa nt-, mas o TAG '+stripped+' consta no cadastro ('+(exact.kind||'referência')+'). Item cadastrado não deve levar nt-; remova o prefixo do Grupo 7.',[{tag:stripped,cadastro:exact.kind||'',versao:context.versions?.appendix||'',codigoSugerido:suggestion}],{severity:context.homologated?.appendix?'error':'pending',source:'Cadastro de TAGs × prefixo nt- (ET item 7.1.7.3)',origin:'Cadastro de TAGs / LD',normativeProof:false,suggestion:{field:'document',before:r.document,after:suggestion}});
+    else if(partial&&partial.length)add('NT-PREFIX-PARTIAL-MATCH','tag','document','O código usa nt-, e parte dele coincide com TAG cadastrado ('+partial.join(', ')+'). Confira se o item é realmente não tagueado.',[{grupo7:p.tag,coincidencias:partial}],{severity:'suggestion',source:'Cadastro de TAGs × prefixo nt-',origin:'Cadastro de TAGs / LD',normativeProof:false});
+   }
+   if(!nonTagged){const tag=index.tags.get(p.tag);if(!tag){const suggestion=index.tags.size?withNt(r.document,false):'';add('TAG-NOT-PROVEN','tag','tag','TAG não comprovado nas referências carregadas.'+(suggestion?' Se o item não for tagueado, o Grupo 7 deve começar com nt- (código sugerido no detalhamento); caso contrário, confira o cadastro.':' Verifique outras fontes autorizadas.'),[{tag:p.tag,version:context.versions?.appendix,...(suggestion?{codigoSugerido:suggestion}:{})}],{origin:'Cadastro de TAGs / LD',...(suggestion?{suggestion:{field:'document',before:r.document,after:suggestion}}:{})});}}
    const codedUnit=norm(p.unit).replace(/-/g,''),destUnit=norm(r.databook).match(/\b(?:U-?32|U-?39S|SE-?3200)\b/)?.[0]?.replace(/-/g,'');
    if(destUnit&&codedUnit!==destUnit)add('UNIT-PATH-MISMATCH','databook','databook','A unidade do documento diverge da unidade explícita do caminho.',[{code:p.unit,path:r.databook}],{severity:'error',origin:'LD'});
    if(text(r.title)&&p.report==='RIR'&&!norm(r.title).startsWith('RELATORIO DE INSPECAO DE RECEBIMENTO'))add('RIR-TITLE-PRECEDENT','title','title','Confira a identificação de relatório de inspeção de recebimento no título.',[{title:r.title,report:p.report}],{severity:'suggestion',source:'Critério fiscal a confirmar'});
@@ -185,7 +317,7 @@
   }else if(!/^\w+-\d{4}\.\d{2}-/.test(r.document))add('CODE-UNRECOGNIZED','code','document','Codificação não reconhecida pelo auditor. Requer conferência.',[{value:r.document}]);
   if(!index.paths.size)add('DATABOOK-BASE-MISSING','databook','databook','Base Data Book indisponível.',[],{origin:'Base Data Book'});
   else if(!text(r.databook))add('DATABOOK-MISSING','databook','databook','Caminho não informado.',[]);
-  else if(!index.paths.has(r.databook))add('DATABOOK-NOT-FOUND','databook','databook','Caminho completo não encontrado na versão carregada.',[{path:r.databook,version:context.versions?.databook}],{severity:context.homologated?.databook?'error':'pending'});
+  else if(!index.paths.has(r.databook)){const near=closest(r.databook,[...index.paths.keys()],0.04);add('DATABOOK-NOT-FOUND','databook','databook','Caminho completo não encontrado na versão carregada.'+(near?' Existe um caminho muito parecido; confira possível erro de digitação.':''),[{path:r.databook,version:context.versions?.databook,...(near?{caminhoSemelhante:near.item}:{})}],{severity:context.homologated?.databook?'error':'pending',...(near?{suggestion:{field:'databook',before:r.databook,after:near.item}}:{})});}
   else {const entry=index.paths.get(r.databook);if(entry.discipline&&norm(entry.discipline)!==norm(r.discipline))add('PATH-DISCIPLINE','databook','databook','Disciplina incompatível com a classificação explícita do caminho.',[{path:r.databook,discipline:r.discipline,expected:entry.discipline}],{severity:'error'});}
   if(!index.eaps.size)add('EAP-BASE-MISSING','hierarchy','eap','EAP contratual não disponível. Hierarquia oficial não foi inferida do histórico.',[],{origin:'EAP'});
   else {
@@ -211,7 +343,7 @@
   }
   const workflows=context.bases?.workflows||[];
   if(!text(r.workflow))add('WORKFLOW-MISSING','workflow','workflow','Workflow não informado. Verifique a necessidade de definição.',[]);
-  else if(workflows.length&&!workflows.some(w=>text(w.workflow)===r.workflow))add('WORKFLOW-UNKNOWN','workflow','workflow','Workflow não localizado na referência carregada.',[{workflow:r.workflow}]);
+  else if(workflows.length&&!workflows.some(w=>text(w.workflow)===r.workflow)){const near=closest(r.workflow,index.workflows,0.04);add('WORKFLOW-UNKNOWN','workflow','workflow','Workflow não localizado na referência carregada.'+(near?' Existe um Workflow muito parecido; confira possível erro de digitação.':''),[{workflow:r.workflow,...(near?{workflowSemelhante:near.item}:{})}],near?{suggestion:{field:'workflow',before:r.workflow,after:near.item}}:{});}
   const dup=JSON.stringify([input.document,input.revision||'',input.allocation||input.sourceFile||'']);
   if((index.batches.get(dup)||0)>1)add('DUPLICATE-IN-BATCH','history','document','Mesmo código e revisão aparecem mais de uma vez no mesmo lote. Confira antes de gerar.',[{allocation:r.allocation,file:r.sourceFile}],{severity:r.revision?'error':'pending'});
   const history=(index.byDocument.get(r.document)||[]).filter(h=>(!h.revision||!r.revision||h.revision===r.revision)&&sameLd(h,r));
@@ -262,5 +394,5 @@
   return [...groups.values()].map(g=>({...g,learning:g.findings.length&&new Set(g.occurrences.map(o=>o.document)).size>=3?'criterio-fiscal-recorrente':g.findings.length?'precedente-especifico':'avaliacao-sem-apontamento',normativeProof:false,humanReview:true}));
  }
  function splitGroup(r){let h=2166136261;for(const c of text(r.contract)+'|'+text(r.document))h=Math.imul(h^c.charCodeAt(0),16777619);const n=(h>>>0)%10;return n<6?'development':n<8?'validation':'holdout';}
- return {VERSION,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,applicable,buildTree,prepare,chooseEap,workflowDiscipline,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
+ return {VERSION,editDistance,checkTitle,withNt,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,applicable,buildTree,prepare,chooseEap,workflowDiscipline,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
 });
