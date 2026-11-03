@@ -48,12 +48,12 @@ const window={
  addEventListener:add
 };
 const script=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const module={exports:{}};
-vm.runInNewContext(script,{exports:module.exports,module,require:id=>{
+const qaModule={exports:{}};
+vm.runInNewContext(script,{exports:qaModule.exports,module:qaModule,require:id=>{
  if(id==='./service')return {service};
  throw Error('Unexpected import '+id);
 },window,crypto:webCrypto,console,Promise});
-const assistant=module.exports.assistant;
+const assistant=qaModule.exports.assistant;
 const read=()=>assistant.snapshot().messages.map(x=>x.text).join('\n');
 (async()=>{
  assistant.show();await Promise.resolve();
