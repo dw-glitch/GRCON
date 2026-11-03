@@ -43,11 +43,13 @@ for(let i=0;i<PW_ROWS;i++){
   cells[69]="Trace-"+i;
   originals.push({document:doc,documentKey:doc,revision:rev,
     state,lastEmission:emitted,company,sourceRow:i+2,pwRawCells:cells});
+  // Qualquer linha da relação do PW comprova cadastro e emissão, de qualquer empresa;
+  // o modelo filtrado (CSG/QTM) segue sem as linhas de outras empresas.
+  registeredByDoc.add(doc);
+  if(emitted==="Sim")emissionByDoc.add(doc);
   if(company==="ABC")continue;
   normalizedPw.push({document:doc,documentKey:doc,revision:rev,
     state,lastEmission:emitted,company,sourceRow:i+2});
-  registeredByDoc.add(doc);
-  if(emitted==="Sim")emissionByDoc.add(doc);
 }
 const normalizedSigem=refs.slice(0,3000).map((ref,i)=>({
   document:ref.document,documentKey:ref.documentKey,revision:"B",
@@ -99,7 +101,7 @@ for(const index of [0,51,200,1350,3000,6040]){
     assert.ok(match,"fórmula deve citar a linha de origem PW para "+row[0]);
     const source=plan.sheets["REL. PW"][Number(match[1])-1];
     assert.equal(source[0],row[0],"sem cruzar documento de outra revisão ou empresa");
-    assert.notEqual(source[2],"ABC","empresa fora do escopo não pode ser evidência");
+    // A evidência é sempre uma linha real da relação do PW do mesmo documento (qualquer empresa).
     assert.equal(source[3],row[5],"a revisão da fórmula deve corresponder à revisão exibida");
     assert.equal(source[1],row[6],"o status da fórmula deve ser da mesma ocorrência");
     assert.equal(source[4],row[7],"a emissão deve pertencer à mesma ocorrência");
@@ -107,7 +109,7 @@ for(const index of [0,51,200,1350,3000,6040]){
 }
 assert.equal(plan.sheets["REL. PW"][1][69],"Trace-0");
 assert.equal(plan.sheets["REL. PW"][PW_ROWS][69],"Trace-"+(PW_ROWS-1));
-assert.equal(plan.sheets["REL. PW"][1][2],"ABC","outras empresas permanecem na fonte, nunca nos cartões");
+assert.equal(plan.sheets["REL. PW"][1][2],"ABC","outras empresas permanecem na fonte do PW");
 const elapsed=Math.round(performance.now()-started);
 const memory=Math.round(process.memoryUsage().heapUsed/1024/1024);
 assert.ok(elapsed<120000,"planejador não pode exceder 2 minutos na amostra sintética");

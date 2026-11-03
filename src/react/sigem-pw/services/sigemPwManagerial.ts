@@ -176,7 +176,7 @@ function pwCompanyInScope(record: SigemPwRecord): boolean {
  * descartou só somam como cadastro/emissão, para que ninguém conste como "aguardando cadastro"
  * estando na consulta PW.
  */
-function pwRegistrationRecords(state: SigemPwState): SigemPwRecord[] {
+export function pwRegistrationRecords(state: SigemPwState): SigemPwRecord[] {
   const scoped = state.model?.normalizedPw || [];
   const source = state.pw.sourceRecords;
   if (!Array.isArray(source) || !source.length) return scoped;
