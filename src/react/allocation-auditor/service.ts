@@ -64,7 +64,7 @@ export const service={
    const candidate=requested?compatible.find(x=>x.name===requested):preferred;
    if(!candidate)throw Error(file.name+': mais de uma aba documental possível ('+compatible.map(x=>x.name).join(', ')+'). Selecione a aba correta para continuar.');
    const parsed=await compute('parse',{file,sheet:candidate.name,contract:c.membership.contract_id,allocation:identifyAllocation(file.name)});current(t);
-   if(parsed.records.some((r:Data)=>Boolean(r.fiscalComment||r.returnedAt)))throw Error(file.name+': o arquivo contém apontamentos ou retorno da fiscalização. Este robô é exclusivo para auditoria preventiva; use os comentários fiscais apenas como base histórica de conhecimento.');
+   if(parsed.records.some((r:Data)=>Boolean(r.returnedAt||(parsed.columns?.fiscalComment>=0&&r.fiscalComment))))throw Error(file.name+': a planilha possui retorno ou comentário identificado da fiscalização. O Robô Auditor recebe alocações antes da submissão; comentários fiscais anteriores são usados como precedentes separados.');
    const named=seenNames.get(file.name);
    if(named&&named!==parsed.sha256)throw Error(file.name+': o lote contém arquivos diferentes com o mesmo nome. Renomeie uma cópia.');
    const old=(state.context.sources||[]).find((x:Data)=>x.name===file.name&&x.kind==='allocation');
