@@ -106,7 +106,7 @@
    if(distinct.size<3)continue;
    recurringFamilies.set(key,{
     distinctDocuments:distinct.size,
-    samples:[...distinct.values()].slice(0,3).map(h=>({document:h.document,revision:h.revision,comment:h.fiscalComment,allocation:h.allocation,source:h.sourceFile}))
+    samples:[...distinct.values()].slice(0,3).map(h=>({document:h.document,revision:h.revision,comment:h.fiscalComment,allocation:h.allocation,source:h.sourceFile,sourceVersion:h.sourceVersion||h.sourceHash||'',sheet:h.sourceSheet||h.ldSheet||'',row:h.sourceRow||'',returnedAt:h.returnedAt||''}))
    });
   }
   return {byDocument,byFamilyCategory:recurringFamilies,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
@@ -225,7 +225,7 @@
    const unchanged=issues.some(issue=>['title','workflow','databook','tag','discipline'].includes(issue.field)&&text(h[issue.field])&&text(r[issue.field])&&norm(h[issue.field])===norm(r[issue.field]));
    add(unchanged?'FISCAL-UNCHANGED-PRECEDENT':'FISCAL-PRECEDENT','history','fiscalComment',
     unchanged?'Um valor citado em apontamento anterior permanece igual. Confira a correção antes do envio.':'Há apontamento histórico para esta ocorrência. Consulte a evidência anterior, sem presumir que a falha ainda existe.',
-    [{comment:h.fiscalComment,decision:h.fiscalDecision,allocation:h.allocation,file:h.sourceFile,sheet:h.sourceSheet,row:h.sourceRow,date:h.returnedAt,revisionKnown:Boolean(h.revision),unchangedValue:unchanged}],
+    [{comment:h.fiscalComment,decision:h.fiscalDecision,allocation:h.allocation,file:h.sourceFile,sourceVersion:h.sourceVersion||h.sourceHash||'',sheet:h.sourceSheet,row:h.sourceRow,date:h.returnedAt,revisionKnown:Boolean(h.revision),unchangedValue:unchanged}],
     {severity:unchanged?'pending':'suggestion',source:'Precedente fiscal específico (não normativo)',origin:'Histórico Fiscal 01',normativeProof:false});
   }
   const family=fiscalFamily(r.document);
