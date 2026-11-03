@@ -1,16 +1,18 @@
 import {service,type Data} from './service';
 
 export type Message={id:string;role:'user'|'assistant';text:string};
+type SheetChoice={name:string;options:Array<{name:string;model:string;documentCount:number}>;selected:string};
 type State={
  open:boolean;messages:Message[];sessionId:string;revision:number;
- pending:boolean;error:string;sessions:Data[];
+ pending:boolean;error:string;sessions:Data[];pendingSheets:SheetChoice[];
 };
 const welcome='Olá! Sou o Robô Auditor Preventivo do GRCON. Posso conferir uma alocação criada aqui ou uma planilha externa, antes do envio à fiscalização. Envie a alocação, anexe as LDs necessárias e peça para auditar.';
 const initial=():State=>({
  open:false,messages:[{id:'hello',role:'assistant',text:welcome}],
- sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[]
+ sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[]
 });
 let state=initial(),generation=0;
+let pendingAllocationFiles:File[]=[];
 const listeners=new Set<()=>void>();
 const emit=(patch:Partial<State>)=>{state={...state,...patch};listeners.forEach(f=>f());};
 const say=(text:string,role:Message['role']='assistant')=>emit({
@@ -111,12 +113,59 @@ export const assistant={
  });},
  upload(files:File[],kind:'allocation'|'ld'){return execute(async(speak)=>{
   if(!files.length){speak('Nenhum arquivo selecionado.');return;}
-  if(kind==='allocation')await service.importMany(files);
-  else await service.importAssistantLd(files);
-  speak('Recebi '+files.length+' '+(kind==='allocation'?'alocação(ões)':'LD(s)')+
-   '. Originais preservados. '+(kind==='allocation'?'Use "Auditar arquivos" para iniciar a conferência.':'Posso usar essas LDs na próxima conferência.'));
+  if(kind==='allocation'){
+   const inspections=await service.inspectBatch(files) as Data[];
+   const choices=inspections.filter(x=>x.requiresSelection).map(x=>({
+    name:x.name,options:x.candidates,selected:''
+   }));
+   if(choices.length){
+    pendingAllocationFiles=files.slice();
+    emit({pendingSheets:choices});
+    speak('Recebi '+files.length+' alocação(ões). Algumas planilhas possuem várias abas compatíveis. Selecione as abas indicadas para iniciar a conferência preventiva sem presumir a origem.');
+    return;
+   }
+   await service.importMany(files);
+   pendingAllocationFiles=[];
+   emit({pendingSheets:[]});
+   speak('Recebi e validei '+files.length+' alocação(ões). Documentos incorporados à sessão com origem e ocorrências preservadas.');
+   await audit(false,speak);
+  }else{
+   const before=service.snapshot(),hadRows=before.rows.length>0;
+   const result=await service.importAssistantLd(files) as Data;
+   speak('Recebi '+files.length+' LD(s) de origem. As alocações anexadas permanecem na sessão.');
+   if(result?.unchanged){
+    if(before.progress<before.total)speak('Progresso preservado. Reanexe as alocações, quando necessário, e use Retomar análise.');
+    else speak('Fontes idênticas reconectadas. Nenhum resultado ou decisão foi modificado.');
+   }else if(service.snapshot().records.length){
+    speak(hadRows?'As referências foram atualizadas. Vou refazer a auditoria para não reutilizar resultados antigos.':'Vou iniciar a auditoria usando as LDs recebidas.');
+    await audit(false,speak);
+   }else speak('Agora envie uma alocação para conferir antes da fiscalização.');
+  }
  });},
- auditFiles(){return execute(speak=>audit(false,speak));},
+ chooseSheet(fileName:string,sheet:string){
+  if(state.pending)return;
+  emit({pendingSheets:state.pendingSheets.map(x=>x.name===fileName?{...x,selected:sheet}:x)});
+ },
+ cancelSheetSelection(){
+  if(state.pending)return;
+  pendingAllocationFiles=[];emit({pendingSheets:[]});
+  say('Seleção de abas cancelada. Os arquivos originais e alocações já carregadas permanecem intactos.');
+ },
+ confirmSheetSelection(){return execute(async(speak)=>{
+  if(!state.pendingSheets.length||!pendingAllocationFiles.length){speak('Não há planilhas aguardando seleção.');return;}
+  if(state.pendingSheets.some(x=>!x.options.some(option=>option.name===x.selected))){
+   speak('Escolha uma aba válida para cada planilha antes de iniciar.');return;
+  }
+  const selected=Object.fromEntries(state.pendingSheets.map(x=>[x.name,x.selected]));
+  await service.importMany(pendingAllocationFiles,selected);
+  speak('Abas confirmadas e arquivos validados. Vou conferir as ocorrências antes do envio à fiscalização.');
+  pendingAllocationFiles=[];emit({pendingSheets:[]});
+  await audit(false,speak);
+ });},
+ auditFiles(){return execute(async(speak)=>{
+  if(state.pendingSheets.length){speak('Confirme primeiro as abas das planilhas anexadas.');return;}
+  await audit(false,speak);
+ });},
  resume(){return execute(speak=>audit(true,speak));},
  pause(){
   if(!state.pending&&!service.snapshot().busy){say('Não existe uma auditoria em andamento para pausar.');return;}
@@ -213,4 +262,4 @@ export const assistant={
  });},
 };
 for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])
- window.addEventListener(event,()=>{generation++;state=initial();listeners.forEach(f=>f());});
+ window.addEventListener(event,()=>{generation++;pendingAllocationFiles=[];state=initial();listeners.forEach(f=>f());});
