@@ -26,34 +26,91 @@ export const service={
   await service.save();const t=epoch;const result=await service.assistantRpc('authorize',{runId:state.runId});current(t);
   const events=[...state.events,...result.events];emit({events,groups:remainingGroups(events)});savedEvents=state.events.length;return result.events.length;
  },
- async importMany(files:File[]){return task(async()=>{
-  const t=epoch,c=requireSession();if(files.length>20)throw Error('Selecione até 20 arquivos por lote.');
+ async inspectBatch(files:File[]){
+  return task(async()=>{
+   if(!files.length||files.length>20)throw Error('Selecione de 1 a 20 alocações XLSX por lote.');
+   const total=files.reduce((sum,file)=>sum+file.size,0);
+   if(total>100*1024*1024)throw Error('O lote ultrapassa 100 MB. Divida os arquivos.');
+   const options:Data[]=[];
+   for(const file of files){
+    const tabs=await compute('inspect',{file});
+    const candidates=(tabs as Data[]).filter(t=>['official-16','mapped'].includes(t.model)&&t.documentCount>0);
+    if(!candidates.length)throw Error(file.name+': não encontrei uma aba com códigos documentais e cabeçalhos reconhecíveis. Confira o arquivo antes do envio.');
+    const official=candidates.filter(t=>t.model==='official-16');
+    const officialGeneral=official.filter(t=>t.name.toUpperCase()==='GERAL');
+    const mappedGeneral=candidates.filter(t=>t.name.toUpperCase()==='GERAL');
+    const preferred=officialGeneral.length===1?officialGeneral[0]:official.length===1?official[0]:mappedGeneral.length===1?mappedGeneral[0]:candidates.length===1?candidates[0]:null;
+    options.push({name:file.name,candidates:candidates.map(t=>({name:t.name,model:t.model,documentCount:t.documentCount})),preferred:preferred?.name||'',requiresSelection:!preferred});
+   }
+   return options;
+  });
+ },
+ async importMany(files:File[],selectedSheets:Record<string,string>={}){return task(async()=>{
+  const t=epoch,c=requireSession();
+  if(!files.length||files.length>20)throw Error('Selecione de 1 a 20 alocações XLSX por lote.');
+  if(files.reduce((sum,file)=>sum+file.size,0)>100*1024*1024)throw Error('Lote acima de 100 MB. Divida os arquivos.');
   const entries:Data[]=[],records:Data[]=[];
+  const seenNames=new Map<string,string>();
   for(const file of files){
    const tabs=await compute('inspect',{file});current(t);
-   const official=tabs.filter((x:Data)=>x.model==='official-16'&&x.documentCount>0);
-   const general=official.filter((x:Data)=>x.name==='GERAL');
-   const candidate=general.length===1?general[0]:official.length===1?official[0]:null;
-   if(!candidate)throw Error(file.name+': alocação oficial não identificada de forma única. Envie LDs pelo campo de LDs ou use a importação avançada.');
+   const compatible=(tabs as Data[]).filter(x=>['official-16','mapped'].includes(x.model)&&x.documentCount>0);
+   const official=compatible.filter(x=>x.model==='official-16');
+   const officialGeneral=official.filter(x=>x.name.toUpperCase()==='GERAL');
+   const mappedGeneral=compatible.filter(x=>x.name.toUpperCase()==='GERAL');
+   const preferred=officialGeneral.length===1?officialGeneral[0]:official.length===1?official[0]:mappedGeneral.length===1?mappedGeneral[0]:compatible.length===1?compatible[0]:null;
+   const requested=selectedSheets[file.name];
+   const candidate=requested?compatible.find(x=>x.name===requested):preferred;
+   if(!candidate)throw Error(file.name+': mais de uma aba documental possível ('+compatible.map(x=>x.name).join(', ')+'). Selecione a aba correta para continuar.');
    const parsed=await compute('parse',{file,sheet:candidate.name,contract:c.membership.contract_id,allocation:identifyAllocation(file.name)});current(t);
-   const old=(state.context.sources||[]).find((x:Data)=>x.name===file.name);
-   if(old&&old.sha256!==parsed.sha256)throw Error('Há outro arquivo com o mesmo nome e conteúdo diferente. Renomeie a cópia.');
-   entries.push({name:file.name,sha256:parsed.sha256,kind:'allocation',sheet:candidate.name});records.push(...parsed.records);
+   if(parsed.records.some((r:Data)=>Boolean(r.fiscalComment||r.returnedAt)))throw Error(file.name+': o arquivo contém apontamentos ou retorno da fiscalização. Este robô é exclusivo para auditoria preventiva; use os comentários fiscais apenas como base histórica de conhecimento.');
+   const named=seenNames.get(file.name);
+   if(named&&named!==parsed.sha256)throw Error(file.name+': o lote contém arquivos diferentes com o mesmo nome. Renomeie uma cópia.');
+   const old=(state.context.sources||[]).find((x:Data)=>x.name===file.name&&x.kind==='allocation');
+   if(old&&old.sha256!==parsed.sha256)throw Error(file.name+': já existe outro conteúdo com esse nome. Renomeie a nova cópia para preservar a origem.');
+   seenNames.set(file.name,parsed.sha256);
+   entries.push({name:file.name,sha256:parsed.sha256,kind:'allocation',sheet:candidate.name,model:parsed.model,documentCount:parsed.records.length,correctionMode:parsed.model==='official-16'?'official-16':'audit-only'});
+   records.push(...parsed.records);
   }
-  const checkpoint=state.context.checkpoint&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.sha256===e.sha256));
-  if(!checkpoint)clearResults();const sources=[...(state.context.sources||[])];
-  for(let i=0;i<entries.length;i++){const entry=entries[i];sourceFiles.set(entry.sha256,files[i]);if(!sources.some((x:Data)=>x.sha256===entry.sha256))sources.push(entry);}
-  const all=[...state.records,...records];const unique=new Map(all.map(r=>[JSON.stringify([r.sourceHash||r.document,r.sourceSheet||r.revision,r.sourceRow||r.allocation]),r]));
-  emit({records:[...unique.values()],context:{...state.context,sources},message:entries.length+' alocações recebidas. Originais preservados.'});
+  const all=[...state.records,...records];
+  const unique=new Map(all.map(r=>[JSON.stringify([r.contract,r.sourceHash||r.sourceFile||r.document,r.sourceSheet||'',r.sourceRow||'',r.allocation||'',r.document,r.revision]),r]));
+  if(unique.size>50000)throw Error('O conjunto excede 50.000 registros. Divida a auditoria em lotes.');
+  // Commit only after every workbook, selection and origin is verified.
+  const sources=[...(state.context.sources||[])];
+  for(let i=0;i<entries.length;i++){
+   const entry=entries[i];sourceFiles.set(entry.sha256,files[i]);
+   if(!sources.some((x:Data)=>x.sha256===entry.sha256&&x.kind==='allocation'))sources.push(entry);
+  }
+  const checkpoint=state.context.checkpoint&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.kind==='allocation'&&old.sha256===e.sha256))&&unique.size===state.records.length;
+  if(!checkpoint)clearResults();
+  emit({records:[...unique.values()],context:{...state.context,sources},message:entries.length+' alocação(ões) recebida(s) e validada(s). Arquivos originais preservados.'});
  });},
  async importAssistantLd(files:File[]){
-  const t=epoch;if(files.length>20)throw Error('Selecione até 20 LDs.');const entries:Data[]=[];
-  for(const file of files){const sha256=await compute('fingerprint',{file});current(t);const old=(state.context.sources||[]).find((x:Data)=>x.name===file.name);if(old&&old.sha256!==sha256)throw Error('Nome de LD repetido com conteúdo diferente. Renomeie a cópia.');entries.push({name:file.name,sha256,kind:'ld'});}
-  const checkpoint=state.context.checkpoint&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.sha256===e.sha256));const previous=state,previousRequest=saveRequest,previousEvents=savedEvents,previousMeta=saveMetadata;
-  await service.importLd([...new Map([...(state.context.sources||[]).filter((x:Data)=>x.kind==='ld').map((x:Data)=>[x.name,sourceFiles.get(x.sha256)]),...files.map(f=>[f.name,f])]).values()].filter(Boolean) as File[]);current(t);if(checkpoint){saveRequest=previousRequest;savedEvents=previousEvents;saveMetadata=previousMeta;emit(previous);}
+  const t=epoch;
+  requireSession();
+  if(!files.length||files.length>20)throw Error('Selecione de 1 a 20 LDs XLSX.');
+  const entries:Data[]=[],names=new Map<string,string>();
+  for(const file of files){
+   const sha256=await compute('fingerprint',{file});current(t);
+   const old=(state.context.sources||[]).find((x:Data)=>x.name===file.name&&x.kind==='ld');
+   if(old&&old.sha256!==sha256)throw Error('LD '+file.name+': mesmo nome, conteúdo diferente. Renomeie para preservar o histórico.');
+   if(names.has(file.name)&&names.get(file.name)!==sha256)throw Error('Duas LDs diferentes possuem o mesmo nome: '+file.name);
+   names.set(file.name,sha256);
+   entries.push({name:file.name,sha256,kind:'ld'});
+  }
+  const previous=state,previousRequest=saveRequest,previousEvents=savedEvents,previousMeta=saveMetadata;
+  const unchanged=Boolean(state.context.checkpoint)&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.kind==='ld'&&old.sha256===e.sha256));
+  const previousLd=(state.context.sources||[]).filter((x:Data)=>x.kind==='ld')
+   .map((x:Data)=>[x.name,sourceFiles.get(x.sha256)] as const).filter((pair):pair is readonly [string,File]=>Boolean(pair[1]));
+  const allLd=[...new Map<string,File>([...previousLd,...files.map(f=>[f.name,f] as const)]).values()];
+  // importLd clears obsolete findings/decisions, never the underlying allocation records.
+  await service.importLd(allLd);current(t);
+  if(unchanged){saveRequest=previousRequest;savedEvents=previousEvents;saveMetadata=previousMeta;emit(previous);}
   const sources=[...(state.context.sources||[])];
-  for(let i=0;i<entries.length;i++){sourceFiles.set(entries[i].sha256,files[i]);if(!sources.some((x:Data)=>x.sha256===entries[i].sha256))sources.push(entries[i]);}
-  emit({context:{...state.context,sources,ldHashes:Object.fromEntries(sources.filter((x:Data)=>x.kind==='ld').map((x:Data)=>[x.name,x.sha256]))}});
+  for(let i=0;i<entries.length;i++){
+   sourceFiles.set(entries[i].sha256,files[i]);
+   if(!sources.some((x:Data)=>x.sha256===entries[i].sha256&&x.kind==='ld'))sources.push(entries[i]);
+  }
+  emit({context:{...state.context,sources,ldHashes:Object.fromEntries(sources.filter((x:Data)=>x.kind==='ld').map((x:Data)=>[x.name,x.sha256]))},message:unchanged?'LDs originais reconectadas para continuar a auditoria.':'LDs anexadas. Alocações preservadas; resultados anteriores invalidados para nova conferência.'});
  },
  async assistantPackage(sessionId:string,generateOfficial=false){return task(async()=>{
   if(!state.rows.length||state.progress!==state.total||state.rows.length!==state.total||state.records.length!==state.total)throw Error('Conclua a auditoria antes de preparar o pacote ou emitir nova alocação.');
