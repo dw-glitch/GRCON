@@ -70,7 +70,7 @@ Memória não foi medida de forma independente (apenas `usedJSHeapSize` pontual,
   situação, com atalho “Importar ou trocar bases” (reaproveita o gerenciador existente; nenhum
   mecanismo de importação novo).
 * Indicadores reorganizados em dois grupos que respondem às perguntas operacionais:
-  **PW** — Universo analisado, Cadastrados, Emitidos, *Aguardando cadastro*, *Cadastrados, não
+  **PW** — Documentos controlados, Cadastrados, Emitidos, *Aguardando cadastro*, *Cadastrados, não
   emitidos* (com % sobre os documentos que dependem do PW); **SIGEM** — Postados, Em conformidade,
   Com pendências. Cada cartão filtra a relação abaixo; cor da borda + texto (não só cor).
 * Definições (`reconcileManagerial`): `pwApplicable` = vigentes, não cancelados, não CV;

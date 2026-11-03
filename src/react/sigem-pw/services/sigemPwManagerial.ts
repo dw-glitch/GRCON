@@ -31,6 +31,8 @@ export interface ManagerialDocument {
   title: string;
   referenceRevision: string;
   referenceStatus: string;
+  /** Aba da LD de onde o documento veio (N-1710, ET, CV…); serve de filtro por classe de código. */
+  sheet: string;
   sources: string[];
   conflict: boolean;
   pwRegistered: boolean;
@@ -249,6 +251,7 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     rows.push({
       code: String(reference.canonicalDocument || reference.document || key),
       title: String(reference.title || ""), referenceRevision, referenceStatus,
+      sheet: String(reference.sheetName || reference.documentClass || "").trim(),
       sources: Array.isArray(reference.referenceSources) ? reference.referenceSources.map(String)
         : [String(state.ld.meta?.fileName || "")],
       conflict, pwRegistered: registered, pwEmitted: emitted, pwNotApplicable,

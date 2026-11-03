@@ -52,7 +52,7 @@ export function SigemPwActiveBases({ state, onManage }: { state: SigemPwState; o
               ) : (
                 <>
                   <strong>Não carregada</strong>
-                  <small>{item.id === "ld" ? "Necessária para delimitar o universo analisado." : "Importe esta base para comparar."}</small>
+                  <small>{item.id === "ld" ? "Necessária para saber quais documentos são controlados." : "Importe esta base para comparar."}</small>
                 </>
               )}
               <b className={meta ? "spw-base-status loaded" : "spw-base-status pending"}>{meta ? "✓ Em uso" : "! Pendente"}</b>

@@ -61,7 +61,7 @@ const LOGO_HEIGHT = 42;
 const REVISIONS = Object.freeze(["0", "A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"]);
 export const COORDINATOR_HEADERS = Object.freeze([
   "DOCUMENTO", "REVISÃO", "TÍTULO", "STATUS", "STATUS SIGEM", "REVISÃO",
-  "STATE", "Última emissão", "AÇÃO", "Cadastro",
+  "STATE", "Última emissão", "AÇÃO", "Cadastro", "ABA",
   ...REVISIONS.map(revision => "Rev. " + revision),
 ]);
 const GRCON = Object.freeze({
@@ -140,8 +140,8 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
     emitted: safeNumber(report.summary.emitted), posted: safeNumber(report.summary.posted),
     compliant: safeNumber(report.summary.compliant), pending: safeNumber(report.summary.pending),
   };
-  const header1: CellValue[] = Array(31).fill("");
-  const header2: CellValue[] = Array(31).fill("");
+  const header1: CellValue[] = Array(32).fill("");
+  const header2: CellValue[] = Array(32).fill("");
   const totals = new Map(REVISIONS.map(r => [r, 0]));
   // Indicadores de documentos únicos: nunca somar revisões para obter total oficial.
   // As colunas de revisão começam em K; por isso as pendências ocupam J (valor numérico
@@ -151,7 +151,7 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   ["CONTROLE DOCUMENTAL • GRCON", "ATIVOS", summary.active, "PW CAD.", summary.registered,
    "PW EMIT.", summary.emitted, "SIGEM", summary.posted, summary.pending];
   header2[0] = "LD"; header2[5] = "PW";
-  REVISIONS.forEach((rev, index) => { header2[index + 10] = rev; });
+  REVISIONS.forEach((rev, index) => { header2[index + 11] = rev; });
   const master: Matrix = [header1, header2, [...COORDINATOR_HEADERS]];
   const indexed = indexPwRecords(state);
   const ldByCode = new Map<string, string>();
@@ -189,10 +189,11 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
       row.code, row.referenceRevision, row.title, row.referenceStatus, row.sigemStatus,
       ...results, row.action, row.pwNotApplicable ? "Não aplicável (CV)"
         : row.pwRegistered ? "Cadastrado" : "Não cadastrado",
+      row.sheet,
       ...REVISIONS.map(revision => available.has(revision) ? "x" : ""),
     ]);
   }
-  REVISIONS.forEach((rev, index) => { header1[index + 10] = totals.get(rev) || 0; });
+  REVISIONS.forEach((rev, index) => { header1[index + 11] = totals.get(rev) || 0; });
   // O modelo do coordenador é referência de INFORMAÇÕES, não de ordem visual.
   // A aba antes vazia ("SIGEM") dá lugar a um resumo útil sem fabricar
   // linhas da Consulta Geral. A base PW mantém todas as 70 colunas originais.
@@ -213,8 +214,8 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   const section = (title: string) => { overview.push([title, ""]); overviewSections.push(overview.length); };
   line("GRCON | SIGEM × PW", "CONTROLE DOCUMENTAL INTEGRADO");
   line("INDICADOR / FONTE", "VALOR");
-  section("UNIVERSO E CADASTRO NO PW");
-  line("Universo analisado (documentos únicos nas referências vigentes)", summary.active);
+  section("DOCUMENTOS CONTROLADOS E CADASTRO NO PW");
+  line("Documentos controlados (únicos, nas LDs ativas)", summary.active);
   line("Cadastrados no PW (CSG/QTM)", summary.registered);
   line("Emitidos no PW", summary.emitted);
   line("Aguardando cadastro no PW", awaiting);
@@ -225,7 +226,7 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   line("Postados no SIGEM", summary.posted);
   line("Em conformidade", summary.compliant);
   line("Com pendência ou em andamento", summary.pending);
-  section("FORA DO UNIVERSO E CONFLITOS");
+  section("FORA DAS LDS E CONFLITOS");
   line("Cancelados nas referências", report.summary.cancelled);
   line("Conflitos entre referências", report.summary.conflicts);
   line("SIGEM fora das referências (aba “Fora das LDs”)", report.excludedSigem);
@@ -247,14 +248,14 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   // Usa SEMPRE o agregado completo (todas as revisões, todas as classes), nunca
   // a lista filtrada que esteja na tela.
   const lists = (state.aggregates?.["all:all"] || state.result)?.lists;
-  const outside: Matrix = [["ORIGEM", "DOCUMENTO", "REVISÃO", "STATUS SIGEM", "STATUS PW", "EMISSÃO PW", "EMPRESA PW (COL. C)", "LINHA NO ARQUIVO PW", "SITUAÇÃO"]];
+  const outside: Matrix = [["ORIGEM", "DOCUMENTO", "REVISÃO", "STATUS SIGEM", "STATUS PW", "EMISSÃO PW", "EMPRESA PW (COL. C)", "LINHA NO ARQUIVO PW", "SITUAÇÃO", "CLASSE"]];
   const seenOutside = new Set<string>();
   for (const [origin, rows] of [["SIGEM", lists?.sigemN1710OutsideLd || []], ["PW", lists?.pwN1710OutsideLd || []]] as const) {
     for (const item of rows) {
       const mark = origin + "|" + text(item.document) + "|" + text(item.revision);
       if (seenOutside.has(mark)) continue;
       seenOutside.add(mark);
-      outside.push([origin, text(item.document), text(item.revision), text(item.sigemStatus), text(item.pwStatus), text(item.pwEmission), text(item.pwCompany), text(item.pwSourceRow), text(item.situation)]);
+      outside.push([origin, text(item.document), text(item.revision), text(item.sigemStatus), text(item.pwStatus), text(item.pwEmission), text(item.pwCompany), text(item.pwSourceRow), text(item.situation), text(item.documentClass)]);
     }
   }
   return {
@@ -282,7 +283,7 @@ function placeLogo(workbook: ExcelWorkbook, sheet: ExcelSheet, logo: Coordinator
 }
 function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.views = [{ state: "frozen", xSplit: 2, ySplit: 3, topLeftCell: "C4" }];
-  sheet.autoFilter = `A3:AE${Math.max(4, plan.sheets[MAIN_SHEET].length)}`;
+  sheet.autoFilter = `A3:AF${Math.max(4, plan.sheets[MAIN_SHEET].length)}`;
   sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:3" };
   sheet.headerFooter = { oddFooter: "&LGRCON · SIGEM × PW&CPágina &P de &N&R&D" };
   sheet.getRow(1).height = 28;
@@ -298,13 +299,14 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.getColumn(8).width = 18;
   sheet.getColumn(9).width = 48;
   sheet.getColumn(10).width = 19;
-  for (let index = 11; index <= 31; index++) sheet.getColumn(index).width = 10;
+  sheet.getColumn(11).width = 14;
+  for (let index = 12; index <= 32; index++) sheet.getColumn(index).width = 10;
   // Excel rows 4+ are actual data, never inject unrelated title rows.
-  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].forEach(index => sheet.getColumn(index).numFmt = "@");
-  for (let column = 0; column < 31; column++) {
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(index => sheet.getColumn(index).numFmt = "@");
+  for (let column = 0; column < 32; column++) {
     formatHeader(sheet.getCell(`${columnLetter(column)}3`));
     const top = sheet.getCell(`${columnLetter(column)}1`);
-    formatHeader(top, column >= 10 ? GRCON.teal : GRCON.navy);
+    formatHeader(top, column >= 11 ? GRCON.teal : GRCON.navy);
     const group = sheet.getCell(`${columnLetter(column)}2`);
     formatHeader(group, GRCON.slate);
   }
@@ -342,6 +344,9 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
       : info.pwSituation === "registered" ? GRCON.amber
       : info.pwSituation === "missing" ? GRCON.red : GRCON.muted;
     registration.fill = { type: "pattern", pattern: "solid", fgColor: { argb: registrationFill } };
+    const aba = sheet.getCell(`K${excelRow}`);
+    aba.font = { name: "Aptos", size: 9, bold: true, color: { argb: GRCON.navy } };
+    aba.alignment = { vertical: "middle", horizontal: "center" };
     const action = text(plan.sheets[MAIN_SHEET][excelRow - 1][8]);
     const situation = sheet.getCell(`I${excelRow}`);
     if (/Sem ação necessária/.test(action)) situation.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.green } };
@@ -402,10 +407,10 @@ function styleOverview(sheet: ExcelSheet, plan: CoordinatorPlan): void {
 }
 function styleOutside(sheet: ExcelSheet, rows: number): void {
   sheet.views = [{ state: "frozen", ySplit: 1, topLeftCell: "A2" }];
-  sheet.autoFilter = `A1:I${Math.max(2, rows)}`;
+  sheet.autoFilter = `A1:J${Math.max(2, rows)}`;
   sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:1" };
   sheet.getRow(1).height = 30;
-  [12, 58, 10, 24, 24, 16, 20, 16, 42].forEach((width, index) => {
+  [12, 58, 10, 24, 24, 16, 20, 16, 42, 16].forEach((width, index) => {
     const column = sheet.getColumn(index + 1);
     column.width = width;
     column.numFmt = "@";

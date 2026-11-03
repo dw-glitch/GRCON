@@ -44,3 +44,6 @@ npm run build
 * A coluna **CHECK REV.** (VERDADEIRO/FALSO) foi **removida**: nenhuma outra coluna dependia dela (só lia B e F). O quadro passa a ter 31 colunas `A:AE`: …`F` revisão PW, `G` STATE, `H` Última emissão, `I` AÇÃO, `J` Cadastro, matriz de revisões `0..U` em `K:AE`. As fórmulas F:H continuam apontando para a linha de origem em REL. PW. As pendências passam para `J1` (valor numérico com formato “PENDÊNCIAS: n”) para não colidir com a matriz de revisões.
 * O cabeçalho das abas Resumo e Conferência Documental recebe a **logo GRCON** sobre faixa branca (opcional: sem o arquivo, o relatório é gerado normalmente).
 * A comparação offline com o modelo original (`scripts/sigem-pw-release-parity.cjs`) deixa de ser aplicável a esta aba, por escolha explícita.
+
+* **Coluna ABA** (K) na Conferência Documental: aba da LD de origem (N-1710, ET, CV…), para filtrar por classe de código; a matriz de revisões passa a `L:AF` (quadro `A:AF`, 32 colunas). A aba “Fora das LDs” ganhou a coluna **CLASSE**.
+* Visão gerencial da tela: cartões trocados por painel gráfico (universo → barra empilhada de cadastro/emissão no PW → postagem e conformidade no SIGEM); trechos e legendas filtram a relação de documentos.
