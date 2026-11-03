@@ -32,7 +32,7 @@ const assistant=qaModule.exports.assistant,conversation=()=>assistant.snapshot()
  await assistant.upload([one],'allocation');
  assert.ok(calls.includes('analyze:false'),'A valid upload must start the audit without a second command');
  assert.match(conversation(),/Recebi e validei 1 alocação/);
- assert.match(conversation(),/Analisei 1 documento/);
+ assert.match(conversation(),/Auditoria preventiva concluída: 1 documento/);
  assert.equal(assistant.snapshot().pendingSheets.length,0);
  const beforeAmbig=calls.filter(x=>x.startsWith('analyze:')).length;
  choices=[{name:'COM-MULTIPLAS-ABAS.xlsx',requiresSelection:true,candidates:[

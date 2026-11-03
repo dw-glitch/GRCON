@@ -22,6 +22,11 @@
    return part;
   });
  }
+ function mergedCovers(merges,ref){
+  if(!Array.isArray(merges)||!merges.length)return false;
+  const rank=x=>[...x].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0),col=rank(ref.match(/^[A-Z]+/)[0]),row=Number(ref.match(/\d+$/)[0]);
+  return merges.some(m=>m&&m.s&&m.e&&row>=m.s.r+1&&row<=m.e.r+1&&col>=m.s.c+1&&col<=m.e.c+1);
+ }
  function replaceCell(xml,ref,value){
   const cellRe=new RegExp('<c\\b[^>]*\\br="'+ref+'"[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)');
   const matched=xml.match(cellRe),newValue='<is><t xml:space="preserve">'+xmlEscape(value)+'</t></is>';
@@ -65,16 +70,19 @@
    if(!row||(!event.humanReview&&!(event.serverAuthorized===true&&event.ruleId&&event.ruleVersion))||!Array.isArray(event.evidence)||!event.evidence.some(x=>text(x).trim())||!event.actor||!event.justification)throw Error('A correção não tem aprovação humana e evidência comprovada.');
    const original=originalByRow.get(row.sourceRow);
    if(!original||original.document!==row.document||original.sourceRow!==row.sourceRow||original.allocation!==row.allocation && original.allocation)throw Error('Código ou linha diferente da origem auditada.');
+   if(text(event.revision)!==text(row.revision))throw Error('Revisão diferente da origem auditada em '+row.document+'. Ocorrências de revisões distintas não são intercambiáveis.');
    const column=a1col(event.field),cell=column+row.sourceRow;
    const current=text(book.Sheets.GERAL[cell]?.v),before=originalValue(original,event.field),after=text(event.after);
    if(before!==current||text(event.before)!==before)throw Error('Valor original divergente na célula '+cell+'. Reimporte o arquivo.');
    if(book.Sheets.GERAL[cell]?.f)throw Error('A célula '+cell+' contém fórmula. Ajuste na origem.');
+   if(mergedCovers(book.Sheets.GERAL['!merges'],cell))throw Error('A célula '+cell+' faz parte de uma região mesclada e não pode ser alterada com segurança.');
    if(!after.trim()||after.length>2000||after===before)throw Error('A correção aprovada em '+cell+' está vazia ou não altera o original.');
    if(seen.has(cell))throw Error('Mais de uma correção para '+cell);seen.add(cell);
-   replacements.push({cell,after,document:row.document,lineage:row.lineage,field:event.field,before});
+   replacements.push({cell,after,document:row.document,revision:row.revision,lineage:row.lineage,field:event.field,before,row:row.sourceRow,column,ruleId:event.ruleId||'',ruleVersion:event.ruleVersion||0,evidence:event.evidence,actor:event.actor,decision:event.decision});
   }
   const zip=await JSZip.loadAsync(bytes,{checkCRC32:true}),path=await findSheetPart(zip,'GERAL');
   let xml=await zip.file(path).async('string');
+  if(/<sheetProtection\b(?![^>]*\bsheet="(?:0|false)")[^>]*\bsheet="(?:1|true)"/.test(xml))throw Error('A aba GERAL está protegida. Remova a proteção na origem antes de gerar a cópia.');
   for(const change of replacements)xml=replaceCell(xml,change.cell,change.after);
   zip.file(path,xml);
   const output=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
@@ -92,7 +100,9 @@
    const a=originalSheet[key],b=finalSheet[key];
    if(text(a?.v)!==text(b?.v)||text(a?.f)!==text(b?.f)||text(a?.t)!==text(b?.t))throw Error('Célula não autorizada modificada: '+key);
   }
-  return {bytes:output,changed:replacements.length,changes:replacements.map(({cell,document,lineage,field,before,after})=>({cell,document,lineage,field,before,after})),originalHash:hash};
+  const outputHash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',output))).map(n=>n.toString(16).padStart(2,'0')).join('');
+  if(outputHash===hash)throw Error('A cópia não difere do original.');
+  return {bytes:output,changed:replacements.length,changes:replacements.map(c=>({cell:c.cell,document:c.document,revision:c.revision,lineage:c.lineage,field:c.field,before:c.before,after:c.after,row:c.row,column:c.column,sheet:'GERAL',file:file.name,ruleId:c.ruleId,ruleVersion:c.ruleVersion,reference:(c.evidence||[]).slice(0,3),actor:c.actor,decision:c.decision,verified:true})),originalHash:hash,outputHash,sheet:'GERAL'};
  }
  root.GrconAllocationRevision=Object.freeze({revise});
 })(typeof globalThis!=='undefined'?globalThis:this);

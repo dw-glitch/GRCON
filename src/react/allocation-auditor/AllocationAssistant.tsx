@@ -90,6 +90,22 @@ export function AllocationAssistant(){
     </div>
    </section>}
    {Boolean(s.context.sources?.length)&&<details><summary>Arquivos recebidos ({s.context.sources.length})</summary>{s.context.sources.map((f:Data)=><p key={f.sha256}>{f.name} · {f.kind==='ld'?'LD':'Alocação'}{f.model==='mapped'?' · layout mapeado (sem correção automática da planilha)':''}</p>)}</details>}
+   {chat.plan&&s.rows.length>0&&s.progress===s.total&&<section className="aac-plan" aria-label="Resultado da auditoria preventiva">
+    <strong>Auditoria preventiva concluída</strong>
+    <dl className="aac-indicators">
+     <div><dt>Documentos analisados</dt><dd>{chat.plan.analyzed}</dd></div>
+     <div><dt>Correções seguras</dt><dd>{chat.plan.safe}</dd></div>
+     <div><dt>Propostas para revisão</dt><dd>{chat.plan.proposed}</dd></div>
+     <div><dt>Pendências</dt><dd>{chat.plan.pending}</dd></div>
+     <div><dt>Sem problemas detectados</dt><dd>{chat.plan.clear}</dd></div>
+    </dl>
+    <div className="aac-plan-actions">
+     {chat.plan.safe>chat.plan.safeAuthorized&&<button type="button" disabled={busy} onClick={()=>void assistant.applySafe()}>Aplicar correções seguras</button>}
+     {chat.plan.proposed>0&&<a href="#aac-groups" className="aac-link">Revisar propostas</a>}
+     <button className="primary-button" type="button" disabled={busy} onClick={()=>void assistant.download()}>Gerar arquivos corrigidos</button>
+    </div>
+    {chat.plan.pending>0&&<small>As pendências permanecem registradas no relatório; nenhum registro original é alterado sem evidência.</small>}
+   </section>}
    {s.rows.length>0&&<div className="aac-result"><strong>{s.progress} de {s.total} documentos analisados</strong><p>{s.summary.errors||0} com não conformidades confirmadas · {s.summary.pending||0} verificações pendentes · {s.summary.suggestions||0} sugestões preventivas</p><button className="primary-button" disabled={busy||s.progress!==s.total} onClick={()=>void assistant.download()}>Baixar pacote completo</button>
    <details><summary>Nova alocação e linhas da Central</summary><p>Emissão opcional, separada da auditoria preventiva. Esta ação cria nova numeração oficial no Gerador e não altera a Central compartilhada.</p>
     {confirmIssue?<div className="aac-issue-confirm" role="group" aria-label="Confirmar nova emissão">
@@ -98,7 +114,7 @@ export function AllocationAssistant(){
      <button type="button" disabled={busy} onClick={()=>setConfirmIssue(false)}>Cancelar</button>
     </div>:<button disabled={busy||!s.total||s.progress!==s.total||s.rows.length!==s.total} onClick={()=>setConfirmIssue(true)}>Gerar nova alocação e pacote</button>}
    </details>
-   <details><summary>Resolver propostas agrupadas ({groups.length})</summary>{groups.map((group:Data)=><article key={group.id}><p>{group.rows.length} ocorrência(s) · {group.field}: {group.before||'vazio'} → {group.after}</p><small>{group.justification}</small><button disabled={busy} onClick={()=>void assistant.group(group)}>Aplicar esta decisão ao grupo</button></article>)}{!groups.length&&<p>Não há propostas determinísticas agrupáveis. Consulte as fontes indicadas no relatório.</p>}</details></div>}
+   <details id="aac-groups"><summary>Resolver propostas agrupadas ({groups.length})</summary>{groups.map((group:Data)=><article key={group.id}><p>{group.rows.length} ocorrência(s) · {group.field}: {group.before||'vazio'} → {group.after}</p><small>{group.justification}</small><button disabled={busy} onClick={()=>void assistant.group(group)}>Aplicar esta decisão ao grupo</button></article>)}{!groups.length&&<p>Não há propostas determinísticas agrupáveis. Consulte as fontes indicadas no relatório.</p>}</details></div>}
    {chat.sessions.length>0&&<details><summary>Conversas salvas</summary>{chat.sessions.map(item=><button disabled={busy} key={item.id} onClick={()=>void assistant.restore(item.id)}>{new Date(item.updated_at).toLocaleString('pt-BR')}</button>)}</details>}
    <div ref={end}/>
   </div>

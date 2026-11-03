@@ -212,3 +212,12 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 .aac-sheet-controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .aac-sheet-controls button{border:1px solid var(--border-1,#c9d7df);border-radius:8px;padding:8px 12px;background:var(--surface-1,#fff);color:var(--text-1,#173345);font:600 12px Inter,'Segoe UI',sans-serif}
 .aac-sheet-controls .primary-button{background:var(--brand-700,#125777);color:#fff;border-color:transparent}
+
+/* Fase 6 — resultado da auditoria preventiva (indicadores reais, sem painel extra) */
+.aac-plan{display:grid;gap:10px;margin:10px 0;padding:12px;border:1px solid var(--line,#d6e0ea);border-radius:10px;background:var(--surface,#fff)}
+.aac-indicators{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:0}
+.aac-indicators div{padding:8px;border-radius:8px;background:var(--surface-2,#f0f5fa)}
+.aac-indicators dt{font-size:.72rem;color:var(--muted,#51667a)}
+.aac-indicators dd{margin:2px 0 0;font-size:1.25rem;font-weight:700}
+.aac-plan-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.aac-link{font-size:.85rem}

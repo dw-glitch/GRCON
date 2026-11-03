@@ -23,9 +23,9 @@
  function groups(rows){
   const out=new Map();
   for(const row of rows)for(const r of row.recommendations||[]){
-   const k=JSON.stringify([row.contract,row.discipline,row.workflow,row.versions,r.field,r.before,r.after]);
+   const k=JSON.stringify([row.contract,row.discipline,row.workflow,row.versions,r.field,r.before,r.after,r.confidence||'']);
    const group=out.get(k)||{id:k,field:r.field,before:r.before,after:r.after,justification:r.justification,evidence:r.evidence,rows:[]};
-   group.rows.push({lineage:row.lineage,document:row.document,revision:row.revision});out.set(k,group);
+   group.rows.push({lineage:row.lineage,document:row.document,revision:row.revision,evidence:r.evidence,justification:r.justification});out.set(k,group);
   }
   return [...out.values()];
  }

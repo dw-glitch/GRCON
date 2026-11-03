@@ -4,12 +4,12 @@ export type Message={id:string;role:'user'|'assistant';text:string};
 type SheetChoice={name:string;options:Array<{name:string;model:string;documentCount:number}>;selected:string};
 type State={
  open:boolean;messages:Message[];sessionId:string;revision:number;
- pending:boolean;error:string;sessions:Data[];pendingSheets:SheetChoice[];
+ pending:boolean;error:string;sessions:Data[];pendingSheets:SheetChoice[];plan:Data|null;
 };
 const welcome='Olá! Sou o Robô Auditor Preventivo do GRCON. Posso conferir uma alocação criada aqui ou uma planilha externa, antes do envio à fiscalização. Envie a alocação, anexe as LDs necessárias e peça para auditar.';
 const initial=():State=>({
  open:false,messages:[{id:'hello',role:'assistant',text:welcome}],
- sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[]
+ sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[],plan:null
 });
 let state=initial(),generation=0;
 let pendingAllocationFiles:File[]=[];
@@ -75,10 +75,15 @@ async function audit(resume=false,speak:typeof say=say){
  try{count=await service.applyAutomatic();}
  catch(e){speak('A auditoria foi calculada, mas as correções automáticas não foram autorizadas: '+(e as Error).message);}
  const summary=service.core().summary(service.snapshot().rows);
- speak('Analisei '+summary.total+' documento'+(summary.total===1?'':'s')+' antes do envio à fiscalização. Foram autorizadas '+count+
-  ' correções por regras ativas e existem '+summary.pending+
-  ' documentos com verificações pendentes e '+summary.suggestions+
-  ' com sugestões preventivas. Os precedentes fiscais não são provas normativas nem garantem aprovação pela fiscalização. O pacote indicará as evidências e as exceções.');
+ await refreshPlan();
+ const plan=state.plan;
+ speak('Auditoria preventiva concluída: '+summary.total+' documento'+(summary.total===1?'':'s')+' analisado'+(summary.total===1?'':'s')+'. '+
+  (plan?plan.safe+' correção(ões) segura(s) ('+plan.safeAuthorized+' autorizada(s) por regra ativa), '+plan.proposed+' proposta(s) para revisão, '+plan.pending+' pendência(s) e '+plan.clear+' documento(s) sem problemas detectados.':'Resumo de correções indisponível.')+
+  ' Foram autorizadas '+count+' correções nesta execução. Precedentes fiscais não são provas normativas nem garantem aprovação pela fiscalização.');
+}
+async function refreshPlan(){
+ try{emit({plan:await service.correctionPlan()});}
+ catch(e){emit({plan:null,error:'Resumo de correções indisponível: '+(e as Error).message});}
 }
 const help=()=>[
  'Posso conferir os arquivos antes do envio à fiscalização. Escolha uma ação:',
@@ -266,9 +271,15 @@ export const assistant={
   await assistant.downloadInternal(true,speak);
   speak('A nova emissão oficial foi solicitada expressamente. A Central compartilhada permanece preservada.');
  });},
+ applySafe(){return execute(async(speak)=>{
+  const count=await service.applyAutomatic();
+  await refreshPlan();
+  speak(count?count+' correção(ões) segura(s) autorizada(s) por regra ativa. As cópias serão verificadas ao gerar os arquivos.':'Nenhuma correção segura nova: só são executadas as cobertas por regra homologada ativa.');
+ });},
  group(group:Data){return execute(async(speak)=>{
   await service.acceptGroup(group);
   await service.save();
+  await refreshPlan();
   speak('Decisão registrada para '+group.rows.length+' ocorrência(s) do mesmo contexto. As cópias serão verificadas ao preparar o pacote.');
  });},
  restore(id:string){return execute(async(speak)=>{

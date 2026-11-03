@@ -22,6 +22,12 @@ const identifyAllocation=(name:string)=>name.match(/(C1O-ALOC-[A-Z]+-\d{3,4}-20\
 const save=(bytes:Uint8Array,name:string)=>{const u=URL.createObjectURL(new Blob([bytes as BlobPart]));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),60000);};
 export const service={
  async assistantRpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_assistant',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message);return r.data;},
+ // Fase 6: classificação A/B/C/D com números reais. Nada é gravado; apenas lê regras ativas do contrato.
+ async correctionPlan(){
+  const rows=state.rows;if(!rows.length)return g.GrconAllocationCorrections.plan([],{},g.GrconAllocationAssistant,[]);
+  let rules:Data[]=[];try{rules=((await service.assistantRpc('rules')).rules||[]).filter((r:Data)=>r.state==='active');}catch{rules=[];}
+  return g.GrconAllocationCorrections.plan(rows,{...state.context,rules,contract:state.context.contract||cloud()?.membership?.contract_id},g.GrconAllocationAssistant,state.events);
+ },
  async applyAutomatic(){
   await service.save();const t=epoch;const result=await service.assistantRpc('authorize',{runId:state.runId});current(t);
   const events=[...state.events,...result.events];emit({events,groups:remainingGroups(events)});savedEvents=state.events.length;return result.events.length;
@@ -161,7 +167,7 @@ export const service={
  });},
  async acceptGroup(group:Data){
   const currentGroups=g.GrconAllocationAssistant.groups(state.rows),match=currentGroups.find((x:Data)=>x.id===group.id);if(!match)throw Error('Grupo mudou. Reanalise.');
-  for(const item of match.rows){const i=state.rows.findIndex(r=>r.lineage===item.lineage);await service.review(i,{state:'Correção proposta',decision:'accepted',field:match.field,value:match.after,justification:match.justification,evidence:match.evidence});}
+  for(const item of match.rows){const i=state.rows.findIndex(r=>r.lineage===item.lineage);await service.review(i,{state:'Correção proposta',decision:'accepted',field:match.field,value:match.after,justification:item.justification||match.justification,evidence:item.evidence||match.evidence});}
  },
  subscribe(f:()=>void){listeners.add(f);return ()=>{listeners.delete(f);};},snapshot:()=>state,
  missingSources:()=>((state.context.sources||[]) as Data[]).filter(x=>!sourceFiles.has(x.sha256)).map(x=>x.name),

@@ -66,7 +66,7 @@ const read=()=>assistant.snapshot().messages.map(x=>x.text).join('\n');
  await assistant.current();
  assert.deepEqual(calls.filter(x=>x==='currentInChat'),['currentInChat']);
  assert.equal(calls.filter(x=>x.startsWith('analyze:')).length,1);
- assert.match(read(),/Analisei 1 documento antes do envio/);
+ assert.match(read(),/Auditoria preventiva concluída: 1 documento analisado/);
  assert.equal(calls.includes('rpc:session-write'),true);
 
  await assistant.download();
