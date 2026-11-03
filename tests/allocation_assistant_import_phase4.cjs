@@ -73,7 +73,7 @@ const service=qaModule.exports.service;
  const imported=await service.importMany([a,b]);
  assert.equal(imported.documents,2);
  assert.equal(service.snapshot().records.length,2);
- assert.deepEqual(service.snapshot().context.sources.map(x=>x.model),['official-16','mapped']);
+ assert.deepEqual(Array.from(service.snapshot().context.sources,x=>x.model),['official-16','mapped']);
  assert.equal(service.snapshot().context.sources[1].correctionMode,'audit-only');
  await service.importMany([a]);
  assert.equal(service.snapshot().records.length,2,'Same file is idempotent');
@@ -95,7 +95,7 @@ const service=qaModule.exports.service;
  assert.equal(service.snapshot().records.length,3,'New LD must preserve all external records');
  assert.equal(service.snapshot().rows.length,0,'Old findings must not survive changed LD');
  assert.equal(service.snapshot().context.sources.length,4,'Allocation and LD provenance stay intact');
- assert.deepEqual(service.missingSources(),[],'Every source is attached');
+ assert.deepEqual(Array.from(service.missingSources()),[],'Every source is attached');
  await service.analyze();
  assert.equal(service.snapshot().rows.length,3,'Re-audit works after LD upload');
  const internalStatus={...files('RASCUNHO-STATUS.xlsx','7'.repeat(64),'mapped','DOC-NOTA'),
