@@ -14,6 +14,13 @@ async function compute(operation:string,input:Data){if(!worker){worker=new Worke
 async function rpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_auditor',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message||'Não foi possível acessar o histórico do auditor.');return r.data;}
 async function task(action:()=>Promise<unknown>){if(state.busy)throw Error('Aguarde a operação atual.');requireSession();const t=epoch;emit({busy:true,error:'',message:''});try{return await action();}catch(e){if(t===epoch)emit({error:(e as Error).message||String(e)});throw e;}finally{if(t===epoch)emit({busy:false});}}
 function reset(){sourceFiles.clear();identity=scope();epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();saveRequest='';savedEvents=0;saveMetadata=null;emit({groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[]});}
+// Nome seguro e legível da cópia; o hash curto só entra se houver colisão.
+function outName(folder:string,original:string,sha:string,existing:Data[]){
+ const base=original.replace(/\.xlsx$/i,'').replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/^\.+/,'').slice(0,80)||'ARQUIVO';
+ let name=folder+'/'+base+'_CORRIGIDA.xlsx';
+ if(existing.some(f=>f.name===name))name=folder+'/'+base+'_'+sha.slice(0,8)+'_CORRIGIDA.xlsx';
+ return name;
+}
 function remainingGroups(events:Data[],rows:Data[]=state.rows){const latest=new Map(events.map(e=>[JSON.stringify([e.lineage,e.field]),e]));return g.GrconAllocationAssistant?.groups(rows.map(row=>({...row,recommendations:(row.recommendations||[]).filter((p:Data)=>!['accepted','rejected'].includes(latest.get(JSON.stringify([row.lineage,p.field]))?.decision||''))})))||[];}
 function clearResults(){saveRequest='';savedEvents=0;saveMetadata=null;emit({groups:[],summary:{},rows:[],events:[],progress:0,total:0,runId:'',selected:[],context:{...state.context,saved:false,checkpoint:false,history:undefined}});}
 async function generator(){await g.GRCONModuleLoader.ensure('react-dist/allocation-app.js');return g.GrconAllocationGeneratorUi;}
@@ -139,10 +146,10 @@ export const service={
      exceptions.push(source.name+': layout compatível com auditoria, mas não homologado para edição automática. Revise as alterações na LD de origem e gere o modelo oficial para produzir a cópia corrigida.');
      continue;
     }
-    try{const result=await compute('revise-allocation',{file,rows,events,sourceHash:source.sha256,contract:cloud().membership.contract_id});current(t);files.push({name:'03_Alocacoes_Corrigidas/'+source.sha256.slice(0,8)+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/\.xlsx$/i,'')+'_CORRIGIDA.xlsx',bytes:result.bytes,changed:result.changed,changes:result.changes,official:true});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
+    try{const result=await compute('revise-allocation',{file,rows,events,sourceHash:source.sha256,contract:cloud().membership.contract_id});current(t);files.push({name:outName('03_Alocacoes_Corrigidas',file.name,source.sha256,files),bytes:result.bytes,changed:result.changed,changes:result.changes,official:true});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
    }else{
     const events=approved.filter((e:Data)=>state.rows.some(r=>r.lineage===e.lineage&&r.origin?.file===source.name));if(!events.length)continue;
-    try{const ui=await generator();const result=await ui.reviseAuditLd(file,state.rows,events,source.sha256);current(t);if(!result.count)continue;files.push({name:'02_LDs_Corrigidas/'+source.sha256.slice(0,8)+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_'),bytes:new Uint8Array(result.buffer),changed:result.count,changes:result.changes});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
+    try{const ui=await generator();const result=await ui.reviseAuditLd(file,state.rows,events,source.sha256);current(t);if(!result.count)continue;files.push({name:outName('02_LDs_Corrigidas',file.name,source.sha256,files),bytes:new Uint8Array(result.buffer),changed:result.count,changes:result.changes});}catch(e){current(t);exceptions.push(source.name+': '+(e as Error).message);}
    }
   }
   if(generateOfficial){
@@ -157,13 +164,14 @@ export const service={
     const generated=await ui.generateAudited(rows,state.events,state.context.versions);current(t);
     for(const output of generated.filter((f:Data)=>['allocation','control'].includes(f.kind))){
      const safeName=output.name.replace(/[^a-zA-Z0-9_.-]/g,'_');const binary=atob(output.base64);const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
-     files.push({name:output.kind==='control'?'04_Linhas_Central_'+safeName:'03_Alocacoes_Corrigidas/NOVA_'+safeName,bytes,official:output.kind==='allocation',changed:0,changes:[]});
+     files.push({name:output.kind==='control'?'04_Linhas_Central_'+safeName.replace(/^Linhas_Central_de_Alocacao_/,''):'03_Alocacoes_Corrigidas/NOVA_'+safeName,bytes,official:output.kind==='allocation',changed:0,changes:[]});
     }
    }
   }
   for(const e of approved)if(!files.some(f=>f.changes?.some((x:Data)=>x.lineage===e.lineage&&x.field===e.field&&x.after===e.after)))exceptions.push(e.document+' / '+e.field+': decisão registrada sem cópia produzida.');
-  const result=await compute('assistant-package',{...state.context,rows:state.rows,events:state.events,progress:state.progress,total:state.total,sessionId,runId:state.runId,files,exceptions});current(t);
-  save(result.bytes,'GRCON_Auditoria_Alocacao.zip');emit({message:exceptions.length?'Pacote parcial verificado; consulte as exceções no relatório.':'Pacote verificado e pronto para download.'});return result.manifest;
+  let plan:Data={items:[]};try{plan=await service.correctionPlan();}catch{plan={items:[]};}
+  const result=await compute('assistant-package',{...state.context,rows:state.rows,events:state.events,progress:state.progress,total:state.total,sessionId,runId:state.runId,files,exceptions,plan:{items:plan.items}});current(t);
+  save(result.bytes,'GRCON_Auditoria_Preventiva.zip');emit({message:exceptions.length?'Pacote parcial verificado; consulte as exceções no relatório.':'Pacote verificado e pronto para download.'});return result.manifest;
  });},
  async acceptGroup(group:Data){
   const currentGroups=g.GrconAllocationAssistant.groups(state.rows),match=currentGroups.find((x:Data)=>x.id===group.id);if(!match)throw Error('Grupo mudou. Reanalise.');
