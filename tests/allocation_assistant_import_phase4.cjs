@@ -97,5 +97,11 @@ const service=qaModule.exports.service;
  assert.deepEqual(service.missingSources(),[],'Every source is attached');
  await service.analyze();
  assert.equal(service.snapshot().rows.length,3,'Re-audit works after LD upload');
+ const internalStatus={...files('RASCUNHO-STATUS.xlsx','7'.repeat(64),'mapped','DOC-NOTA'),
+  records:[{document:'DOC-NOTA',revision:'0',fiscalComment:'REVISAR INTERNAMENTE',returnedAt:''}]};
+ await service.importMany([internalStatus]);
+ const note=service.snapshot().records.find(r=>r.document==='DOC-NOTA');
+ assert.equal(note.fiscalComment,'','Internal draft status must not masquerade as Fiscal 01 feedback');
+ assert.equal(note.inputStatusObservation,'REVISAR INTERNAMENTE');
  console.log('allocation_assistant_import_phase4: batch atomicity, mapped layout, sheet choice, fiscal safety, origins, deduplication and LD re-audit passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});
