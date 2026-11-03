@@ -44,21 +44,21 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
 
  // Relatório: duas abas, dados reais, separação entre erro, pendência e sugestão.
  const wb=X.read(await zip.file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array',cellDates:true});
- assert.deepEqual([...wb.SheetNames],['RESUMO','DETALHAMENTO']);
+ assert.deepEqual([...wb.SheetNames],['RESUMO','DETALHAMENTO','ALOCAÇÃO CORRIGIDA']);
  const resumo=Object.fromEntries(X.utils.sheet_to_json(wb.Sheets.RESUMO,{header:1,defval:''}).filter(r=>r[0]&&r[1]!=='').map(r=>[r[0],r[1]]));
- assert.equal(resumo['Documentos analisados'],5);assert.equal(resumo['Documentos sem problemas detectados'],2);
- assert.equal(resumo['Não conformidades confirmadas sem correção'],1);assert.equal(resumo['Verificações inconclusivas'],1);
- assert.equal(resumo['Correções executadas (verificadas em cópia)'],0);assert.equal(resumo['Estado final'],P.STATES.fix);
+ assert.equal(resumo['Documentos analisados'],5);assert.equal(resumo['Documentos sem apontamentos'],2);
+ assert.equal(resumo['Não conformidades confirmadas sem correção'],1);assert.equal(resumo['Verificações pendentes'],1);
+ assert.equal(resumo['Correções aplicadas e verificadas em cópia'],0);assert.equal(resumo['Estado da auditoria'],P.STATES.fix);
  assert.equal(resumo['Contrato'],'qa');assert.equal(resumo['Identificação da auditoria'],'run-1');
  assert.match(resumo['Fontes utilizadas'],/ALOC\.xlsx.*\n.*LD\.xlsx/);assert.match(resumo['Versões das referências'],/databook: v1/);
  const detail=X.utils.sheet_to_json(wb.Sheets.DETALHAMENTO,{defval:''});
  assert.equal(detail.length,5);
- assert.deepEqual(Object.keys(detail[0]),['Alocação','Documento','Revisão','Categoria','Regra','Severidade','Problema','Campo','Valor original','Valor proposto','Valor efetivamente corrigido','Fonte da evidência','Arquivo','Aba','Linha/célula','Situação','Tipo de correção','Justificativa','Revisão humana']);
- const sev=Object.fromEntries(detail.map(d=>[d.Regra.split(' ·')[0]||d.Regra,d.Severidade]));
+ assert.deepEqual(Object.keys(detail[0]),['Alocação','Código do documento','Revisão','Categoria','Regra / critério','Classificação','Descrição do apontamento','Campo','Valor atual','Valor sugerido','Valor corrigido (aplicado)','Evidência','Arquivo de origem','Aba','Local (linha/célula)','Situação','Tipo de tratamento','Fundamento','Requer decisão humana']);
+ const sev=Object.fromEntries(detail.map(d=>[d['Regra / critério'].split(' ·')[0]||d['Regra / critério'],d['Classificação']]));
  assert.equal(sev['DATABOOK-NOT-FOUND'],'Não conformidade confirmada');assert.equal(sev['TAG-NOT-PROVEN'],'Verificação pendente');assert.equal(sev['FISCAL-FAMILY-title'],'Sugestão preventiva (não normativa)');
- assert.equal(detail[0].Severidade,'Não conformidade confirmada','erros confirmados vêm primeiro');
+ assert.equal(detail[0]['Classificação'],'Não conformidade confirmada','erros confirmados vêm primeiro');
  assert.ok(wb.Sheets.DETALHAMENTO['!autofilter']);assert.ok(!wb.Sheets.RESUMO['!autofilter']);
- assert.match(String(detail[0]['Fonte da evidência']),/file: LD\.xlsx/,'evidência legível, não JSON bruto');
+ assert.match(String(detail[0]['Evidência']),/file: LD\.xlsx/,'evidência legível, não JSON bruto');
 
  // Cópia corrigida real: revisão do escritor → pacote → segunda auditoria.
  const ldRows=[{document:DOC,revision:'0',source:'LD.xlsx',sheet:'ELE',row:2,workflow:'WF NOVO',databook:'DB|NOVO',discipline:'ELE'}];
@@ -82,8 +82,8 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
  assert.ok(!pack.manifest.omitted.some(o=>o.path.startsWith('03_')),'cópia produzida não é listada como omitida');
  assert.ok(pack.manifest.omitted.some(o=>o.path.startsWith('02_')),'LD não corrigida segue omitida');
  const wb2=X.read(await pz.file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array'});
- const d2=X.utils.sheet_to_json(wb2.Sheets.DETALHAMENTO,{defval:''}).find(d=>d['Campo']==='workflow'&&d['Valor efetivamente corrigido']);
- assert.equal(d2['Valor original'],'WF ANTIGO');assert.equal(d2['Valor efetivamente corrigido'],'WF NOVO');assert.equal(d2['Linha/célula'],'C2');assert.equal(d2['Situação'],'Corrigido e verificado em cópia');
+ const d2=X.utils.sheet_to_json(wb2.Sheets.DETALHAMENTO,{defval:''}).find(d=>d['Campo']==='Workflow'&&d['Valor corrigido (aplicado)']);
+ assert.equal(d2['Valor atual'],'WF ANTIGO');assert.equal(d2['Valor corrigido (aplicado)'],'WF NOVO');assert.equal(d2['Local (linha/célula)'],'C2');assert.equal(d2['Situação'],'Corrigida e verificada em cópia');
 
  // Segunda auditoria rejeita cópia que não corrigiu o que declara.
  await assert.rejects(call('assistant-package',{...full,files:[{name:copyName,bytes:original,official:true,changed:1,changes:revised.changes}]}),/Segunda auditoria/);

@@ -23,3 +23,4 @@ for(const [name,src] of [['lançador',launcher],['chat',chat]])assert.ok(!/<img\
 assert.match(css,/\.aac-launcher #grcon-mascot-context-bubble\{display:none!important\}/,'balão de saudação não deforma o lançador');
 assert.match(css,/\.aac-launcher #grcon-context-mascot\.grcon-mascot-runtime\{width:104px;height:104px\}/,'tamanho do mascote no lançador');
 console.log('allocation_assistant_gate_phase9: lançador usa o mascote oficial do runtime, sem balão e com tamanho definido');
+assert.match(css,/\.aac-launcher-caption\{[^}]*width:max-content/,'a borda da legenda acompanha o texto');
