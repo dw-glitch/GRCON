@@ -56,6 +56,7 @@ export function AllocationAssistant(){
   operation.current={busy,error};
  },[chat.open,busy,s.error,chat.error,s.progress,s.total]);
  useEffect(()=>{if(!chat.open)setConfirmIssue(false);},[chat.open]);
+ useEffect(()=>{setConfirmIssue(false);},[s.records]);
  useEffect(()=>{
   const viewport=end.current?.parentElement;
   if(viewport&&chat.open)viewport.scrollTop=viewport.scrollHeight;
@@ -67,7 +68,7 @@ export function AllocationAssistant(){
   <div className="aac-messages" role="log" aria-live="polite">{chat.messages.map(m=><article className={'aac-message aac-'+m.role} key={m.id}><small>{m.role==='user'?'Você':'Assistente GRCON'}</small><p>{m.text}</p></article>)}
    {!s.records.length&&<div className="aac-options"><button disabled={busy} onClick={()=>void assistant.current()}>Auditar alocação atual</button><label>Enviar outra alocação<input type="file" multiple accept=".xlsx" disabled={busy} onChange={e=>{void assistant.upload([...e.target.files||[]],'allocation');e.target.value='';}}/></label></div>}
    <nav className="aac-quick-actions" aria-label="Ações rápidas do auditor">
-    {Boolean(s.records.length)&&<button type="button" disabled={busy} onClick={()=>void assistant.auditFiles()}>Auditar arquivos</button>}
+    {Boolean(s.records.length)&&(s.total===0||s.progress===s.total)&&<button type="button" disabled={busy} onClick={()=>void assistant.auditFiles()}>Auditar arquivos</button>}
     {s.total>0&&s.progress<s.total&&!busy&&<button type="button" onClick={()=>void assistant.resume()}>Retomar análise</button>}
     <button type="button" disabled={busy} onClick={()=>void assistant.status()}>Situação</button>
     {s.rows.length>0&&<button type="button" disabled={busy} onClick={()=>void assistant.details()}>Ver pendências</button>}
