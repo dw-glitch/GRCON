@@ -85,6 +85,7 @@ export const service={
   const checkpoint=state.context.checkpoint&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.kind==='allocation'&&old.sha256===e.sha256))&&unique.size===state.records.length;
   if(!checkpoint)clearResults();
   emit({records:[...unique.values()],context:{...state.context,sources},message:entries.length+' alocação(ões) recebida(s) e validada(s). Arquivos originais preservados.'});
+  return {checkpoint,documents:unique.size,files:entries.length};
  });},
  async importAssistantLd(files:File[]){
   const t=epoch;
@@ -154,6 +155,7 @@ export const service={
   for(const item of match.rows){const i=state.rows.findIndex(r=>r.lineage===item.lineage);await service.review(i,{state:'Correção proposta',decision:'accepted',field:match.field,value:match.after,justification:match.justification,evidence:match.evidence});}
  },
  subscribe(f:()=>void){listeners.add(f);return ()=>{listeners.delete(f);};},snapshot:()=>state,
+ missingSources:()=>((state.context.sources||[]) as Data[]).filter(x=>!sourceFiles.has(x.sha256)).map(x=>x.name),
  core:()=>g.GrconAllocationAuditorCore,
  async activate(){requireSession();try{const data=await rpc('history');emit({runs:data.runs});}catch(e){emit({message:'Histórico compartilhado indisponível: '+(e as Error).message});}},
  async open(seed:Data){return task(async()=>{const t=epoch;current(t);clearResults();emit({records:seed.rows.map((r:Data)=>({...r.record,document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow,databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,allocation:seed.allocation||'',sourceFile:seed.allocation?'Histórico do Gerador':'Gerador GRCON',sourceVersions:seed.sourceVersions||{},contract:cloud().membership.contract_id})),context:{...seed,contract:cloud().membership.contract_id},message:'Documentos recebidos do Gerador. Inicie a auditoria.'});});},
