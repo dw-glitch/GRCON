@@ -68,7 +68,7 @@ export interface ManagerialSummary {
   sigemInLd: SigemCounts | null;
   /** Documentos vigentes que dependem do PW (exclui CV e cancelados). */
   pwApplicable: number | null;
-  /** Dependem do PW e ainda não constam na consulta PW (CSG/QTM). */
+  /** Dependem do PW e não constam em nenhuma linha da consulta PW (qualquer empresa). */
   awaitingRegistration: number | null;
   /** Constam na consulta PW, mas sem evidência de emissão. */
   registeredNotEmitted: number | null;
@@ -164,6 +164,26 @@ function isCv(reference: SigemPwRecord): boolean {
   return /(?:^|[-_])CV(?=[-_]|$)/.test(norm(reference.canonicalDocument || reference.document));
 }
 
+const PW_COMPANY_FALLBACK = /(?:^|[\s,;/|+&])(?:CSG|QTM)(?=$|[\s,;/|+&])/i;
+function pwCompanyInScope(record: SigemPwRecord): boolean {
+  const core = typeof window !== "undefined" ? window.GrconSigemPwDashboard : undefined;
+  if (typeof core?.isPwCompanyInScope === "function") return core.isPwCompanyInScope(record);
+  return PW_COMPANY_FALLBACK.test(String((record as { company?: unknown }).company ?? ""));
+}
+/**
+ * Cadastro no PW = o código consta na relação do PW, seja qual for a Sigla da Empresa.
+ * O filtro CSG/QTM continua valendo para as demais análises (o modelo); aqui as linhas que ele
+ * descartou só somam como cadastro/emissão, para que ninguém conste como "aguardando cadastro"
+ * estando na consulta PW.
+ */
+export function pwRegistrationRecords(state: SigemPwState): SigemPwRecord[] {
+  const scoped = state.model?.normalizedPw || [];
+  const source = state.pw.sourceRecords;
+  if (!Array.isArray(source) || !source.length) return scoped;
+  const extra = source.filter(record => record && !(record as { pwRawInvalid?: boolean }).pwRawInvalid && !pwCompanyInScope(record));
+  return extra.length ? [...scoped, ...extra] : scoped;
+}
+
 export function reconcileManagerial(state: SigemPwState): ManagerialReport {
   const referenceAvailable = Boolean(state.ld.meta && state.ld.records.length);
   const pwAvailable = Boolean(state.pw.meta && state.pw.meta.companyColumn === "C" && state.pw.meta.scopeCompanyColumnMissing !== true);
@@ -173,7 +193,7 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     : !pwAvailable ? "Importe uma consulta PW com empresas identificadas na coluna C."
     : !sigemAvailable ? "Consulta Geral indisponível; postagem e conformidade são inconclusivas."
     : !state.model ? "A conciliação ainda não foi calculada." : "";
-  const pwIndex = fromIndex(state.model?.normalizedPw || []);
+  const pwIndex = fromIndex(pwRegistrationRecords(state));
   const sigemIndex = fromIndex(state.model?.normalizedSigem || []);
   const rows: ManagerialDocument[] = [];
   const summary: ManagerialSummary = {

@@ -88,4 +88,22 @@ assert.equal(s.pwApplicable - s.awaitingRegistration - s.registeredNotEmitted, 1
   assert.equal(missing.summary.sigemIssued, null);
   assert.equal(missing.summary.sigemInLd, null);
 }
+// Qualquer linha da relação do PW comprova cadastro, mesmo de outra empresa (fora de CSG/QTM).
+{
+  const inPw = "IS-5290.00-22313-955-C1O-001", inPwPlanned = "IS-5290.00-22313-955-C1O-002", missing = "IS-5290.00-22313-955-C1O-003";
+  const base = state([ref(inPw, { revision: "0" }), ref(inPwPlanned, { revision: "0" }), ref(missing, { revision: "0" })], [], []);
+  base.pw.sourceRecords = [
+    { document: inPw, revision: "0", company: "ABC", lastEmission: "Sim" },
+    { document: inPwPlanned, revision: "0", company: "", lastEmission: "Previsto" },
+  ];
+  const r = reconcileManagerial(base).summary;
+  assert.equal(r.registered, 2, "fora de CSG/QTM também é cadastrado");
+  assert.equal(r.awaitingRegistration, 1, "só o que não consta no PW aguarda cadastro");
+  assert.equal(r.registeredNotEmitted, 1, "Previsto = cadastrado, não emitido");
+  assert.equal(r.pwApplicable - r.awaitingRegistration - r.registeredNotEmitted, 1);
+  // Linhas de empresa em escopo no modelo não são contadas duas vezes.
+  const scoped = state([ref(inPw, { revision: "0" })], [pw(inPw, "0", "Sim")], []);
+  scoped.pw.sourceRecords = [{ document: inPw, revision: "0", company: "CSG", lastEmission: "Sim" }];
+  assert.equal(reconcileManagerial(scoped).summary.registered, 1);
+}
 console.log("sigem_pw_managerial_kpis: documentos controlados, cadastro, emissão, aguardando cadastro e CV/cancelados OK");
