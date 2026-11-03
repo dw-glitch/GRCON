@@ -31,8 +31,10 @@ export const service={
    if(!files.length||files.length>20)throw Error('Selecione de 1 a 20 alocações XLSX por lote.');
    const total=files.reduce((sum,file)=>sum+file.size,0);
    if(total>100*1024*1024)throw Error('O lote ultrapassa 100 MB. Divida os arquivos.');
-   const options:Data[]=[];
+   const options:Data[]=[],seenNames=new Set<string>();
    for(const file of files){
+    if(seenNames.has(file.name))throw Error('O lote contém nomes repetidos: '+file.name+'. Renomeie os arquivos para identificar a origem corretamente.');
+    seenNames.add(file.name);
     const tabs=await compute('inspect',{file});
     const candidates=(tabs as Data[]).filter(t=>['official-16','mapped'].includes(t.model)&&t.documentCount>0);
     if(!candidates.length)throw Error(file.name+': não encontrei uma aba com códigos documentais e cabeçalhos reconhecíveis. Confira o arquivo antes do envio.');
@@ -111,6 +113,7 @@ export const service={
    if(!sources.some((x:Data)=>x.sha256===entries[i].sha256&&x.kind==='ld'))sources.push(entries[i]);
   }
   emit({context:{...state.context,sources,ldHashes:Object.fromEntries(sources.filter((x:Data)=>x.kind==='ld').map((x:Data)=>[x.name,x.sha256]))},message:unchanged?'LDs originais reconectadas para continuar a auditoria.':'LDs anexadas. Alocações preservadas; resultados anteriores invalidados para nova conferência.'});
+  return {unchanged,records:state.records.length};
  },
  async assistantPackage(sessionId:string,generateOfficial=false){return task(async()=>{
   if(!state.rows.length||state.progress!==state.total||state.rows.length!==state.total||state.records.length!==state.total)throw Error('Conclua a auditoria antes de preparar o pacote ou emitir nova alocação.');
