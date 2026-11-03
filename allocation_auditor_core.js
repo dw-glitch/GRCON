@@ -78,10 +78,12 @@
  function prepare(context){
   const byDocument=new Map(),byFamilyCategory=new Map(),batches=new Map(),tags=new Map(),paths=new Map(),eaps=new Map(),ld=new Map();
   for(const h of context.history||[]){
-   // Historic comments are hints, never general normative rules. Only the same contract.
-   if(!h.contract||h.contract!==context.contract)continue;
+   // Preserve narrowly scoped existing history while never generalizing an
+   // unscoped record into a recurrent family rule.
+   if(h.contract&&h.contract!==context.contract)continue;
    const exact=byDocument.get(h.document)||[];
    exact.push(h);byDocument.set(h.document,exact);
+   if(h.contract!==context.contract)continue;
    const family=fiscalFamily(h.document);
    if(!family)continue;
    for(const issue of classifyComment(h.fiscalComment)){
