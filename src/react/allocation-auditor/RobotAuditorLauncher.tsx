@@ -10,6 +10,10 @@ export const generatorVisible=()=>{
  const panel=document.getElementById('allocation-generator-module');
  return Boolean(panel&&!panel.hidden&&panel.getAttribute('aria-hidden')!=='true');
 };
+const launchAvailable=()=>{
+ const bridge=window as unknown as {GrconAllocationGeneratorUi?:{assistantEnabled?:()=>boolean}};
+ return generatorVisible()&&bridge.GrconAllocationGeneratorUi?.assistantEnabled?.()===true;
+};
 
 /**
  * The launcher is kept mounted while chat is open: removing its DOM host before
@@ -17,16 +21,23 @@ export const generatorVisible=()=>{
  */
 export function RobotAuditorLauncher(){
  const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot);
- const [active,setActive]=useState(generatorVisible);
+ const [active,setActive]=useState(launchAvailable);
  const host=useRef<HTMLSpanElement>(null);
 
  useEffect(()=>{
   const panel=document.getElementById('allocation-generator-module');
   if(!panel)return;
-  const observe=new MutationObserver(()=>setActive(generatorVisible()));
+  const refresh=()=>setActive(launchAvailable());
+  const observe=new MutationObserver(refresh);
   observe.observe(panel,{attributes:true,attributeFilter:['hidden','aria-hidden']});
-  setActive(generatorVisible());
-  return()=>observe.disconnect();
+  for(const event of ['grcon:contract-context-changed','grcon:cloud-ready','grcon:cloud-signed-out'])
+   window.addEventListener(event,refresh);
+  refresh();
+  return()=>{
+   observe.disconnect();
+   for(const event of ['grcon:contract-context-changed','grcon:cloud-ready','grcon:cloud-signed-out'])
+    window.removeEventListener(event,refresh);
+  };
  },[]);
 
  useEffect(()=>{
