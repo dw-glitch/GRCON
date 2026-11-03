@@ -4,11 +4,13 @@ import { getPwOriginalMatrix } from "./sigemPwRawPw";
 
 type CellValue = string | number;
 export type Matrix = CellValue[][];
+/** Aba principal: todos os documentos conferidos (ET, N-1710 e CV), não só N-1710. */
+export const MAIN_SHEET = "Conferência Documental";
 export interface CoordinatorPlan {
-  sheets: Record<"Resumo" | "N-1710" | "REL. PW", Matrix> & { "Fora das LDs"?: Matrix };
-  /** Excel rows for the N-1710 table (zero-based array indices start at row 4). */
+  sheets: Record<"Resumo" | typeof MAIN_SHEET | "REL. PW", Matrix> & { "Fora das LDs"?: Matrix };
+  /** Excel rows for the main table (zero-based array indices start at row 4). Fórmulas das colunas F (revisão), G (state) e H (última emissão) lidas da aba REL. PW. */
   formulas: Array<{
-    excelRow: number; f: string; g: string; h: string; i: string; results: [string, string, string, string];
+    excelRow: number; f: string; g: string; h: string; results: [string, string, string];
     /** Situação PW do documento, usada apenas para o destaque visual da coluna Cadastro. */
     pwSituation: "emitted" | "registered" | "missing" | "notApplicable";
   }>;
@@ -32,6 +34,7 @@ interface ExcelRow {
 }
 interface ExcelColumn { width?: number; numFmt?: string }
 interface ExcelSheet {
+  addImage?(imageId: number, position: Record<string, unknown>): void;
   addRow(row: CellValue[]): ExcelRow;
   getCell(address: string): ExcelCell;
   getRow(index: number): ExcelRow;
@@ -44,14 +47,21 @@ interface ExcelSheet {
 interface ExcelWorkbook {
   addWorksheet(name: string): ExcelSheet;
   calcProperties?: { fullCalcOnLoad?: boolean };
+  addImage?(image: { buffer: ArrayBuffer | Uint8Array; extension: "png" }): number;
   xlsx: { writeBuffer(): Promise<ArrayBuffer | Uint8Array> };
 }
 export interface CoordinatorExcelApi { Workbook: new () => ExcelWorkbook }
+/** Logo opcional (PNG). Sem ele o relatório é gerado normalmente, só sem a marca. */
+export interface CoordinatorLogo { buffer: ArrayBuffer | Uint8Array }
+// Proporção do arquivo grcon-logo-report.png (900 × 250): azul-marinho/azul sobre fundo claro,
+// por isso a faixa do cabeçalho que recebe a marca é branca.
+const LOGO_WIDTH = 150;
+const LOGO_HEIGHT = 42;
 
 const REVISIONS = Object.freeze(["0", "A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"]);
 export const COORDINATOR_HEADERS = Object.freeze([
   "DOCUMENTO", "REVISÃO", "TÍTULO", "STATUS", "STATUS SIGEM", "REVISÃO",
-  "CHECK REV.", "STATE", "Última emissão", "AÇÃO", "Cadastro",
+  "STATE", "Última emissão", "AÇÃO", "Cadastro",
   ...REVISIONS.map(revision => "Rev. " + revision),
 ]);
 const GRCON = Object.freeze({
@@ -130,16 +140,18 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
     emitted: safeNumber(report.summary.emitted), posted: safeNumber(report.summary.posted),
     compliant: safeNumber(report.summary.compliant), pending: safeNumber(report.summary.pending),
   };
-  const header1: CellValue[] = Array(32).fill("");
-  const header2: CellValue[] = Array(32).fill("");
+  const header1: CellValue[] = Array(31).fill("");
+  const header2: CellValue[] = Array(31).fill("");
   const totals = new Map(REVISIONS.map(r => [r, 0]));
   // Indicadores de documentos únicos: nunca somar revisões para obter total oficial.
+  // As colunas de revisão começam em K; por isso as pendências ocupam J (valor numérico
+  // com formato "PENDÊNCIAS: n") em vez de um par rótulo/valor.
   [header1[0], header1[1], header1[2], header1[3], header1[4],
-   header1[5], header1[6], header1[7], header1[8], header1[9], header1[10]] =
+   header1[5], header1[6], header1[7], header1[8], header1[9]] =
   ["CONTROLE DOCUMENTAL • GRCON", "ATIVOS", summary.active, "PW CAD.", summary.registered,
-   "PW EMIT.", summary.emitted, "SIGEM", summary.posted, "PENDÊNCIAS", summary.pending];
+   "PW EMIT.", summary.emitted, "SIGEM", summary.posted, summary.pending];
   header2[0] = "LD"; header2[5] = "PW";
-  REVISIONS.forEach((rev, index) => { header2[index + 11] = rev; });
+  REVISIONS.forEach((rev, index) => { header2[index + 10] = rev; });
   const master: Matrix = [header1, header2, [...COORDINATOR_HEADERS]];
   const indexed = indexPwRecords(state);
   const ldByCode = new Map<string, string>();
@@ -167,14 +179,12 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
     // Cached display values and formulas always describe the SAME selected PW
     // evidence row, rather than pairing statuses from different revisions.
     const f = sourceFormula(sourceRow, revisionColumn);
-    const g = `IF(OR(B${number}="",F${number}=""),"FALSO",IF(UPPER(SUBSTITUTE(TRIM(B${number}),"REV. ",""))=UPPER(SUBSTITUTE(TRIM(F${number}),"REV. ","")),"VERDADEIRO","FALSO"))`;
-    const h = sourceFormula(sourceRow, statusColumn);
-    const i = sourceFormula(sourceRow, emissionColumn);
-    const gValue = sameRevision(row.referenceRevision, row.pwRevision) ? "VERDADEIRO" : "FALSO";
-    const results: [string, string, string, string] = [row.pwRevision, gValue, row.pwState, row.pwLastEmission];
+    const g = sourceFormula(sourceRow, statusColumn);
+    const h = sourceFormula(sourceRow, emissionColumn);
+    const results: [string, string, string] = [row.pwRevision, row.pwState, row.pwLastEmission];
     const pwSituation: CoordinatorPlan["formulas"][number]["pwSituation"] = row.pwNotApplicable ? "notApplicable"
       : !row.pwRegistered ? "missing" : row.pwEmitted ? "emitted" : "registered";
-    formulas.push({ excelRow: number, f, g, h, i, results, pwSituation });
+    formulas.push({ excelRow: number, f, g, h, results, pwSituation });
     master.push([
       row.code, row.referenceRevision, row.title, row.referenceStatus, row.sigemStatus,
       ...results, row.action, row.pwNotApplicable ? "Não aplicável (CV)"
@@ -182,7 +192,7 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
       ...REVISIONS.map(revision => available.has(revision) ? "x" : ""),
     ]);
   }
-  REVISIONS.forEach((rev, index) => { header1[index + 11] = totals.get(rev) || 0; });
+  REVISIONS.forEach((rev, index) => { header1[index + 10] = totals.get(rev) || 0; });
   // O modelo do coordenador é referência de INFORMAÇÕES, não de ordem visual.
   // A aba antes vazia ("SIGEM") dá lugar a um resumo útil sem fabricar
   // linhas da Consulta Geral. A base PW mantém todas as 70 colunas originais.
@@ -249,7 +259,7 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   }
   return {
     sheets: {
-      "Resumo": overview, "N-1710": master, "REL. PW": [pw.headers, ...pw.rows],
+      "Resumo": overview, [MAIN_SHEET]: master, "REL. PW": [pw.headers, ...pw.rows],
       ...(outside.length > 1 ? { "Fora das LDs": outside } : {}),
     },
     formulas, summary, pwColumns: 70, overviewSections,
@@ -265,9 +275,14 @@ function formatHeader(cell: ExcelCell, fill: string = GRCON.navy): void {
   cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
   cell.border = { bottom: { style: "thin", color: { argb: GRCON.border } } };
 }
+function placeLogo(workbook: ExcelWorkbook, sheet: ExcelSheet, logo: CoordinatorLogo | undefined, position: Record<string, unknown>): void {
+  if (!logo || !workbook.addImage || !sheet.addImage) return;
+  const id = workbook.addImage({ buffer: logo.buffer, extension: "png" });
+  sheet.addImage(id, { ...position, ext: { width: LOGO_WIDTH, height: LOGO_HEIGHT } });
+}
 function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.views = [{ state: "frozen", xSplit: 2, ySplit: 3, topLeftCell: "C4" }];
-  sheet.autoFilter = `A3:AF${Math.max(4, plan.sheets["N-1710"].length)}`;
+  sheet.autoFilter = `A3:AE${Math.max(4, plan.sheets[MAIN_SHEET].length)}`;
   sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:3" };
   sheet.headerFooter = { oddFooter: "&LGRCON · SIGEM × PW&CPágina &P de &N&R&D" };
   sheet.getRow(1).height = 28;
@@ -279,48 +294,62 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.getColumn(4).width = 18;
   sheet.getColumn(5).width = 25;
   sheet.getColumn(6).width = 12;
-  sheet.getColumn(7).width = 16;
-  sheet.getColumn(8).width = 19;
-  sheet.getColumn(9).width = 18;
-  sheet.getColumn(10).width = 48;
-  sheet.getColumn(11).width = 19;
-  for (let index = 12; index <= 32; index++) sheet.getColumn(index).width = 10;
+  sheet.getColumn(7).width = 19;
+  sheet.getColumn(8).width = 18;
+  sheet.getColumn(9).width = 48;
+  sheet.getColumn(10).width = 19;
+  for (let index = 11; index <= 31; index++) sheet.getColumn(index).width = 10;
   // Excel rows 4+ are actual data, never inject unrelated title rows.
-  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(index => sheet.getColumn(index).numFmt = "@");
-  for (let column = 0; column < 32; column++) {
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].forEach(index => sheet.getColumn(index).numFmt = "@");
+  for (let column = 0; column < 31; column++) {
     formatHeader(sheet.getCell(`${columnLetter(column)}3`));
     const top = sheet.getCell(`${columnLetter(column)}1`);
-    formatHeader(top, column >= 11 ? GRCON.teal : GRCON.navy);
+    formatHeader(top, column >= 10 ? GRCON.teal : GRCON.navy);
     const group = sheet.getCell(`${columnLetter(column)}2`);
     formatHeader(group, GRCON.slate);
   }
+  // Faixa de marca (A1:J1): fundo branco para a logo e indicadores em azul-marinho.
+  sheet.getRow(1).height = 58;
+  for (let column = 0; column < 10; column++) {
+    const cell = sheet.getCell(`${columnLetter(column)}1`);
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.white } };
+    cell.border = { bottom: { style: "medium", color: { argb: GRCON.navy } } };
+    cell.alignment = { vertical: "middle", horizontal: column === 0 ? "left" : "center", wrapText: false };
+    const isValue = column === 2 || column === 4 || column === 6 || column === 8 || column === 9;
+    cell.font = column === 0
+      ? { name: "Aptos", size: 9, bold: true, color: { argb: GRCON.navy } }
+      : isValue ? { name: "Aptos", size: 13, bold: true, color: { argb: GRCON.navy } }
+      : { name: "Aptos", size: 8, bold: true, color: { argb: GRCON.slate } };
+    if (isValue) cell.numFmt = column === 9 ? '"PENDÊNCIAS: "0' : "#,##0";
+  }
+  sheet.getCell("A1").alignment = { vertical: "bottom", horizontal: "left" };
   for (let idx = 0; idx < plan.formulas.length; idx++) {
     const info = plan.formulas[idx];
     const excelRow = info.excelRow;
     const row = sheet.getRow(excelRow);
     row.height = 24;
     // Style only operational cells: avoid huge per-cell styles on data sources.
-    for (const column of ["A", "B", "G", "J"]) {
+    for (const column of ["A", "B", "I"]) {
       const cell = sheet.getCell(`${column}${excelRow}`);
       cell.font = { name: "Aptos", size: 9, color: { argb: GRCON.ink } };
       cell.alignment = { vertical: "middle", wrapText: false };
       if (idx % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.pale } };
     }
-    const registration = sheet.getCell(`K${excelRow}`);
+    const registration = sheet.getCell(`J${excelRow}`);
     registration.font = { name: "Aptos", size: 9, bold: info.pwSituation !== "registered", color: { argb: GRCON.ink } };
     registration.alignment = { vertical: "middle", horizontal: "center" };
     const registrationFill = info.pwSituation === "emitted" ? GRCON.green
       : info.pwSituation === "registered" ? GRCON.amber
       : info.pwSituation === "missing" ? GRCON.red : GRCON.muted;
     registration.fill = { type: "pattern", pattern: "solid", fgColor: { argb: registrationFill } };
-    const action = text(plan.sheets["N-1710"][excelRow - 1][9]);
-    const situation = sheet.getCell(`J${excelRow}`);
+    const action = text(plan.sheets[MAIN_SHEET][excelRow - 1][8]);
+    const situation = sheet.getCell(`I${excelRow}`);
     if (/Sem ação necessária/.test(action)) situation.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.green } };
     else if (/Cadastrar|Revisão|Conferir|Analisar|Tratar|Resolver/.test(action)) situation.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.red } };
     else situation.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.amber } };
     for (const [col, formula, result] of [
       ["F", info.f, info.results[0]], ["G", info.g, info.results[1]],
-      ["H", info.h, info.results[2]], ["I", info.i, info.results[3]],
+      ["H", info.h, info.results[2]],
     ] as const) {
       const cell = sheet.getCell(`${col}${excelRow}`);
       // Formula strings are generated by the application only. Source text
@@ -337,12 +366,16 @@ function styleOverview(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.headerFooter = { oddFooter: "&LGRCON · SIGEM × PW&CPágina &P de &N&R&D" };
   sheet.getColumn(1).width = 62;
   sheet.getColumn(2).width = 70;
-  sheet.getRow(1).height = 33;
   sheet.getRow(2).height = 27;
   for (const col of ["A", "B"]) {
-    formatHeader(sheet.getCell(col + "1"), GRCON.navy);
     formatHeader(sheet.getCell(col + "2"), GRCON.teal);
+    const top = sheet.getCell(col + "1");
+    top.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.white } };
+    top.border = { bottom: { style: "medium", color: { argb: GRCON.navy } } };
+    top.font = { name: "Aptos", size: col === "A" ? 16 : 10, bold: true, color: { argb: GRCON.navy } };
+    top.alignment = { vertical: "middle", horizontal: col === "A" ? "left" : "right" };
   }
+  sheet.getRow(1).height = 58;
   const sections = new Set(plan.overviewSections);
   for (let index = 3; index <= rows; index++) {
     const label = sheet.getCell("A" + index);
@@ -390,16 +423,19 @@ function stylePw(sheet: ExcelSheet, dataRows: number): void {
     formatHeader(sheet.getCell(`${columnLetter(col)}1`));
   }
 }
-export function buildCoordinatorWorkbook(state: SigemPwState, excel: CoordinatorExcelApi): { workbook: ExcelWorkbook; plan: CoordinatorPlan } {
+export function buildCoordinatorWorkbook(state: SigemPwState, excel: CoordinatorExcelApi, logo?: CoordinatorLogo): { workbook: ExcelWorkbook; plan: CoordinatorPlan } {
   const plan = coordinatorPlan(state);
   const workbook = new excel.Workbook();
   if (workbook.calcProperties) workbook.calcProperties.fullCalcOnLoad = true;
   const overview = workbook.addWorksheet("Resumo");
   plan.sheets.Resumo.forEach(row => overview.addRow(row));
   styleOverview(overview, plan);
-  const main = workbook.addWorksheet("N-1710");
-  plan.sheets["N-1710"].forEach(row => main.addRow(row));
+  // Resumo: logo à esquerda da coluna B, título à esquerda e subtítulo à direita.
+  placeLogo(workbook, overview, logo, { tl: { col: 1.03, row: 0.18 } });
+  const main = workbook.addWorksheet(MAIN_SHEET);
+  plan.sheets[MAIN_SHEET].forEach(row => main.addRow(row));
   styleMain(main, plan);
+  placeLogo(workbook, main, logo, { tl: { col: 0.05, row: 0.06 } });
   const pw = workbook.addWorksheet("REL. PW");
   plan.sheets["REL. PW"].forEach(row => pw.addRow(row));
   stylePw(pw, plan.sheets["REL. PW"].length);
@@ -411,8 +447,18 @@ export function buildCoordinatorWorkbook(state: SigemPwState, excel: Coordinator
   // A fonte SIGEM permanece a Consulta Geral; nenhum dado fictício é exportado.
   return { workbook, plan };
 }
+async function loadLogo(): Promise<CoordinatorLogo | undefined> {
+  try {
+    const brand = (window as unknown as { GRCONBrandAssets?: { reportLogoFile?: string } }).GRCONBrandAssets;
+    const response = await fetch(brand?.reportLogoFile || "grcon-logo-report.png");
+    if (!response.ok) return undefined;
+    return { buffer: await response.arrayBuffer() };
+  } catch {
+    return undefined; // a marca é opcional: nunca impede o relatório
+  }
+}
 export async function downloadCoordinatorWorkbook(state: SigemPwState, excel: CoordinatorExcelApi): Promise<void> {
-  const { workbook } = buildCoordinatorWorkbook(state, excel);
+  const { workbook } = buildCoordinatorWorkbook(state, excel, await loadLogo());
   const data = await workbook.xlsx.writeBuffer();
   const file = new Blob([data as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(file);

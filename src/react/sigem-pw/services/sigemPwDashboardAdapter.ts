@@ -1198,7 +1198,7 @@ async function exportCoordinatorWorkbook(): Promise<void> {
     const excel = runtime[["Excel", "JS"].join("")];
     if (!excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
     await downloadCoordinatorWorkbook(state, excel);
-    notify("Relatório GRCON exportado: Resumo, N-1710 e relação PW completa.", "success");
+    notify("Relatório GRCON exportado: Resumo, Conferência Documental e relação PW completa.", "success");
   } catch (error) {
     console.error("[SIGEM×PW] Exportação do coordenador:", error);
     notify(messageOf(error, "Não foi possível exportar o relatório gerencial."), "error");
