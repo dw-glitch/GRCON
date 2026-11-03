@@ -11,14 +11,29 @@ export function AllocationAssistant(){
   if(!chat.open)return;
   const previouslyFocused=document.activeElement as HTMLElement|null;
   panel.current?.focus();
-  g.GrconMascot?.presentIn?.(mascot.current);
-  // Preserve the hello video: don't immediately override it with the idle state.
-  g.GrconMascot?.show?.('hello',{source:'audit-chat-open',force:true});
+  let runtimeWatcher:MutationObserver|undefined;
+  const present=()=>{
+   if(!mascot.current?.isConnected||!g.GrconMascot?.presentIn)return false;
+   g.GrconMascot.presentIn(mascot.current);
+   const working=assistant.snapshot().pending||service.snapshot().busy;
+   g.GrconMascot?.show?.(working?'analyzing':'hello',{source:'audit-chat-open',force:true});
+   return true;
+  };
+  // The official mascot runtime can initialize after the assistant bundle.
+  if(!present()){
+   runtimeWatcher=new MutationObserver(()=>{
+    if(present())runtimeWatcher?.disconnect();
+   });
+   runtimeWatcher.observe(document.documentElement,{
+    attributes:true,attributeFilter:['data-grcon-mascot-runtime']
+   });
+  }
   const closeOnEscape=(event:KeyboardEvent)=>{
    if(event.key==='Escape'){event.preventDefault();assistant.close();}
   };
   document.addEventListener('keydown',closeOnEscape);
   return()=>{
+   runtimeWatcher?.disconnect();
    document.removeEventListener('keydown',closeOnEscape);
    // Host ownership transfers back to the still-mounted launcher, not a new mascot.
    const launcher=document.querySelector<HTMLButtonElement>('.aac-launcher:not(.aac-launcher-hidden)');
