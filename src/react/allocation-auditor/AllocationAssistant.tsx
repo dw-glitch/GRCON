@@ -68,13 +68,28 @@ export function AllocationAssistant(){
   <div className="aac-messages" role="log" aria-live="polite">{chat.messages.map(m=><article className={'aac-message aac-'+m.role} key={m.id}><small>{m.role==='user'?'Você':'Assistente GRCON'}</small><p>{m.text}</p></article>)}
    {!s.records.length&&<div className="aac-options"><button disabled={busy} onClick={()=>void assistant.current()}>Auditar alocação atual</button><label>Enviar outra alocação<input type="file" multiple accept=".xlsx" disabled={busy} onChange={e=>{void assistant.upload([...e.target.files||[]],'allocation');e.target.value='';}}/></label></div>}
    <nav className="aac-quick-actions" aria-label="Ações rápidas do auditor">
-    {Boolean(s.records.length)&&(s.total===0||s.progress===s.total)&&<button type="button" disabled={busy} onClick={()=>void assistant.auditFiles()}>Auditar arquivos</button>}
+    {chat.pendingSheets.length===0&&Boolean(s.records.length)&&(s.total===0||s.progress===s.total)&&<button type="button" disabled={busy} onClick={()=>void assistant.auditFiles()}>Auditar novamente</button>}
     {s.total>0&&s.progress<s.total&&!busy&&<button type="button" onClick={()=>void assistant.resume()}>Retomar análise</button>}
     <button type="button" disabled={busy} onClick={()=>void assistant.status()}>Situação</button>
     {s.rows.length>0&&<button type="button" disabled={busy} onClick={()=>void assistant.details()}>Ver pendências</button>}
     <button type="button" disabled={busy} onClick={()=>void assistant.help()}>Ajuda</button>
    </nav>
-   {Boolean(s.context.sources?.length)&&<details><summary>Arquivos recebidos ({s.context.sources.length})</summary>{s.context.sources.map((f:Data)=><p key={f.sha256}>{f.name} · {f.kind==='ld'?'LD':'Alocação'}</p>)}</details>}
+   {chat.pendingSheets.length>0&&<section className="aac-sheet-selection" aria-label="Selecionar abas das alocações">
+    <strong>Confirmar abas documentais</strong>
+    <p>Encontrei mais de uma aba compatível em alguns arquivos. Selecione a origem para evitar auditoria incorreta.</p>
+    {chat.pendingSheets.map(entry=><label key={entry.name}>
+     <span>{entry.name}</span>
+     <select value={entry.selected} disabled={busy} aria-label={'Aba da alocação '+entry.name} onChange={e=>assistant.chooseSheet(entry.name,e.target.value)}>
+      <option value="">Selecione uma aba</option>
+      {entry.options.map(option=><option key={option.name} value={option.name}>{option.name} · {option.documentCount} documentos · {option.model==='official-16'?'16 colunas':'colunas mapeadas'}</option>)}
+     </select>
+    </label>)}
+    <div className="aac-sheet-controls">
+     <button className="primary-button" type="button" disabled={busy||chat.pendingSheets.some(x=>!x.selected)} onClick={()=>void assistant.confirmSheetSelection()}>Confirmar e auditar</button>
+     <button type="button" disabled={busy} onClick={()=>assistant.cancelSheetSelection()}>Cancelar</button>
+    </div>
+   </section>}
+   {Boolean(s.context.sources?.length)&&<details><summary>Arquivos recebidos ({s.context.sources.length})</summary>{s.context.sources.map((f:Data)=><p key={f.sha256}>{f.name} · {f.kind==='ld'?'LD':'Alocação'}{f.model==='mapped'?' · layout mapeado (sem correção automática da planilha)':''}</p>)}</details>}
    {s.rows.length>0&&<div className="aac-result"><strong>{s.progress} de {s.total} documentos analisados</strong><p>{s.summary.errors||0} com erros confirmados · {s.summary.pending||0} com verificações pendentes</p><button className="primary-button" disabled={busy||s.progress!==s.total} onClick={()=>void assistant.download()}>Baixar pacote completo</button>
    <details><summary>Nova alocação e linhas da Central</summary><p>Emissão opcional, separada da auditoria preventiva. Esta ação cria nova numeração oficial no Gerador e não altera a Central compartilhada.</p>
     {confirmIssue?<div className="aac-issue-confirm" role="group" aria-label="Confirmar nova emissão">
