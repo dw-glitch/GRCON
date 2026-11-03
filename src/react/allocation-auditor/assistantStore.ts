@@ -144,9 +144,23 @@ export const assistant={
    switch(intent){
     case 'audit':{
      const ref=g.GrconAllocationAssistant.allocationReference(request);
-     if(ref){
+     const loaded=service.snapshot();
+     const uploads=(loaded.context.sources||[]).filter((x:Data)=>x.kind==='allocation');
+     const full=String(ref||'').toUpperCase();
+     const matchingUpload=Boolean(full&&(
+      loaded.records.some((r:Data)=>String(r.allocation||'').toUpperCase()===full)||
+      uploads.some((x:Data)=>String(x.name||'').toUpperCase().includes(full))
+     ));
+     if(ref&&!matchingUpload){
+      // Never overwrite external pre-fiscalization inputs by silently loading history.
+      if(loaded.records.length&&uploads.length){
+       speak('Já existem alocações externas anexadas. Para conferir esses arquivos, use "Auditar arquivos". Para consultar outra alocação, abra uma conversa sem anexos e informe o código completo.');
+       break;
+      }
       await service.openAllocationReference(ref);
       speak('Alocação '+ref+' encontrada no histórico do Gerador. Conferindo os documentos antes do envio.');
+     }else if(matchingUpload){
+      speak('Encontrei a alocação informada nos arquivos recebidos. Vou usar a planilha anexada, sem substituí-la pelo histórico do Gerador.');
      }
      await audit(false,speak);break;
     }
