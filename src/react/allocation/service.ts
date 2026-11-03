@@ -90,6 +90,7 @@ export const service={
   });
  },
  async importAuditLd(files:File[]){return await this.importSource('ld',files);},
+ clearAuditLd(){ldRecords=[];},
  // O Robô Auditor Preventivo é parte do Gerador e vem habilitado para todos os contratos; as permissões de uso continuam no servidor.
  assistantEnabled(){return true;},
  async showAssistant(){await globals.GRCONModuleLoader.ensure('allocation-auditor');globals.GrconAllocationAuditorUi.showAssistant();},

@@ -29,6 +29,18 @@ const identifyAllocation=(name:string)=>name.match(/(C1O-ALOC-[A-Z]+-\d{3,4}-20\
 const save=(bytes:Uint8Array,name:string)=>{const u=URL.createObjectURL(new Blob([bytes as BlobPart]));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),60000);};
 export const service={
  async assistantRpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_assistant',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message);return r.data;},
+ // Exclui a análise atual para começar outra. Os arquivos originais do usuário nunca são tocados;
+ // o histórico já salvo no servidor é imutável (trilha de auditoria) e permanece.
+ async discard(includeLds=false){
+  epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise excluída.')));pending.clear();
+  const keep=includeLds?[]:((state.context.sources||[]) as Data[]).filter(x=>x.kind==='ld');
+  for(const key of [...sourceFiles.keys()])if(!keep.some(x=>x.sha256===key))sourceFiles.delete(key);
+  saveRequest='';savedEvents=0;saveMetadata=null;
+  if(includeLds){try{(await generator()).clearAuditLd?.();}catch{/* o Gerador pode não estar carregado */}}
+  emit({groups:[],summary:{},rows:[],records:[],history:[],events:[],busy:false,progress:0,total:0,error:'',runId:'',selected:[],
+   context:{sources:keep,ldHashes:Object.fromEntries(keep.map((x:Data)=>[x.name,x.sha256]))},
+   message:includeLds?'Análise e LDs removidas desta sessão. Seus arquivos originais não foram alterados.':'Análise excluída. As LDs continuam disponíveis. Seus arquivos originais não foram alterados.'});
+ },
  // Fase 6: classificação A/B/C/D com números reais. Nada é gravado; apenas lê regras ativas do contrato.
  async correctionPlan(){
   const rows=state.rows;if(!rows.length)return g.GrconAllocationCorrections.plan([],{},g.GrconAllocationAssistant,[]);
@@ -85,25 +97,32 @@ export const service={
    }:r);
    const named=seenNames.get(file.name);
    if(named&&named!==parsed.sha256)throw Error(file.name+': o lote contém arquivos diferentes com o mesmo nome. Renomeie uma cópia.');
-   const old=(state.context.sources||[]).find((x:Data)=>x.name===file.name&&x.kind==='allocation');
-   if(old&&old.sha256!==parsed.sha256)throw Error(file.name+': já existe outro conteúdo com esse nome. Renomeie a nova cópia para preservar a origem.');
    seenNames.set(file.name,parsed.sha256);
    entries.push({name:file.name,sha256:parsed.sha256,kind:'allocation',sheet:candidate.name,model:parsed.model,documentCount:parsed.records.length,correctionMode:parsed.model==='official-16'?'official-16':'audit-only'});
    records.push(...normalizedRecords);
   }
-  const all=[...state.records,...records];
-  const unique=new Map(all.map(r=>[JSON.stringify([r.contract,r.sourceHash||r.sourceFile||r.document,r.sourceSheet||'',r.sourceRow||'',r.allocation||'',r.document,r.revision]),r]));
+  const keyOf=(r:Data)=>JSON.stringify([r.contract,r.sourceHash||r.sourceFile||r.document,r.sourceSheet||'',r.sourceRow||'',r.allocation||'',r.document,r.revision]);
+  const unionAll=new Map([...state.records,...records].map(r=>[keyOf(r),r]));
+  const previousAllocations=(state.context.sources||[]).filter((x:Data)=>x.kind==='allocation');
+  // Retomada: os mesmos arquivos de uma análise parcial salva continuam a análise. Qualquer outro envio
+  // inicia uma NOVA análise: as alocações anteriores são substituídas (nunca empilhadas); as LDs permanecem.
+  const checkpoint=Boolean(state.context.checkpoint)&&entries.every((e:Data)=>previousAllocations.some((old:Data)=>old.sha256===e.sha256))&&unionAll.size===state.records.length;
+  const unique=checkpoint?unionAll:new Map(records.map((r:Data)=>[keyOf(r),r]));
   if(unique.size>50000)throw Error('O conjunto excede 50.000 registros. Divida a auditoria em lotes.');
+  const replaced=!checkpoint&&(state.records.length>0||previousAllocations.length>0);
   // Commit only after every workbook, selection and origin is verified.
-  const sources=[...(state.context.sources||[])];
+  let sources:Data[]=[...(state.context.sources||[])];
+  if(!checkpoint){
+   sources=sources.filter((x:Data)=>x.kind!=='allocation');
+   for(const old of previousAllocations)if(!entries.some((e:Data)=>e.sha256===old.sha256))sourceFiles.delete(old.sha256);
+  }
   for(let i=0;i<entries.length;i++){
    const entry=entries[i];sourceFiles.set(entry.sha256,files[i]);
    if(!sources.some((x:Data)=>x.sha256===entry.sha256&&x.kind==='allocation'))sources.push(entry);
   }
-  const checkpoint=state.context.checkpoint&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.kind==='allocation'&&old.sha256===e.sha256))&&unique.size===state.records.length;
   if(!checkpoint)clearResults();
-  emit({records:[...unique.values()],context:{...state.context,sources},message:entries.length+' alocação(ões) recebida(s) e validada(s). Arquivos originais preservados.'});
-  return {checkpoint,documents:unique.size,files:entries.length};
+  emit({records:[...unique.values()],context:{...state.context,sources,inputFile:'',inputSheet:'',inputModel:'',sourceHash:'',allocation:''},message:(replaced?'Nova análise iniciada: as alocações anteriores foram substituídas. ':'')+entries.length+' alocação(ões) recebida(s) e validada(s). Arquivos originais preservados.'});
+  return {checkpoint,replaced,documents:unique.size,files:entries.length};
  });},
  async importAssistantLd(files:File[]){
   const t=epoch;

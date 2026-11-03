@@ -42,3 +42,9 @@ Revisar o PR #373 → merge em `main` → `npm run build:cloudflare` + deploy do
 - Todas essas detecções são **sugestões a conferir** (severidade pendente), sem prova normativa, e **nunca** correção automática; mudança de código não é aplicada em arquivo.
 - **Limite honesto:** a verificação ortográfica é por similaridade com a própria LD, não um dicionário completo do português; erros em palavras raras ou que não aparecem na LD não são detectados.
 - Legenda flutuante do lançador: borda acompanha o texto.
+
+## Atualização 2 — nova auditoria, abas por alocação e escopo N-1710
+- **Anexar alocações** agora inicia uma **nova análise** (substitui a anterior; várias alocações no mesmo envio são analisadas juntas). A retomada de análise parcial (mesmos arquivos) continua funcionando. LDs permanecem.
+- **Nova auditoria** (botão no chat): *Excluir análise (manter LDs)* ou *Excluir análise e LDs*. Não altera arquivos do usuário; o histórico já salvo no servidor é imutável (trilha de auditoria) e não é apagado.
+- **Relatório com mais de uma alocação:** abas próprias por número (`DETALHAMENTO 0372-2026`, `ALOC. CORRIGIDA 0372-2026`, `TÍTULOS LD 0372-2026`), coluna **Norma** (N-1710 / ET-5290) e quadro "Resultado por alocação" no RESUMO. Com uma só alocação, as abas mantêm os nomes simples.
+- **Escopo N-1710 (motor 1.4.0):** documentos N-1710 são auditados somente quanto a **Data Book, níveis (EAP) e título**, além de verificações estruturais (revisão, duplicidade, LD ambígua, código digitado, sequencial N-1710). Não recebem: nt-/TAG/Apêndice, regras da ET, Workflow nem precedentes fiscais de categorias fora de título/Data Book/EAP.

@@ -242,13 +242,15 @@
   if(!text(context.contract))throw Error('Contrato obrigatório.');
   if(input.contract&&input.contract!==context.contract)throw Error('Documento de outro contrato.');
   const r={...input,contract:context.contract},f=[],p=parts(r.document),add=(...a)=>f.push(finding(...a)),enforced=applicable(context);
+  // Norma do código: ET-5290 (Grupo 7 com TAG, separado por _) ou N-1710. Em N-1710 só se auditam Data Book, níveis (EAP) e título.
+  const kind=p?'ET':/^(?:[A-Z]-)?[A-Z]{2}-\d{4}\.\d{2}-/i.test(text(r.document))?'N-1710':'outro',isN1710=kind==='N-1710';
   if(r.rawDocument&&r.rawDocument!==r.document)add('SOURCE-CODE-WHITESPACE','code','document','O código de origem contém espaços externos. Confira a fonte; o valor original foi preservado.',[{original:r.rawDocument,matchingKey:r.document}]);
   const originals=index.ld.get(r.document)||[],compatible=originals.filter(x=>!r.revision||!x.revision||String(x.revision)===r.revision).filter(x=>sameLd(r,{ld:x.source||x.sourceFile,ldSheet:x.sheet||x.sourceSheet}));
   const source=compatible.length===1?compatible[0]:null,recommendations=[];
   if(source){for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k])&&!(r.officialAllocation&&k==='workflow'))r[k]=text(source[k]);r.ld=r.ld||text(source.source);r.ldSheet=r.ldSheet||text(source.sheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={revision:text(source.revision),file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
   if(source&&r.officialAllocation){
    const reference={origin:'LD exata',file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,version:source.ldVersion||''};
-   if(text(source.workflow)&&text(source.workflow)!==text(r.workflow))recommendations.push({field:'workflow',before:text(r.workflow),after:text(source.workflow),justification:'Diferença de Workflow frente à linha exata da LD. Verifique a versão e a disciplina antes de aprovar.',evidence:[JSON.stringify(reference)],confidence:'fonte documental exata',humanReview:true});
+   if(!isN1710&&text(source.workflow)&&text(source.workflow)!==text(r.workflow))recommendations.push({field:'workflow',before:text(r.workflow),after:text(source.workflow),justification:'Diferença de Workflow frente à linha exata da LD. Verifique a versão e a disciplina antes de aprovar.',evidence:[JSON.stringify(reference)],confidence:'fonte documental exata',humanReview:true});
    if(text(source.databook)&&text(source.databook)!==text(r.databook)&&index.paths.has(text(source.databook)))recommendations.push({field:'databook',before:text(r.databook),after:text(source.databook),justification:'Caminho da LD encontrado na base Data Book ativa. Confirme a adequação ao serviço antes de aprovar.',evidence:[JSON.stringify({...reference,databookVersion:context.versions?.databook})],confidence:'fonte documental exata',humanReview:true});
   }
   if(!originals.length&&index.ldCodes.size){
@@ -275,13 +277,14 @@
     if(!text(r.action))add('ALLOCATION-ACTION-MISSING','history','action','A ação da alocação está vazia.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
     if(!text(r.purpose))add('ALLOCATION-PURPOSE-MISSING','history','purpose','O Propósito de Emissão Original está vazio.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
    }
-  if(!enforced)add('ET-APPLICABILITY','code','document','Aplicabilidade e revisão da ET ainda não comprovadas para este contrato.',[],{origin:'Base normativa'});
+  if(!enforced&&!isN1710)add('ET-APPLICABILITY','code','document','Aplicabilidade e revisão da ET ainda não comprovadas para este contrato.',[],{origin:'Base normativa'});
   const catalogRApplicable=enforced&&context.applicability?.revision==='R';
-  if(enforced&&!catalogRApplicable)add('ET-REVISION-NEEDS-VALIDATION','code','document','A revisão aplicável da ET é '+context.applicability.revision+', mas o validador incorporado usa a revisão R. Não aplicar as regras da revisão R como não conformidades confirmadas.',[{source:ET,applicableRevision:context.applicability.revision,catalogRevision:'R',contract:context.contract}],{source:'Controle de aplicabilidade normativa',origin:'Base normativa',severity:'pending',normativeProof:false});
+  if(enforced&&!catalogRApplicable&&!isN1710)add('ET-REVISION-NEEDS-VALIDATION','code','document','A revisão aplicável da ET é '+context.applicability.revision+', mas o validador incorporado usa a revisão R. Não aplicar as regras da revisão R como não conformidades confirmadas.',[{source:ET,applicableRevision:context.applicability.revision,catalogRevision:'R',contract:context.contract}],{source:'Controle de aplicabilidade normativa',origin:'Base normativa',severity:'pending',normativeProof:false});
   if(context.validateDocument){
    const validation=context.validateDocument(r.document);
    for(const error of validation.errors||[]){
     const et=/^ET(?:-|_)/.test(String(error.code||''));
+    if(et&&isN1710)continue; // regras da ET não se aplicam a documentos N-1710
     if(et&&enforced&&!catalogRApplicable)continue;
     const matched=(context.bases?.norms||[]).find(n=>n.source===error.source&&n.contract===context.contract&&n.applicabilityEvidence&&n.confirmed===true);
     const confirmed=et?catalogRApplicable:Boolean(matched);
@@ -336,13 +339,14 @@
    }
   // A Workflow/discipline discrepancy is a preventive warning, not a guessed correction.
   const alias={ELE:'ELETRICA',TUB:'TUBULACAO',HVAC:'HVAC',CVL:'CIVIL'};
-  const workflowCategory=workflowDiscipline(r.workflow);
+  const workflowCategory=isN1710?'':workflowDiscipline(r.workflow);
   const documentCategory=alias[norm(r.discipline)]||'';
   if(workflowCategory&&documentCategory&&workflowCategory!==documentCategory){
    add('WORKFLOW-DISCIPLINE-CONFLICT','workflow','workflow','A disciplina identificada no Workflow diverge da disciplina explicitamente codificada. Confira a LD e a tabela aplicável antes do envio.',[{document:r.document,codeDiscipline:r.discipline,workflow:r.workflow,workflowDiscipline:workflowCategory,sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow}],{severity:context.homologated?.workflows?'pending':'suggestion',origin:'Workflow / LD',normativeProof:false});
   }
   const workflows=context.bases?.workflows||[];
-  if(!text(r.workflow))add('WORKFLOW-MISSING','workflow','workflow','Workflow não informado. Verifique a necessidade de definição.',[]);
+  if(isN1710){/* Workflow não é auditado em N-1710 */}
+  else if(!text(r.workflow))add('WORKFLOW-MISSING','workflow','workflow','Workflow não informado. Verifique a necessidade de definição.',[]);
   else if(workflows.length&&!workflows.some(w=>text(w.workflow)===r.workflow)){const near=closest(r.workflow,index.workflows,0.04);add('WORKFLOW-UNKNOWN','workflow','workflow','Workflow não localizado na referência carregada.'+(near?' Existe um Workflow muito parecido; confira possível erro de digitação.':''),[{workflow:r.workflow,...(near?{workflowSemelhante:near.item}:{})}],near?{suggestion:{field:'workflow',before:r.workflow,after:near.item}}:{});}
   const dup=JSON.stringify([input.document,input.revision||'',input.allocation||input.sourceFile||'']);
   if((index.batches.get(dup)||0)>1)add('DUPLICATE-IN-BATCH','history','document','Mesmo código e revisão aparecem mais de uma vez no mesmo lote. Confira antes de gerar.',[{allocation:r.allocation,file:r.sourceFile}],{severity:r.revision?'error':'pending'});
@@ -364,6 +368,7 @@
   if(family&&index.byFamilyCategory){
    const categories=['title','code','tag','databook','hierarchy','workflow','scope'];
    for(const category of categories){
+    if(isN1710&&!['title','databook','hierarchy'].includes(category))continue;
     const recurrence=index.byFamilyCategory.get(family+'|'+category);
     if(!recurrence)continue; // A single document resubmitted several times is not recurrence.
     add('FISCAL-FAMILY-'+category,'history','fiscalComment',
@@ -373,7 +378,7 @@
    }
   }
   const status=f.some(x=>x.severity==='error')?'Correções pendentes':f.some(x=>x.severity==='pending')?'Verificações inconclusivas':f.some(x=>x.severity==='suggestion')?'Sugestões de melhoria':'Sem não conformidades detectadas';
-  return {...r,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto'};
+  return {...r,docKind:kind,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto'};
  }
  function compare(a,b){const changes=[],unknown=[];for(const k of ['document','revision','title','tag','discipline','eap','databook','levels','workflow']){if(a[k]==null||b[k]==null||a[k]===''||b[k]===''){unknown.push(k);continue;}if(JSON.stringify(a[k])!==JSON.stringify(b[k]))changes.push({field:k,before:a[k],after:b[k]});}return {changes,unknown,resolved:false};}
  function reviewEvent(row,{state,field,value,justification,evidence=[],decision='proposed'},actor){

@@ -13,7 +13,7 @@ const result=[];
 (async()=>{
  const history=Array.from({length:6000},(_,i)=>({contract:'qa',document:'RL-5290.00-22313-91A-C1O-'+String(100000+i%1500).slice(-3)+'-X'+(i%1500),revision:'0',fiscalComment:'Completar o título do documento conforme padrão '+i%40,sourceFile:'HIST.xlsx',sourceSheet:'GERAL',sourceRow:i+2,allocation:'C1O-ALOC-CM-0001-2026'}));
  for(const n of [100,500,1000,2500]){
-  const records=Array.from({length:n},(_,i)=>({contract:'qa',document:'RL-5290.00-22313-91A-C1O-'+String(1000+i),revision:'0',title:'TÍTULO '+i,allocation:'C1O-ALOC-CM-0372-2026',sourceFile:'ALOC.xlsx',sourceSheet:'GERAL',sourceRow:i+2,sourceHash:'a'.repeat(64),officialAllocation:true,workflow:'WF '+i%7,databook:'DB|'+i%11,levels:['1','','','','',''],discipline:'ELE'}));
+  const records=Array.from({length:n},(_,i)=>({contract:'qa',document:'C1O_RNEST_U32_10.2.1.2_ELE_RIR_TR-'+String(1000+i),revision:'0',title:'TÍTULO '+i,allocation:'C1O-ALOC-CM-0372-2026',sourceFile:'ALOC.xlsx',sourceSheet:'GERAL',sourceRow:i+2,sourceHash:'a'.repeat(64),officialAllocation:true,workflow:'WF '+i%7,databook:'DB|'+i%11,levels:['1','','','','',''],discipline:'ELE'}));
   const ldRecords=records.map((r,i)=>({document:r.document,revision:'0',source:'LD.xlsx',sheet:'ELE',row:i+2,workflow:i%5===0?'WF NOVO':r.workflow,databook:r.databook,discipline:'ELE'}));
   const context={contract:'qa',records,ldRecords,history,bases:{databook:Array.from({length:11},(_,i)=>({databook:'DB|'+i}))},versions:{databook:'v1'},ldHashes:{'LD.xlsx':'b'.repeat(64)},homologated:{},applicability:{}};
   const t0=ms0();await call('context',context);let rows=[];
