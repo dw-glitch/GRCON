@@ -43,7 +43,7 @@ const window={
  },
  GrconAllocationAssistant:{
   intent:t=>/^retom/i.test(t)?'resume':/^aud|^confer/i.test(t)?'audit':/^baix/i.test(t)?'package':/^pend/i.test(t)?'details':'help',
-  allocationReference:()=>'',questionRows:()=>[],
+  allocationReference:t=>t.match(/C1O-ALOC-[A-Z]+-\\d{3,4}-20\\d{2}/i)?.[0]?.toUpperCase()||'',questionRows:()=>[],
  },
  addEventListener:add
 };
@@ -78,6 +78,13 @@ const read=()=>assistant.snapshot().messages.map(x=>x.text).join('\n');
 
  await assistant.details();
  assert.match(read(),/detalhamento técnico/);
+ // An uploaded external allocation must take precedence over a generator-history lookup.
+ state.context.sources=[{kind:'allocation',name:'C1O-ALOC-CM-0372-2026.xlsx'}];
+ state.records=[{document:'D-EXT',allocation:'C1O-ALOC-CM-0372-2026'}];
+ const beforeExternal=calls.filter(x=>x==='historyLookup').length;
+ await assistant.send('Auditar C1O-ALOC-CM-0372-2026');
+ assert.equal(calls.filter(x=>x==='historyLookup').length,beforeExternal,'External upload wins over history');
+ assert.match(read(),/planilha anexada/);
  holdAnalysis=true;
  state.records=[{document:'D-1'},{document:'D-2'},{document:'D-3'}];
  const pending=assistant.auditFiles();
@@ -94,5 +101,5 @@ const read=()=>assistant.snapshot().messages.map(x=>x.text).join('\n');
  assert.notEqual(assistant.snapshot().sessionId,oldSession,'Switching contract clears conversation state');
  assert.equal(assistant.snapshot().open,false);
  assert.match(read(),/Robô Auditor Preventivo/);
- console.log('allocation_auditor_chat_phase3: 13 behavior assertions passed');
+ console.log('allocation_auditor_chat_phase3: conversational behavior including external-priority passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});
