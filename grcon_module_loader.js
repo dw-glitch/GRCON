@@ -345,6 +345,10 @@
     // Compatibility for old links and saved navigation: never open a standalone Auditor.
     if (view === "allocation-auditor") {
       await ensureModule("allocation-generator");
+      if (!root.GrconAllocationGeneratorUi?.assistantEnabled?.()) {
+        root.GrconNotify?.("O Robô Auditor não está habilitado para este contrato. Consulte o Proprietário ADM.", "warning");
+        return;
+      }
       await ensure("allocation-auditor");
       root.GrconAllocationAuditorUi?.showAssistant?.();
       return;
