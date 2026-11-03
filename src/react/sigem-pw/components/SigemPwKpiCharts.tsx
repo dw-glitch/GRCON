@@ -7,6 +7,9 @@ interface Props {
   summary: ManagerialSummary;
   selection: string;
   onSelect(key: ChartKey): void;
+  /** false = somente revisão 0 (padrão); true = todas as revisões. */
+  allRevisions: boolean;
+  onAllRevisionsChange(value: boolean): void;
 }
 
 type Tone = "ok" | "warn" | "bad" | "muted" | "info";
@@ -109,7 +112,7 @@ function Meter({ label, value, total, tone, hint, keyName, selection, onSelect }
  * quantos documentos são controlados, em que ponto do PW cada um está e como estão no SIGEM.
  * Cada trecho/legenda filtra a relação de documentos logo abaixo.
  */
-export function SigemPwKpiCharts({ summary, selection, onSelect }: Props) {
+export function SigemPwKpiCharts({ summary, selection, onSelect, allRevisions, onAllRevisionsChange }: Props) {
   const [tip, setTip] = useState<Tip | null>(null);
   const universe = summary.active;
   if (universe === null) return null;
@@ -121,13 +124,9 @@ export function SigemPwKpiCharts({ summary, selection, onSelect }: Props) {
     { key: "notEmitted", label: "Cadastrados, não emitidos", value: summary.registeredNotEmitted || 0, tone: "warn", hint: "Já constam no PW, mas ainda sem emissão." },
     { key: "awaiting", label: "Aguardando cadastro", value: summary.awaitingRegistration || 0, tone: "bad", hint: "Ainda não constam na consulta PW (CSG/QTM)." },
   ] : null;
-  const compliant = summary.compliant;
-  const pending = summary.pending;
-  const sigemSegments: Segment[] | null = compliant !== null && pending !== null ? [
-    { key: "compliant", label: "Em conformidade", value: compliant, tone: "ok", hint: "Revisão alinhada, avaliação favorável e sem ressalvas." },
-    { key: "pending", label: "Com pendências", value: pending, tone: "warn", hint: "Exigem ação ou aguardam conclusão do processo." },
-    { key: "other", label: "Em preparação ou incompletos", value: Math.max(0, universe - compliant - pending), tone: "muted", hint: "Ainda em preparação ou com dados insuficientes para avaliar." },
-  ] : null;
+  const issued = summary.sigemIssued ? (allRevisions ? summary.sigemIssued.all : summary.sigemIssued.rev0) : null;
+  const inLd = summary.sigemInLd ? (allRevisions ? summary.sigemInLd.all : summary.sigemInLd.rev0) : null;
+  const scope = allRevisions ? "todas as revisões" : "somente a revisão 0";
 
   return (
     <div className="spw-charts" id="spw-kpi-charts">
@@ -149,12 +148,25 @@ export function SigemPwKpiCharts({ summary, selection, onSelect }: Props) {
 
       <section className="spw-chart-card" aria-labelledby="spw-chart-sigem-title">
         <header>
-          <h4 id="spw-chart-sigem-title">2 · Situação no SIGEM</h4>
-          <p>Postagem e conformidade dos <b>{nf(universe)}</b> documentos controlados.</p>
+          <h4 id="spw-chart-sigem-title">2 · Emissão no SIGEM</h4>
+          <p>Documentos emitidos na Consulta Geral ({scope}) e quantos deles constam nas LDs.</p>
         </header>
-        {summary.posted !== null ? <Meter label="Postados no SIGEM" value={summary.posted} total={universe} tone="info" keyName="posted" selection={selection} onSelect={onSelect}
-          hint="Localizados na Consulta Geral; postagem não significa aprovação." /> : null}
-        {sigemSegments ? <SegmentedBar title="Conformidade no SIGEM" segments={sigemSegments} total={universe} selection={selection} onSelect={onSelect} unit="documentos" onTip={setTip} /> : null}
+        <fieldset className="spw-chart-scope">
+          <legend className="spw-sr-only">Revisões consideradas</legend>
+          <label><input type="radio" name="spw-sigem-scope" checked={!allRevisions} onChange={() => onAllRevisionsChange(false)} /><span>Somente revisão 0</span></label>
+          <label><input type="radio" name="spw-sigem-scope" checked={allRevisions} onChange={() => onAllRevisionsChange(true)} /><span>Todas as revisões</span></label>
+        </fieldset>
+        {issued !== null && inLd !== null ? (
+          <>
+            <div className="spw-sigem-stat">
+              <span>Emitidos no SIGEM</span>
+              <strong>{nf(issued)}</strong>
+              <small>documentos únicos na Consulta Geral · {scope}</small>
+            </div>
+            <Meter label="Constam nas LDs" value={inLd} total={issued} tone="ok" keyName="posted" selection={selection} onSelect={onSelect}
+              hint={`${nf(Math.max(0, issued - inLd))} emitido(s) no SIGEM não constam nas LDs ativas.`} />
+          </>
+        ) : <p className="spw-chart-empty">Importe a Consulta Geral e as LDs para ver a emissão no SIGEM.</p>}
       </section>
       <Tooltip tip={tip} />
     </div>

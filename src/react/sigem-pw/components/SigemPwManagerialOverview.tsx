@@ -13,7 +13,7 @@ function fmt(value: number | null): string {
 function eligible(row: ManagerialDocument): boolean {
   return row.situation !== "Cancelado";
 }
-function matchesKpi(row: ManagerialDocument, key: Selection): boolean {
+function matchesKpi(row: ManagerialDocument, key: Selection, allRevisions: boolean): boolean {
   if (key === "all") return true;
   if (!eligible(row)) return false;
   switch (key) {
@@ -22,7 +22,7 @@ function matchesKpi(row: ManagerialDocument, key: Selection): boolean {
     case "emitted": return row.pwEmitted;
     case "awaiting": return !row.pwNotApplicable && !row.pwRegistered;
     case "notEmitted": return !row.pwNotApplicable && row.pwRegistered && !row.pwEmitted;
-    case "posted": return row.sigemPosted;
+    case "posted": return allRevisions ? row.sigemPosted : row.sigemRev0;
     case "compliant": return row.situation === "Em conformidade";
     case "pending": return row.situation === "Com pendência" || row.situation === "Em andamento";
     case "other": return row.situation === "Em preparação" || row.situation === "Dados insuficientes";
@@ -42,6 +42,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
   const [situation, setSituation] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [allRevisions, setAllRevisions] = useState(false);
   const [selectedCode, setSelectedCode] = useState("");
   const evidenceRef = useRef<HTMLElement>(null);
   useEffect(() => { if (selectedCode) evidenceRef.current?.scrollIntoView({ block: "nearest" }); }, [selectedCode]);
@@ -53,19 +54,19 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
     { key: "emitted", label: "Emitidos no PW", value: sum.emitted },
     { key: "awaiting", label: "Aguardando cadastro", value: sum.awaitingRegistration },
     { key: "notEmitted", label: "Cadastrados, não emitidos", value: sum.registeredNotEmitted },
-    { key: "posted", label: "Postados no SIGEM", value: sum.posted },
+    { key: "posted", label: allRevisions ? "Emitidos no SIGEM (todas as revisões)" : "Emitidos no SIGEM (revisão 0)", value: sum.sigemInLd ? (allRevisions ? sum.sigemInLd.all : sum.sigemInLd.rev0) : sum.posted },
     { key: "compliant", label: "Em conformidade", value: sum.compliant },
     { key: "pending", label: "Com pendências", value: sum.pending },
     { key: "other", label: "Em preparação ou incompletos", value: sum.active !== null && sum.compliant !== null && sum.pending !== null ? Math.max(0, sum.active - sum.compliant - sum.pending) : null },
   ];
   const filtered = useMemo(() => report.rows.filter(row => {
-    if (!matchesKpi(row, selection)) return false;
+    if (!matchesKpi(row, selection, allRevisions)) return false;
     if (situation && row.situation !== situation) return false;
     const needle = query.trim().toLocaleLowerCase("pt-BR");
     return !needle || [row.code, row.title, row.action, row.referenceRevision].some(value =>
       value.toLocaleLowerCase("pt-BR").includes(needle));
   }).sort((a, b) => priority(a) - priority(b) || a.code.localeCompare(b.code, "pt-BR")),
-  [report.rows, selection, situation, query]);
+  [report.rows, selection, situation, query, allRevisions]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -81,7 +82,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
           <span>{report.reason} Um dado ausente aparece como “—”, nunca como zero confirmado.</span>
         </div>
       ) : null}
-      <SigemPwKpiCharts summary={report.summary} selection={selection} onSelect={(key) => setKpi(key)} />
+      <SigemPwKpiCharts summary={report.summary} selection={selection} onSelect={(key) => setKpi(key)} allRevisions={allRevisions} onAllRevisionsChange={setAllRevisions} />
 
       <div className="spw-managerial-workspace" aria-labelledby="spw-managerial-list-title">
         <div className="spw-managerial-list-heading">
