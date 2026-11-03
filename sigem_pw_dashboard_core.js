@@ -137,7 +137,7 @@
     const raw = cleanCodeText(norm(stripDocumentExtension(cleanCodeText(value)))).replace(/\s*([_.-])\s*/g, "$1");
     let result = raw;
     if (raw && !N1710_CODE_RE.test(raw)) {
-      const match = raw.match(/^([A-Z0-9]{3})[-_]RNEST[-_]([A-Z0-9]+)[-_](\d+(?:\.\d+){3})[-_]([A-Z0-9]+)[-_]([A-Z0-9]+)[-_](.+)$/);
+      const match = raw.match(/^([A-Z0-9]{3})[-_]RNEST[-_]([A-Z0-9]+)[-_](\d+(?:\.\d+){3})[-_]([A-Z0-9]+)[-_]([A-Z0-9]+(?:\.[A-Z0-9]+)*)[-_](.+)$/);
       if (match) result = `${match[1]}_RNEST_${match[2]}_${match[3]}_${match[4]}_${match[5]}_${match[6]}`;
     }
     return cacheKey !== null ? remember(canonicalCache, cacheKey, result) : result;
@@ -251,7 +251,7 @@
 
   function classFromIdentity(identity) {
     if (isCvDocumentCode(identity.canonical)) return "CV";
-    if (/^C1O_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_.+$/i.test(identity.canonical)) return "ET";
+    if (/^C1O_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+(?:\.[A-Z0-9]+)*_.+$/i.test(identity.canonical)) return "ET";
     if (N1710_CODE_RE.test(identity.canonical)) return "N-1710";
     return UNCLASSIFIED;
   }
@@ -582,6 +582,11 @@
     };
   }
 
+  function looksLikeDocumentCode(code) {
+    return code.length >= 8 && /^[A-Z0-9][A-Z0-9._-]*$/.test(code)
+      && /\d/.test(code) && (code.match(/[-_]/g) || []).length >= 2;
+  }
+
   function parseLdMatrix(matrix, fileMeta) {
     const rows = Array.isArray(matrix) ? matrix : [];
     let headerRow = -1;
@@ -613,7 +618,11 @@
       const row = rows[rowIndex] || [];
       const document = rowValue(row, documentColumn);
       const identity = documentIdentity(document);
-      if (!identity.key || documentClass(document) === UNCLASSIFIED || seen.has(identity.key)) continue;
+      // A LD é a referência: qualquer código nela pertence ao universo, mesmo que a
+      // estrutura não seja reconhecida como ET/N-1710/CV (ex.: ET com ponto no 6º grupo,
+      // N-1710 com 5 dígitos, área 42323, C10_). Só são ignoradas linhas que não têm
+      // cara de código (títulos de seção, rótulos, células vazias).
+      if (!identity.key || !looksLikeDocumentCode(identity.canonical) || seen.has(identity.key)) continue;
       seen.add(identity.key);
       records.push({
         document,

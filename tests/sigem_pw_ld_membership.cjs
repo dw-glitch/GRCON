@@ -48,4 +48,24 @@ assert.notEqual(Core.documentIdentity("I-" + regular).key, key, "prefixo de idio
 assert.notEqual(Core.documentIdentity(regular + "_A").key, key, "sufixo de revisão não é ignorado em silêncio");
 assert.notEqual(Core.documentIdentity("RL-5290.00-22313-ABC-C1O-002").key, key);
 
+
+// 5. Códigos reais da LD que apareciam em "Fora das LDs": a LD os descartava na importação
+//    por não serem classificados como ET/N-1710/CV (ponto no 6º grupo, 5 dígitos, área 42323, C10_).
+const real = [
+  "C1O_RNEST_U32_7.6.1.1_EST_PAR.SPIE_V-32014", "C1O_RNEST_U32_7.6.1.1_EST_TH.SPIE_FT-C-32002A-02A",
+  "C1O_RNEST_U39_7.6.1.1_EST_TH.SPIE_P-39701A", "C10_RNEST_U32_3.9.2.1_CVL_RIR_EMT-NF-43578",
+  "IS-5290.00-22313-955-C1O-00101", "IS-5290.00-42323-955-C1O-2002",
+];
+const matrix = [["ITEM", "DOCUMENTO", "REVISÃO"], ["", "SISTEMA ELÉTRICO", ""], ["", "N-1710", ""], ...real.map((c, i) => [String(i), c, "0"])];
+const parsed = Core.parseLdMatrix(matrix, { fileName: "ld.xlsx" });
+assert.equal(parsed.records.length, real.length, "todos os códigos da LD são mantidos; títulos de seção são ignorados");
+for (const [name, transform] of [["igual à LD", c => c], ["PW com hífens", c => /RNEST/.test(c) ? c.replace(/_/g, "-") : c]]) {
+  const m = Core.createModel(real.map(document => ({ document, revision: "0", status: "Postado" })),
+    real.map(c => ({ document: transform(c), revision: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" })), parsed.records, opts);
+  assert.equal(m.excludedPwN1710.length, 0, name + ": nada que conste na LD pode ir para fora das LDs");
+  assert.equal(m.excludedSigemN1710.length, 0);
+  assert.equal(m.normalizedPw.length, real.length);
+}
+assert.equal(Core.documentClass("C1O_RNEST_U32_7.6.1.1_EST_TH.SPIE_FT-C-32002A-02A"), "ET", "ET com ponto no 6º grupo é ET");
+
 console.log("sigem_pw_ld_membership: consta na LD ⇒ no universo; fora da LD segue fora; variantes tipográficas; identidades distintas preservadas OK");
