@@ -34,13 +34,28 @@ export function RobotAuditorLauncher(){
  },[active,chat.open]);
 
  useLayoutEffect(()=>{
+  let runtimeWatcher:MutationObserver|undefined;
   if(active&&!chat.open&&host.current){
-   mascot()?.presentIn?.(host.current);
-   mascot()?.show?.('idle',{source:'allocation-preventive-launcher'});
+   const present=()=>{
+    if(!host.current?.isConnected||!mascot()?.presentIn)return false;
+    mascot()?.presentIn?.(host.current);
+    mascot()?.show?.('idle',{source:'allocation-preventive-launcher'});
+    return true;
+   };
+   // The official v5 runtime is injected asynchronously by the legacy entrypoint.
+   // Reclaim the mascot if its initialization finishes after the Generator opens.
+   if(!present()){
+    runtimeWatcher=new MutationObserver(()=>{
+     if(present())runtimeWatcher?.disconnect();
+    });
+    runtimeWatcher.observe(document.documentElement,{
+     attributes:true,attributeFilter:['data-grcon-mascot-runtime']
+    });
+   }
   }
   return()=>{
-   // Do not take the mascot away from the chat while transitioning between hosts.
-   // Only return it to the global header when leaving the Generator altogether.
+   runtimeWatcher?.disconnect();
+   // Don't release the mascot while it is being handed to the chat.
    if(!generatorVisible())mascot()?.presentIn?.(null);
   };
  },[active,chat.open]);
