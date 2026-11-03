@@ -147,3 +147,20 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 
 .aac-attachments label,.aac-options label{position:relative;cursor:pointer}.aac-attachments input[type=file],.aac-options label input[type=file]{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.aac-attachments label:focus-within,.aac-options label:focus-within{outline:2px solid #29749a;outline-offset:3px}
 .aac-training{font-family:Inter,Arial,sans-serif;color:#23384b;font-size:14px;line-height:1.5}.aac-training>label{display:flex;flex-direction:column;gap:6px;margin:14px 0}.aac-training input,.aac-training select,.aac-training textarea{font:inherit;color:inherit;background:#fff;border:1px solid #bfceda;border-radius:8px;padding:9px;max-width:100%;box-sizing:border-box}.aac-training textarea,.aac-training>label>select,.aac-training>label>input{width:100%}.aac-training button{font:inherit;border:1px solid #b7cbd9;background:#f3f8fb;color:#205471;border-radius:8px;padding:8px 12px;cursor:pointer}.aac-training button:disabled{opacity:.5;cursor:default}.aac-training>article{margin:16px 0;padding:18px;border:1px solid #cbd9e3;border-radius:12px;background:#fff}.aac-training .ag-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.aac-training [role=status]{border-left:3px solid #29749a;padding:10px;background:#edf6fb}.aac-training fieldset>label{display:flex;flex-direction:column;gap:6px}[data-theme=dark] .aac-training{color:#d8e6f0}[data-theme=dark] .aac-training>article,[data-theme=dark] .aac-training input,[data-theme=dark] .aac-training select,[data-theme=dark] .aac-training textarea{background:#172635;color:#e3eef6;border-color:#425c71}
+
+
+/* Robô Auditor Preventivo — non-modal floating surface anchored to the Generator. */
+.aac-backdrop{position:fixed;inset:0;z-index:12000;background:transparent;display:block;pointer-events:none;padding:0}
+.aac-panel,.aac-panel.aac-expanded{position:absolute;right:18px;bottom:18px;pointer-events:auto;max-width:calc(100vw - 36px);height:min(770px,calc(100dvh - 36px))}
+.aac-panel{width:min(480px,calc(100vw - 36px))}
+.aac-panel.aac-expanded{width:min(860px,calc(100vw - 36px))}
+.aac-launcher{position:fixed;right:22px;bottom:18px;z-index:11999;display:flex;align-items:center;flex-direction:column;gap:4px;border:0;padding:3px 5px;background:transparent;color:var(--text-1,#172c39);cursor:pointer;filter:drop-shadow(0 8px 12px rgba(0,0,0,.18))}
+.aac-launcher-mascot{width:104px;height:104px;display:flex;justify-content:center;align-items:center;pointer-events:none}
+.aac-launcher-caption{max-width:140px;background:var(--surface-1,#fff);border:1px solid var(--border-1,#d8e1e7);border-radius:999px;padding:5px 12px;font-weight:650;font-size:12px;white-space:nowrap}
+.aac-launcher:focus-visible{outline:3px solid #2588b5;outline-offset:2px;border-radius:18px}
+@media(max-width:760px){
+ .aac-backdrop{padding:0}
+ .aac-panel,.aac-panel.aac-expanded{right:0;bottom:0;width:100vw;max-width:100vw;height:min(90dvh,820px);border-radius:18px 18px 0 0}
+ .aac-launcher{right:10px;bottom:12px}
+ .aac-launcher-mascot{width:76px;height:76px}
+}
