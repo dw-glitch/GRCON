@@ -43,7 +43,7 @@ const window={
  },
  GrconAllocationAssistant:{
   intent:t=>/^retom/i.test(t)?'resume':/^aud|^confer/i.test(t)?'audit':/^baix/i.test(t)?'package':/^pend/i.test(t)?'details':'help',
-  allocationReference:t=>t.match(/C1O-ALOC-[A-Z]+-\\d{3,4}-20\\d{2}/i)?.[0]?.toUpperCase()||'',questionRows:()=>[],
+  allocationReference:t=>t.match(/C1O-ALOC-[A-Z]+-\d{3,4}-20\d{2}/i)?.[0]?.toUpperCase()||'',questionRows:()=>[],
  },
  addEventListener:add
 };
