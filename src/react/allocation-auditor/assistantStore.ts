@@ -72,7 +72,7 @@ async function audit(resume=false,speak:typeof say=say){
  try{count=await service.applyAutomatic();}
  catch(e){speak('A auditoria foi calculada, mas as correções automáticas não foram autorizadas: '+(e as Error).message);}
  const summary=service.core().summary(service.snapshot().rows);
- speak('Analisei '+summary.total+' documentos antes do envio à fiscalização. Foram autorizadas '+count+
+ speak('Analisei '+summary.total+' documento'+(summary.total===1?'':'s')+' antes do envio à fiscalização. Foram autorizadas '+count+
   ' correções por regras ativas e existem '+summary.pending+
   ' documentos com verificações pendentes. O pacote final indicará as evidências, as cópias geradas e as exceções.');
 }
