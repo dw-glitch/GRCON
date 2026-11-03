@@ -24,3 +24,8 @@ assert.match(css,/\.aac-launcher #grcon-mascot-context-bubble\{display:none!impo
 assert.match(css,/\.aac-launcher #grcon-context-mascot\.grcon-mascot-runtime\{width:104px;height:104px\}/,'tamanho do mascote no lançador');
 console.log('allocation_assistant_gate_phase9: lançador usa o mascote oficial do runtime, sem balão e com tamanho definido');
 assert.match(css,/\.aac-launcher-caption\{[^}]*width:max-content/,'a borda da legenda acompanha o texto');
+// Excluir análise e anexar-substitui estão expostos na interface e no Gerador.
+assert.match(chat,/Nova auditoria/);assert.match(chat,/Excluir análise \(manter LDs\)/);assert.match(chat,/Excluir análise e LDs/);
+assert.match(fs.readFileSync('src/react/allocation/index.tsx','utf8'),/clearAuditLd:\(\)=>service\.clearAuditLd\(\)/);
+assert.match(fs.readFileSync('src/react/allocation-auditor/service.ts','utf8'),/Nova análise iniciada: as alocações anteriores foram substituídas/);
+console.log('allocation_assistant_gate_phase9: excluir análise e anexar-substitui expostos');

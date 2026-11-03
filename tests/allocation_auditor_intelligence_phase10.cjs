@@ -47,9 +47,20 @@ assert.ok(typo.findings.some(x=>x.id==='CODE-TYPO-SUSPECT'&&x.suggestion.after==
 assert.ok(audit({document:'RL-5290.00-22313-91A-C1O-1004'}).findings.every(x=>x.id!=='CODE-TYPO-SUSPECT'),'código existente não é apontado');
 
 // caminho e workflow quase iguais aos cadastrados
-r=audit({document:'RL-5290.00-22313-91A-C1O-1004',databook:'UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIRR',workflow:'RNEST UHDTD U-32 C&M/ELETRICO'});
+r=audit({document:code('TR-0001'),databook:'UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIRR',workflow:'RNEST UHDTD U-32 C&M/ELETRICO'});
 assert.equal(r.findings.find(x=>x.id==='DATABOOK-NOT-FOUND').suggestion.after,'UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR');
 assert.equal(r.findings.find(x=>x.id==='WORKFLOW-UNKNOWN').suggestion.after,'RNEST UHDTD U-32 C&M/ELETRICA');
+// N-1710: só Data Book, níveis (EAP) e título — sem nt-/TAG/ET/Workflow
+const n1710=(over={})=>audit({document:'RL-5290.00-22313-91A-C1O-1004',workflow:'WORKFLOW QUALQUER',databook:'CAMINHO|INEXISTENTE',...over},base({ldRecords:filler.map(x=>({...x,workflow:'WF DA LD'})),bases:{...base().bases,eap:[{code:'3',levels:['3','3.1']}]}}));
+let n=n1710();
+assert.equal(n.docKind,'N-1710');assert.equal(audit({document:code('TR-0001')}).docKind,'ET');
+assert.ok(ids(n).includes('DATABOOK-NOT-FOUND'),'Data Book continua auditado');
+assert.ok(!ids(n).some(i=>/^(NT-|TAG-|ET-|WORKFLOW-)/.test(i)),'sem regras de nt-/TAG/ET/Workflow em N-1710: '+ids(n));
+assert.ok(!n.recommendations.some(r=>r.field==='workflow'),'sem proposta de Workflow em N-1710');
+assert.ok(ids(audit({document:code('TR-0001')})).includes('ET-APPLICABILITY'),'ET mantém a verificação de aplicabilidade');
+n=n1710({title:'RELATORIO DE INSPECAO DE RECEBIMENTO DE TRANSFORMDOR DE POTENCIA'});assert.ok(ids(n).includes('TITLE-TYPO-SUSPECT'),'título continua auditado em N-1710');
+n=n1710({eap:'3.1',levels:['9','','','','','']});assert.ok(ids(n).some(i=>i.startsWith('EAP-')),'níveis/EAP continuam auditados em N-1710');
+assert.ok(!ids(n1710({document:'RL-5290.00-22313-91A-C1O-1004',databook:'UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR'})).some(i=>i==='DATABOOK-NOT-FOUND'));
 // nada disso consome numeração nem é correção automática: títulos não entram em regras do servidor
 assert.ok(!require('node:fs').readFileSync(require.resolve('../allocation_auditor_assistant.js'),'utf8').includes("field==='title'&&"));
 console.log('allocation_auditor_intelligence_phase10: nt-, TAG sem nt-, ortografia de título, formatação, código digitado, caminho/workflow parecidos e limites aprovados');

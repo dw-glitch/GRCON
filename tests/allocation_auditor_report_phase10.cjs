@@ -38,7 +38,7 @@ const base={contract:'qa',progress:4,total:4,versions:{databook:'v1'},sources:[]
  const ex=new box.ExcelJS.Workbook();await ex.xlsx.load(bytes);
  const sheet=ex.getWorksheet('ALOCAÇÃO CORRIGIDA');
  assert.equal(sheet.getCell('C2').fill.fgColor.argb,'FFFFE08A');assert.ok(!sheet.getCell('C5').fill?.fgColor?.argb||sheet.getCell('C5').fill.fgColor.argb!=='FFFFE08A');
- assert.ok(sheet.getCell('R2').font.bold,'código sugerido em destaque');
+ assert.ok(sheet.getCell('S2').font.bold,'código sugerido em destaque');
  // Títulos da LD: título atual e sugerido lado a lado, termos alterados e origem
  const tl=X.utils.sheet_to_json(wb.Sheets['TÍTULOS DA LD'],{defval:''});
  assert.equal(tl.length,1);assert.equal(tl[0]['Título atual'],'RELATORIO DE TRANSFORMDOR');assert.equal(tl[0]['Título sugerido'],'RELATORIO DE TRANSFORMADOR');
@@ -62,5 +62,23 @@ const base={contract:'qa',progress:4,total:4,versions:{databook:'v1'},sources:[]
  const applied=await pack({...base,rows:[row0],total:1,progress:1,events:[ev],files:[]});
  const aw=X.read(await (await box.JSZip.loadAsync(applied.bytes)).file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array'});
  assert.equal(X.utils.sheet_to_json(aw.Sheets['ALOCAÇÃO CORRIGIDA'])[0]['Situação das alterações'],'Autorizadas; cópia pendente');
+ // Mais de uma alocação: abas próprias com o número, sem misturar N-1710 e ET
+ const a372=[row(0,{allocation:'C1O-ALOC-CM-0372-2026',docKind:'ET',findings:[{id:'TAG-NOT-PROVEN',category:'tag',field:'tag',severity:'pending',message:'TAG não comprovado.',evidence:[],source:'x',ruleVersion:C.VERSION}]}),row(1,{allocation:'C1O-ALOC-CM-0372-2026',docKind:'ET'})];
+ const a373=[row(5,{allocation:'C1O-ALOC-CM-0373-2026',docKind:'N-1710',document:'RL-5290.00-22313-91A-C1O-121',title:'RELATORIO DE TRANSFORMDOR',findings:[{id:'TITLE-TYPO-SUSPECT',category:'title',field:'title',severity:'pending',message:'Possível erro.',evidence:[],source:'o',ruleVersion:C.VERSION,suggestion:{field:'title',before:'RELATORIO DE TRANSFORMDOR',after:'RELATORIO DE TRANSFORMADOR'}}],recommendations:[{field:'title',before:'RELATORIO DE TRANSFORMDOR',after:'RELATORIO DE TRANSFORMADOR',justification:'j',evidence:[JSON.stringify({ajustes:[{de:'A',para:'B'}]})],confidence:'c',humanReview:true}]})];
+ const multi=await pack({...base,rows:[...a372,...a373],total:3,progress:3});
+ const mw=X.read(await (await box.JSZip.loadAsync(multi.bytes)).file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array'});
+ assert.deepEqual([...mw.SheetNames],['RESUMO','DETALHAMENTO 0372-2026','ALOC. CORRIGIDA 0372-2026','DETALHAMENTO 0373-2026','ALOC. CORRIGIDA 0373-2026','TÍTULOS LD 0373-2026']);
+ const d372=X.utils.sheet_to_json(mw.Sheets['DETALHAMENTO 0372-2026']),d373=X.utils.sheet_to_json(mw.Sheets['DETALHAMENTO 0373-2026']);
+ assert.ok(d372.every(d=>d['Alocação']==='C1O-ALOC-CM-0372-2026'&&d['Norma']==='ET-5290'),'0372 só tem documentos ET');
+ assert.ok(d373.every(d=>d['Alocação']==='C1O-ALOC-CM-0373-2026'&&d['Norma']==='N-1710'),'0373 só tem documentos N-1710');
+ assert.equal(X.utils.sheet_to_json(mw.Sheets['ALOC. CORRIGIDA 0372-2026']).length,2);assert.equal(X.utils.sheet_to_json(mw.Sheets['ALOC. CORRIGIDA 0373-2026']).length,1);
+ assert.equal(X.utils.sheet_to_json(mw.Sheets['TÍTULOS LD 0373-2026']).length,1);
+ const mres=JSON.stringify(X.utils.sheet_to_json(mw.Sheets.RESUMO,{header:1}));
+ assert.match(mres,/RESULTADO POR ALOCAÇÃO/);assert.match(mres,/C1O-ALOC-CM-0373-2026.*N-1710: 1/);assert.match(mres,/C1O-ALOC-CM-0372-2026.*ET-5290: 2/);
+ assert.ok([...mw.SheetNames].every(n=>n.length<=31));
+ // mesma numeração em anos diferentes não colide
+ const dup=await pack({...base,rows:[row(0,{allocation:'ALOC-0372-2026'}),row(1,{allocation:'ALOC-0372-2027'})],total:2,progress:2});
+ const dw=X.read(await (await box.JSZip.loadAsync(dup.bytes)).file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array'});
+ assert.ok(dw.SheetNames.includes('DETALHAMENTO 0372-2026')&&dw.SheetNames.includes('DETALHAMENTO 0372-2027'));
  console.log('allocation_auditor_report_phase10: abas ALOCAÇÃO CORRIGIDA e TÍTULOS DA LD, destaques, código sugerido, termos alterados e linguagem do resumo aprovados');
 })().catch(e=>{console.error(e);process.exit(1);});

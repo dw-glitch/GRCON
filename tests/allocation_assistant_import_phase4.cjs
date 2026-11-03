@@ -75,29 +75,41 @@ const service=qaModule.exports.service;
  assert.equal(service.snapshot().records.length,2);
  assert.deepEqual(Array.from(service.snapshot().context.sources,x=>x.model),['official-16','mapped']);
  assert.equal(service.snapshot().context.sources[1].correctionMode,'audit-only');
- await service.importMany([a]);
- assert.equal(service.snapshot().records.length,2,'Same file is idempotent');
- await assert.rejects(service.importMany([{...a,sha:'9'.repeat(64)}]),/outro conteúdo/);
- assert.equal(service.snapshot().records.length,2,'Rejected filename collision leaves records intact');
+ // Anexar alocações inicia uma NOVA análise: substitui as anteriores, nunca empilha.
+ const again=await service.importMany([a]);
+ assert.equal(again.replaced,true);assert.equal(service.snapshot().records.length,1,'Uma só alocação anexada gera uma análise só dela');
+ assert.deepEqual(Array.from(service.snapshot().context.sources,x=>x.name),[a.name],'Alocações anteriores saem das fontes');
+ const swapped=await service.importMany([{...a,sha:'9'.repeat(64)}]);
+ assert.equal(swapped.replaced,true,'Mesmo nome com outro conteúdo substitui a versão anterior em vez de bloquear');
+ assert.equal(service.snapshot().records.length,1);
+ await service.importMany([a,b]);
+ assert.equal(service.snapshot().records.length,2,'Várias alocações no mesmo envio são analisadas juntas');
 
  await assert.rejects(service.importMany([ambiguous]),/Selecione a aba correta/);
- assert.equal(service.snapshot().records.length,2);
+ assert.equal(service.snapshot().records.length,2,'Falha de seleção não destrói a análise existente');
  await service.importMany([ambiguous],{'MULTIABA.xlsx':'TUB'});
- assert.equal(service.snapshot().records.length,3);
- assert.equal(service.snapshot().records[2].sourceSheet,'TUB');
+ assert.equal(service.snapshot().records.length,1,'Novo envio substitui a análise anterior');
+ assert.equal(service.snapshot().records[0].sourceSheet,'TUB');
  await service.analyze();
- assert.equal(service.snapshot().progress,3);
+ assert.equal(service.snapshot().progress,1);
 
  const ld={name:'LD-001.xlsx',size:4000,sha:'e'.repeat(64)};
  const result=await service.importAssistantLd([ld]);
  assert.equal(result.unchanged,false);
  assert.equal(ldLoads,1);
- assert.equal(service.snapshot().records.length,3,'New LD must preserve all external records');
+ assert.equal(service.snapshot().records.length,1,'New LD must preserve all external records');
  assert.equal(service.snapshot().rows.length,0,'Old findings must not survive changed LD');
- assert.equal(service.snapshot().context.sources.length,4,'Allocation and LD provenance stay intact');
+ assert.equal(service.snapshot().context.sources.length,2,'Allocation and LD provenance stay intact');
  assert.deepEqual(Array.from(service.missingSources()),[],'Every source is attached');
  await service.analyze();
- assert.equal(service.snapshot().rows.length,3,'Re-audit works after LD upload');
+ assert.equal(service.snapshot().rows.length,1,'Re-audit works after LD upload');
+ // Excluir análise: mantém LDs; "e LDs" remove também as LDs; nunca toca nos arquivos do usuário.
+ await service.discard(false);
+ assert.equal(service.snapshot().records.length,0);assert.equal(service.snapshot().rows.length,0);assert.equal(service.snapshot().events.length,0);
+ assert.deepEqual(Array.from(service.snapshot().context.sources,x=>x.kind),['ld'],'LDs permanecem após excluir a análise');
+ await service.importMany([a]);await service.analyze();assert.equal(service.snapshot().rows.length,1,'Nova auditoria funciona após excluir');
+ await service.discard(true);
+ assert.equal((service.snapshot().context.sources||[]).length,0,'Excluir também as LDs limpa as fontes');assert.equal(service.snapshot().runId,'');
  const internalStatus={...files('RASCUNHO-STATUS.xlsx','7'.repeat(64),'mapped','DOC-NOTA'),
   records:[{document:'DOC-NOTA',revision:'0',fiscalComment:'REVISAR INTERNAMENTE',returnedAt:''}]};
  await service.importMany([internalStatus]);

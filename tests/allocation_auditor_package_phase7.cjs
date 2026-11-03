@@ -12,7 +12,7 @@ const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
 const ROOT='GRCON_Auditoria_Preventiva/';
 const HEAD=['NOMEDOCUMENTO','DATA PREVISTA','WORKFLOW','DOCUMENTO ATIVO','ACAO','DATA DA LINHA BASE','PROPOSITO DE EMISSAO ORIGINAL','DOCUMENTO CRITICO','OBSERVACAO','CAMINHO DATA BOOK','N1','N2','N3','N4','N5','N6'];
-const DOC='RL-5290.00-22313-91A-C1O-121';
+const DOC='C1O_RNEST_U32_10.2.1.2_ELE_RIR_TR-0001';
 function alloc(){const b=X.utils.book_new();X.utils.book_append_sheet(b,X.utils.aoa_to_sheet([HEAD,[DOC,'','WF ANTIGO','SIM','INCLUIR','','EMISSÃO','NÃO','','DB|ANTIGO','N1','','','','','']]),'GERAL');return new Uint8Array(X.write(b,{type:'array',bookType:'xlsx'}));}
 const mkRow=(i,findings=[],extra={})=>({contract:'qa',document:i===0?DOC:'DOC-'+i,revision:'0',allocation:'C1O-ALOC-CM-0372-2026',sourceFile:'ALOC.xlsx',sourceSheet:'GERAL',sourceRow:i+2,lineage:'L'+i,ruleVersion:C.VERSION,versions:{databook:'v1'},officialAllocation:true,levels:[],findings,recommendations:[],...extra});
 const finding=(id,severity,field='title',category='title')=>({id,category,field,severity,message:'Mensagem '+id,evidence:[{file:'LD.xlsx',row:3,version:'v1'}],source:'Fonte '+id,ruleVersion:C.VERSION,humanReview:true});
@@ -53,7 +53,7 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
  assert.match(resumo['Fontes utilizadas'],/ALOC\.xlsx.*\n.*LD\.xlsx/);assert.match(resumo['Versões das referências'],/databook: v1/);
  const detail=X.utils.sheet_to_json(wb.Sheets.DETALHAMENTO,{defval:''});
  assert.equal(detail.length,5);
- assert.deepEqual(Object.keys(detail[0]),['Alocação','Código do documento','Revisão','Categoria','Regra / critério','Classificação','Descrição do apontamento','Campo','Valor atual','Valor sugerido','Valor corrigido (aplicado)','Evidência','Arquivo de origem','Aba','Local (linha/célula)','Situação','Tipo de tratamento','Fundamento','Requer decisão humana']);
+ assert.deepEqual(Object.keys(detail[0]),['Alocação','Código do documento','Revisão','Norma','Categoria','Regra / critério','Classificação','Descrição do apontamento','Campo','Valor atual','Valor sugerido','Valor corrigido (aplicado)','Evidência','Arquivo de origem','Aba','Local (linha/célula)','Situação','Tipo de tratamento','Fundamento','Requer decisão humana']);
  const sev=Object.fromEntries(detail.map(d=>[d['Regra / critério'].split(' ·')[0]||d['Regra / critério'],d['Classificação']]));
  assert.equal(sev['DATABOOK-NOT-FOUND'],'Não conformidade confirmada');assert.equal(sev['TAG-NOT-PROVEN'],'Verificação pendente');assert.equal(sev['FISCAL-FAMILY-title'],'Sugestão preventiva (não normativa)');
  assert.equal(detail[0]['Classificação'],'Não conformidade confirmada','erros confirmados vêm primeiro');
@@ -123,7 +123,7 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
  // Injeção de fórmula neutralizada.
  const inj=await call('assistant-package',{...base,rows:[mkRow(0,[{...finding('X','pending'),message:'=HYPERLINK("http://x")'}],{title:'=1+1'})],total:1,progress:1});
  const iw=X.read(await (await box.JSZip.loadAsync(inj.bytes)).file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array'});
- assert.equal(iw.Sheets.DETALHAMENTO.G2.v,"'=HYPERLINK(\"http://x\")");
+ assert.equal(iw.Sheets.DETALHAMENTO.H2.v,"'=HYPERLINK(\"http://x\")");
 
  // Pacote incompleto é recusado.
  await assert.rejects(call('assistant-package',{...base,progress:4}),/Conclua/);
