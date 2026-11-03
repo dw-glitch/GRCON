@@ -58,7 +58,7 @@ jobs:
           GRCON_RECOVERY_SNAPSHOT: ${{ inputs.snapshot }}
           GRCON_RECOVERY_MANIFEST_HASH: ${{ inputs.manifest_hash }}
         run: node scripts/verify-sigem-r2-recovery.mjs
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: sigem-recovery-summary
           path: artifacts/sigem-recovery/summary.json
