@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci --ignore-scripts",
   "outputDirectory": ".",
-  "ignoreCommand": "if [ \"$VERCEL_ENV\" != \"production\" ]; then echo \"Ignorando preview (apenas producao e publicada)\"; exit 0; fi; if [ \"$VERCEL_PROJECT_PRODUCTION_URL\" = \"grcon-ten.vercel.app\" ]; then exit 1; else echo \"Ignoring deployment for legacy Vercel project: $VERCEL_PROJECT_PRODUCTION_URL\"; exit 0; fi",
+  "ignoreCommand": "[ \"$VERCEL_ENV\" != production ] && exit 0; [ \"$VERCEL_PROJECT_PRODUCTION_URL\" = grcon-ten.vercel.app ] && exit 1; exit 0",
   "headers": [
     {
       "source": "/index.html",
