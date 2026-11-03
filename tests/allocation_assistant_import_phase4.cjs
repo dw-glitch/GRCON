@@ -5,6 +5,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const root=path.resolve(__dirname,'..');
 const src=fs.readFileSync(path.join(root,'src/react/allocation-auditor/service.ts'),'utf8');
+assert.match(src,/source\.correctionMode==='audit-only'/,'Mapped sheets must never reach the official workbook writer');
 const js=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const files=(name,sha,model='official-16',document='DOC-121')=>({
  name,size:4096,sha,tabs:[{name:'GERAL',model,documentCount:1}],
