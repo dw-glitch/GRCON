@@ -34,8 +34,11 @@ for (const header of ["DOCUMENTO \r\nN-1710 ", "DOCUMENTO N-1710"]) {
     ["2", "PR-5290.00-22313-122-C1O-003", "A", "Procedimento"],
     ["3", "PR-5290.00-22314-122-C1O-003", "0", "Outra área"],
   ], { fileName: "LD-comissionamento.xlsx", sheetName: "N-1710" });
-  assert.equal(commissioning.records.length, 1, "LD deduplica documentos e preserva o escopo");
+  // A LD é a referência: todo código listado entra (inclusive de outra área, ex.: 22314/42323);
+  // o mesmo código com revisões diferentes continua deduplicado.
+  assert.equal(commissioning.records.length, 2, "LD deduplica por código e mantém todo código listado");
   assert.equal(commissioning.records[0].revision, "0");
+  assert.equal(commissioning.records[1].document, "PR-5290.00-22314-122-C1O-003");
   assert.equal(commissioning.meta.headerRow, 1);
 }
 assert.throws(() => Core.parseLdMatrix([
