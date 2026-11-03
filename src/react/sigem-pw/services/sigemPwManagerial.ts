@@ -56,6 +56,12 @@ export interface ManagerialSummary {
   posted: number | null;
   compliant: number | null;
   pending: number | null;
+  /** Documentos vigentes que dependem do PW (exclui CV e cancelados). */
+  pwApplicable: number | null;
+  /** Dependem do PW e ainda não constam na consulta PW (CSG/QTM). */
+  awaitingRegistration: number | null;
+  /** Constam na consulta PW, mas sem evidência de emissão. */
+  registeredNotEmitted: number | null;
   cancelled: number;
   conflicts: number;
 }
@@ -167,6 +173,9 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     posted: referenceAvailable && sigemAvailable && state.model ? 0 : null,
     compliant: ready ? 0 : null,
     pending: ready ? 0 : null,
+    pwApplicable: referenceAvailable && pwAvailable && state.model ? 0 : null,
+    awaitingRegistration: referenceAvailable && pwAvailable && state.model ? 0 : null,
+    registeredNotEmitted: referenceAvailable && pwAvailable && state.model ? 0 : null,
     cancelled: 0, conflicts: 0,
   };
   const processed = new Set<string>();
@@ -227,6 +236,11 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
       if (summary.registered !== null && registered) summary.registered++;
       if (summary.emitted !== null && emitted) summary.emitted++;
       if (summary.posted !== null && posted) summary.posted++;
+      if (summary.pwApplicable !== null && !pwNotApplicable) {
+        summary.pwApplicable++;
+        if (!registered) summary.awaitingRegistration!++;
+        else if (!emitted) summary.registeredNotEmitted!++;
+      }
       if (ready) {
         if (situation === "Em conformidade") summary.compliant!++;
         if (situation === "Com pendência" || situation === "Em andamento") summary.pending!++;

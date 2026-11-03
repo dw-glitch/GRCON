@@ -21,3 +21,6 @@ supabase/functions/grcon-background-processor/generated/
 # Server-only local credentials
 .dev.vars*
 .env*
+
+# Gerado por scripts/prepare-pdfjs-assets.mjs durante o build.
+assets/vendor/

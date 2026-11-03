@@ -99,13 +99,33 @@
    * os sistemas, sem substituição de caracteres. Jamais trocar separadores
    * globalmente ou identificar N-1710 apenas pela presença de hífen.
    */
+  // Funções puras de string → resultado. A mesma chave documental é consultada
+  // dezenas de vezes por importação (saneamento, modelo, histórico, revisões);
+  // sem cache, 30 mil linhas custavam ~8 s de CPU. `Utils` e `Core` são fixos por
+  // instância do módulo, portanto o resultado de uma chave nunca muda. Limite
+  // de entradas evita crescimento ilimitado em sessões longas.
+  const IDENTITY_CACHE_LIMIT = 250000;
+  const canonicalCache = new Map();
+  const identityCache = new Map();
+  function remember(cache, key, value) {
+    if (cache.size >= IDENTITY_CACHE_LIMIT) cache.clear();
+    cache.set(key, value);
+    return value;
+  }
+
   function canonicalDocumentCode(value) {
+    const cacheKey = typeof value === "string" ? value : null;
+    if (cacheKey !== null) {
+      const hit = canonicalCache.get(cacheKey);
+      if (hit !== undefined) return hit;
+    }
     const raw = norm(stripDocumentExtension(value)).replace(/\s*([_.-])\s*/g, "$1");
-    if (!raw) return "";
-    if (N1710_CODE_RE.test(raw)) return raw;
-    const match = raw.match(/^([A-Z0-9]{3})[-_]RNEST[-_]([A-Z0-9]+)[-_](\d+(?:\.\d+){3})[-_]([A-Z0-9]+)[-_]([A-Z0-9]+)[-_](.+)$/);
-    if (!match) return raw;
-    return `${match[1]}_RNEST_${match[2]}_${match[3]}_${match[4]}_${match[5]}_${match[6]}`;
+    let result = raw;
+    if (raw && !N1710_CODE_RE.test(raw)) {
+      const match = raw.match(/^([A-Z0-9]{3})[-_]RNEST[-_]([A-Z0-9]+)[-_](\d+(?:\.\d+){3})[-_]([A-Z0-9]+)[-_]([A-Z0-9]+)[-_](.+)$/);
+      if (match) result = `${match[1]}_RNEST_${match[2]}_${match[3]}_${match[4]}_${match[5]}_${match[6]}`;
+    }
+    return cacheKey !== null ? remember(canonicalCache, cacheKey, result) : result;
   }
 
   // Escopo único da comparação: presença literal de C1O no código documental.
@@ -145,6 +165,17 @@
   }
 
   function documentIdentity(value) {
+    const cacheKey = typeof value === "string" ? value : null;
+    if (cacheKey !== null) {
+      const hit = identityCache.get(cacheKey);
+      if (hit) return hit;
+    }
+    const identity = computeDocumentIdentity(value);
+    // O objeto é compartilhado entre chamadas: nenhum consumidor o altera.
+    return cacheKey !== null ? remember(identityCache, cacheKey, identity) : identity;
+  }
+
+  function computeDocumentIdentity(value) {
     const canonical = canonicalDocumentCode(value);
     if (!canonical) return { key: "", canonical: "", info: null, searchKeys: [] };
 
@@ -1345,7 +1376,7 @@
     else store.put(value, key);
   }
 
-  async function kvGet(key, fallback) {
+  async function kvGetRaw(key, fallback) {
     const db = await openDb();
     try {
       return await new Promise((resolve, reject) => {
@@ -1357,33 +1388,62 @@
     } finally { db.close(); }
   }
 
-  async function kvSet(key, value) {
+  async function kvGetManyRaw(keys) {
+    if (!keys.length) return [];
     const db = await openDb();
     try {
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction(DB_STORE, "readwrite");
-        putKv(tx.objectStore(DB_STORE), key, value);
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error || new Error("Falha ao salvar a base local."));
-        tx.onabort = () => reject(tx.error || new Error("A gravação da base local foi cancelada."));
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readonly");
+        const store = tx.objectStore(DB_STORE);
+        const values = new Array(keys.length);
+        keys.forEach((key, index) => {
+          const request = store.get(key);
+          request.onsuccess = () => { values[index] = storedValue(request.result, undefined); };
+        });
+        tx.oncomplete = () => resolve(values);
+        tx.onerror = () => reject(tx.error || new Error("Falha ao ler a base local."));
+        tx.onabort = () => reject(tx.error || new Error("A leitura da base local foi cancelada."));
       });
-      return value;
     } finally { db.close(); }
   }
 
-  async function kvSetMany(entries) {
+  // Leitura pública: o histórico é sempre devolvido completo (compatível com
+  // backup e módulos legados), independentemente do formato físico.
+  async function kvGet(key, fallback) {
+    if (key === HISTORY_KEY) return loadHistory(fallback);
+    return kvGetRaw(key, fallback);
+  }
+
+  async function kvWriteRaw(entries, deletions) {
     const db = await openDb();
     try {
       await new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE, "readwrite");
         const store = tx.objectStore(DB_STORE);
         (entries || []).forEach(([key, value]) => putKv(store, key, value));
+        (deletions || []).forEach((key) => store.delete(key));
         tx.oncomplete = resolve;
         tx.onerror = () => reject(tx.error || new Error("Falha ao salvar as bases do Dashboard."));
         tx.onabort = () => reject(tx.error || new Error("A gravação das bases foi cancelada."));
       });
-      return true;
     } finally { db.close(); }
+  }
+
+  async function kvSet(key, value) {
+    await kvSetMany([[key, value]]);
+    return value;
+  }
+
+  async function kvSetMany(entries) {
+    const list = entries || [];
+    const history = list.find(([key]) => key === HISTORY_KEY);
+    if (history) {
+      const value = history[1] || {};
+      await commitHistory(value.snapshots || [], value.deletedIds || [], list.filter(([key]) => key !== HISTORY_KEY));
+    } else {
+      await kvWriteRaw(list, []);
+    }
+    return true;
   }
 
   function baseKey(kind) {
@@ -1426,17 +1486,156 @@
         ? { sourceRecords: base.sourceRecords } : {}) };
   }
 
-  async function loadHistory() {
-    const stored = await kvGet(HISTORY_KEY, { version: HISTORY_VERSION, snapshots: [], deletedIds: [] });
-    const snapshots = Array.isArray(stored && stored.snapshots) ? stored.snapshots.filter((item) => item && item.meta && Array.isArray(item.records)) : [];
-    const deletedIds = Array.isArray(stored && stored.deletedIds) ? [...new Set(stored.deletedIds.map(text).filter(Boolean))] : [];
+  // ── Histórico de bases: índice + payloads em partes ─────────────────────────
+  // O histórico antigo era UM valor IndexedDB com todas as versões e todos os
+  // registros. Cada importação relia e regravava o conjunto inteiro (cópias de
+  // dezenas de MB na thread principal) e, ao passar do limite de serialização de
+  // um único valor (~128 MB no Chromium), a importação falhava. Agora:
+  //   HISTORY_KEY                      → índice leve {storage:"split-v1", snapshots:[{meta, contagens}]}
+  //   HISTORY_KEY::p::<id>::<parte>::n → registros em partes de HISTORY_CHUNK linhas
+  // Leitores antigos continuam recebendo o histórico completo via kvGet/loadHistory;
+  // gravações com o formato antigo são convertidas automaticamente.
+  const HISTORY_STORAGE = "split-v1";
+  const HISTORY_CHUNK = 15000;
+
+  function payloadKey(id, part, index) { return `${HISTORY_KEY}::p::${id}::${part}::${index}`; }
+  function chunkCount(total) { return total > 0 ? Math.ceil(total / HISTORY_CHUNK) : 0; }
+  function isSplitHistory(raw) { return Boolean(raw && raw.storage === HISTORY_STORAGE && Array.isArray(raw.snapshots)); }
+  function payloadKeysOf(entry) {
+    const id = entry.meta.snapshotId;
+    const keys = [];
+    for (let index = 0; index < chunkCount(entry.recordCount); index += 1) keys.push(payloadKey(id, "records", index));
+    for (let index = 0; index < chunkCount(entry.sourceRecordCount); index += 1) keys.push(payloadKey(id, "source", index));
+    return keys;
+  }
+  function indexEntry(snapshot) {
+    const entry = { meta: snapshot.meta, recordCount: snapshot.records.length };
+    if (Array.isArray(snapshot.sourceRecords)) entry.sourceRecordCount = snapshot.sourceRecords.length;
+    return entry;
+  }
+  function lightSnapshot(entry) {
+    // `records` vazio é apenas um marcador de forma; use recordCount para exibir
+    // quantidades e loadHistorySnapshot(id) para obter os registros.
+    return { meta: entry.meta, records: [], recordCount: Number(entry.recordCount) || 0,
+      sourceRecordCount: Number(entry.sourceRecordCount) || 0, indexOnly: true };
+  }
+  function normalizedIndex(raw) {
+    const snapshots = (raw.snapshots || []).filter((entry) => entry && entry.meta && entry.meta.snapshotId);
+    return snapshots;
+  }
+  function cleanDeletedIds(value) {
+    return Array.isArray(value) ? [...new Set(value.map(text).filter(Boolean))] : [];
+  }
+  function sliceChunks(rows, part, id) {
+    const entries = [];
+    for (let index = 0; index * HISTORY_CHUNK < rows.length; index += 1) {
+      entries.push([payloadKey(id, part, index), rows.slice(index * HISTORY_CHUNK, (index + 1) * HISTORY_CHUNK)]);
+    }
+    return entries;
+  }
+  async function readPayload(entry) {
+    const id = entry.meta.snapshotId;
+    const recordKeys = [], sourceKeys = [];
+    for (let index = 0; index < chunkCount(entry.recordCount); index += 1) recordKeys.push(payloadKey(id, "records", index));
+    for (let index = 0; index < chunkCount(entry.sourceRecordCount); index += 1) sourceKeys.push(payloadKey(id, "source", index));
+    const parts = await kvGetManyRaw([...recordKeys, ...sourceKeys]);
+    const records = [], sourceRecords = [];
+    recordKeys.forEach((key, index) => {
+      if (!Array.isArray(parts[index])) throw new Error("O histórico de bases está incompleto neste navegador. Reimporte a base afetada.");
+      for (const row of parts[index]) records.push(row);
+    });
+    sourceKeys.forEach((key, index) => {
+      const chunk = parts[recordKeys.length + index];
+      if (!Array.isArray(chunk)) throw new Error("O histórico de bases está incompleto neste navegador. Reimporte a base afetada.");
+      for (const row of chunk) sourceRecords.push(row);
+    });
+    return { records, ...(Number(entry.sourceRecordCount) > 0 ? { sourceRecords } : {}) };
+  }
+
+  async function loadHistory(fallback) {
+    const empty = fallback || { version: HISTORY_VERSION, snapshots: [], deletedIds: [] };
+    const raw = await kvGetRaw(HISTORY_KEY, empty);
+    const deletedIds = cleanDeletedIds(raw && raw.deletedIds);
+    if (isSplitHistory(raw)) {
+      const snapshots = [];
+      for (const entry of normalizedIndex(raw)) {
+        try { snapshots.push({ meta: entry.meta, ...(await readPayload(entry)) }); }
+        catch (error) { console.warn("[SIGEM×PW] versão do histórico ignorada:", error); }
+      }
+      return { version: HISTORY_VERSION, snapshots, deletedIds };
+    }
+    const snapshots = Array.isArray(raw && raw.snapshots) ? raw.snapshots.filter((item) => item && item.meta && Array.isArray(item.records)) : [];
     return { version: HISTORY_VERSION, snapshots, deletedIds };
+  }
+
+  /** Histórico sem registros: só metadados e contagens. Converte o formato antigo se necessário. */
+  async function loadHistoryIndex() {
+    let raw = await kvGetRaw(HISTORY_KEY, null);
+    if (raw && !isSplitHistory(raw) && Array.isArray(raw.snapshots) && raw.snapshots.length) {
+      const legacy = await loadHistory();
+      await commitHistory(legacy.snapshots, legacy.deletedIds, []);
+      raw = await kvGetRaw(HISTORY_KEY, null);
+    }
+    if (!isSplitHistory(raw)) return { version: HISTORY_VERSION, snapshots: [], deletedIds: cleanDeletedIds(raw && raw.deletedIds) };
+    return { version: HISTORY_VERSION, snapshots: normalizedIndex(raw).map(lightSnapshot), deletedIds: cleanDeletedIds(raw.deletedIds) };
+  }
+
+  /** Uma versão completa (com registros) a partir do id. */
+  async function loadHistorySnapshot(id) {
+    const wanted = text(id);
+    const raw = await kvGetRaw(HISTORY_KEY, null);
+    if (isSplitHistory(raw)) {
+      const entry = normalizedIndex(raw).find((item) => item.meta.snapshotId === wanted);
+      return entry ? { meta: entry.meta, ...(await readPayload(entry)) } : null;
+    }
+    return (raw && Array.isArray(raw.snapshots) ? raw.snapshots : []).find((item) => item && item.meta && item.meta.snapshotId === wanted && Array.isArray(item.records)) || null;
+  }
+
+  /**
+   * Grava o histórico. Versões com `records` (novas/alteradas) têm o payload
+   * regravado; versões só-índice reaproveitam o payload existente. Tudo — índice,
+   * payloads, remoções e `extraWrites` — vai numa única transação atômica.
+   */
+  async function commitHistory(snapshotsIn, deletedIdsIn, extraWrites) {
+    const previousRaw = await kvGetRaw(HISTORY_KEY, null);
+    const previous = isSplitHistory(previousRaw) ? normalizedIndex(previousRaw) : [];
+    const previousById = new Map(previous.map((entry) => [entry.meta.snapshotId, entry]));
+    const writes = [];
+    const nextIndex = [];
+    const seen = new Set();
+    for (const snapshot of snapshotsIn || []) {
+      if (!snapshot || !snapshot.meta || !snapshot.meta.snapshotId || seen.has(snapshot.meta.snapshotId)) continue;
+      const id = snapshot.meta.snapshotId;
+      seen.add(id);
+      const hasPayload = Array.isArray(snapshot.records) && !snapshot.indexOnly;
+      if (hasPayload) {
+        writes.push(...sliceChunks(snapshot.records, "records", id));
+        if (Array.isArray(snapshot.sourceRecords)) writes.push(...sliceChunks(snapshot.sourceRecords, "source", id));
+        nextIndex.push(indexEntry(snapshot));
+      } else {
+        const existing = previousById.get(id);
+        // Só-índice sem payload anterior não pode ser reconstruído: omitir.
+        if (existing) nextIndex.push({ ...existing, meta: snapshot.meta });
+      }
+    }
+    const written = new Set(writes.map(([key]) => key));
+    const deletions = [];
+    for (const entry of previous) {
+      const kept = nextIndex.find((item) => item.meta.snapshotId === entry.meta.snapshotId);
+      for (const key of payloadKeysOf(entry)) {
+        if (!written.has(key) && !(kept && payloadKeysOf(kept).includes(key))) deletions.push(key);
+      }
+    }
+    nextIndex.sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt));
+    const index = { version: HISTORY_VERSION, storage: HISTORY_STORAGE, snapshots: nextIndex, deletedIds: cleanDeletedIds(deletedIdsIn) };
+    await kvWriteRaw([...writes, ...(extraWrites || []), [HISTORY_KEY, index]], deletions);
+    return index;
   }
 
   async function saveBase(kind, base) {
     const normalized = normalizeBase(kind, base);
     const snapshot = historySnapshot(normalized);
-    const history = await loadHistory();
+    const history = await loadHistoryIndex();
     const snapshots = history.snapshots.filter((item) => item.meta.snapshotId !== normalized.meta.snapshotId);
     const deletedIds = history.deletedIds.filter((id) => id !== normalized.meta.snapshotId);
     snapshots.push(snapshot);
@@ -1454,7 +1653,7 @@
     const parsed = new Date(importedAtValue);
     if (!snapshotIdValueText || Number.isNaN(parsed.getTime())) throw new Error("Informe uma data válida para a base.");
     const importedAt = parsed.toISOString();
-    const history = await loadHistory();
+    const history = await loadHistoryIndex();
     const index = history.snapshots.findIndex((item) => item.meta.snapshotId === snapshotIdValueText && item.meta.kind === kind);
     if (index < 0) throw new Error("A base selecionada não existe mais no histórico.");
     const original = history.snapshots[index];
@@ -1483,7 +1682,7 @@
   }
 
   async function updateSnapshotMetadata(kind, id, metadata) {
-    const history = await loadHistory();
+    const history = await loadHistoryIndex();
     const snapshots = history.snapshots.map(item => item.meta.snapshotId === id && item.meta.kind === kind
       ? { ...item, meta: { ...item.meta, ...metadata } } : item);
     const current = await kvGet(baseKey(kind), { meta: null, records: [] });
@@ -1493,7 +1692,7 @@
   }
 
   async function deleteSnapshot(id) {
-    const history = await loadHistory();
+    const history = await loadHistoryIndex();
     const removed = history.snapshots.find((item) => item.meta.snapshotId === id);
     if (!removed) throw new Error("A base selecionada não existe mais no histórico.");
     const snapshots = history.snapshots.filter((item) => item.meta.snapshotId !== id);
@@ -1503,9 +1702,10 @@
     const currentId = current && current.meta && current.meta.snapshotId;
     const writes = [[HISTORY_KEY, { version: HISTORY_VERSION, snapshots, deletedIds }]];
     if (currentId === id) {
-      const replacement = snapshots.filter((item) => item.meta.kind === kind)
-        .sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt))[0]
-        || { meta: null, records: [] };
+      const next = snapshots.filter((item) => item.meta.kind === kind)
+        .sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt))[0];
+      // A nova base ativa precisa dos registros completos, não só do índice.
+      const replacement = (next && await loadHistorySnapshot(next.meta.snapshotId)) || { meta: null, records: [] };
       writes.push([baseKey(kind), replacement]);
     }
     await kvSetMany(writes);
@@ -1515,7 +1715,7 @@
   async function migrateLegacyBases() {
     const [sigemCurrent, pwCurrent, ldCurrent, legacySigem, legacyPw, history] = await Promise.all([
       kvGet(SIGEM_BASE_KEY, null), kvGet(PW_BASE_KEY, null), kvGet(LD_BASE_KEY, null),
-      kvGet(LEGACY_SIGEM_BASE_KEY, null), kvGet(LEGACY_PW_BASE_KEY, null), loadHistory(),
+      kvGet(LEGACY_SIGEM_BASE_KEY, null), kvGet(LEGACY_PW_BASE_KEY, null), loadHistoryIndex(),
     ]);
     const newest = (primary, legacy) => {
       if (!primary || !primary.meta) return legacy;
@@ -1544,7 +1744,7 @@
       const snapshotIndex = snapshots.findIndex((item) => item.meta.snapshotId === normalized.meta.snapshotId);
       const needsScopedSnapshot = kind === "pw" && (Number(snapshots[snapshotIndex]?.meta?.scopeVersion) < PW_SCOPE_VERSION
         || text(snapshots[snapshotIndex]?.meta?.scopeLdSnapshotId) !== text(normalized.meta.scopeLdSnapshotId)
-        || (Array.isArray(normalized.sourceRecords) && !Array.isArray(snapshots[snapshotIndex]?.sourceRecords)));
+        || (Array.isArray(normalized.sourceRecords) && !Array.isArray(snapshots[snapshotIndex]?.sourceRecords) && !(Number(snapshots[snapshotIndex]?.sourceRecordCount) > 0)));
       if (snapshotIndex < 0) { snapshots.push(compact); historyChanged = true; }
       else if (needsScopedSnapshot) { snapshots[snapshotIndex] = compact; historyChanged = true; }
       const current = kind === "sigem" ? sigemCurrent : kind === "pw" ? pwCurrent : ldCurrent;
@@ -1556,7 +1756,11 @@
       snapshots.sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt));
       writes.push([HISTORY_KEY, { version: HISTORY_VERSION, snapshots, deletedIds: history.deletedIds }]);
     }
-    if (writes.length) await kvSetMany(writes);
+    if (writes.length) { await kvSetMany(writes); return null; }
+    // Nada foi regravado: as leituras acima já são o estado vigente. Devolvê-las
+    // evita reler (e reclonar) as três bases em loadBases().
+    const empty = () => ({ meta: null, records: [] });
+    return { sigem: sigemCurrent || empty(), pw: pwCurrent || empty(), ld: ldCurrent || empty() };
   }
 
   async function loadSigemBase() {
@@ -1586,7 +1790,7 @@
     const normalizedPw = currentPw && currentPw.meta && Array.isArray(currentPw.records)
       ? normalizeBase("pw", sanitizePwBase(currentPw, normalizedLd))
       : null;
-    const history = await loadHistory();
+    const history = await loadHistoryIndex();
     const replacementIds = new Set([normalizedLd.meta.snapshotId, normalizedPw && normalizedPw.meta.snapshotId].filter(Boolean));
     const snapshots = history.snapshots.filter((item) => !replacementIds.has(item.meta.snapshotId));
     snapshots.push(historySnapshot(normalizedLd));
@@ -1607,9 +1811,17 @@
   }
 
   async function loadBases() {
-    await migrateLegacyBases();
+    const migrated = await migrateLegacyBases();
+    // O PW compartilhado pode regravar a base PW local durante o refresh: ela é
+    // sempre relida. SIGEM e LD só mudam por gravações deste módulo e reaproveitam
+    // a leitura da migração.
     await (typeof globalThis !== "undefined" ? globalThis.GrconSharedPwQuery?.refresh?.() : null);
-    const [sigem, pw, ld, history] = await Promise.all([loadSigemBase(), loadPwBase(), loadLdBase(), loadHistory()]);
+    const [sigem, pw, ld, history] = await Promise.all([
+      migrated ? migrated.sigem : loadSigemBase(),
+      loadPwBase(),
+      migrated ? migrated.ld : loadLdBase(),
+      loadHistoryIndex(),
+    ]);
     return { sigem, pw, ld, history };
   }
 
@@ -1624,7 +1836,7 @@
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, parseReferenceSheets, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
-    openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
+    openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory, loadHistoryIndex, loadHistorySnapshot,
     saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, updateSnapshotMetadata, deleteSnapshot, migrateLegacyBases, loadBases,
   });
 });
