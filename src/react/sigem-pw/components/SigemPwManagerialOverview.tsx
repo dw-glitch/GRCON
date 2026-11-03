@@ -48,7 +48,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
   const report = useMemo(() => reconcileManagerial(state), [state.ld, state.pw, state.sigem, state.model, state.result]);
   const sum = report.summary;
   const kpis: { key: KpiKey; label: string; value: number | null }[] = [
-    { key: "active", label: "Universo analisado", value: sum.active },
+    { key: "active", label: "Documentos controlados", value: sum.active },
     { key: "registered", label: "Cadastrados no PW", value: sum.registered },
     { key: "emitted", label: "Emitidos no PW", value: sum.emitted },
     { key: "awaiting", label: "Aguardando cadastro", value: sum.awaitingRegistration },
@@ -56,7 +56,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
     { key: "posted", label: "Postados no SIGEM", value: sum.posted },
     { key: "compliant", label: "Em conformidade", value: sum.compliant },
     { key: "pending", label: "Com pendências", value: sum.pending },
-    { key: "other", label: "Em preparação ou sem dados", value: sum.active !== null && sum.compliant !== null && sum.pending !== null ? Math.max(0, sum.active - sum.compliant - sum.pending) : null },
+    { key: "other", label: "Em preparação ou incompletos", value: sum.active !== null && sum.compliant !== null && sum.pending !== null ? Math.max(0, sum.active - sum.compliant - sum.pending) : null },
   ];
   const filtered = useMemo(() => report.rows.filter(row => {
     if (!matchesKpi(row, selection)) return false;

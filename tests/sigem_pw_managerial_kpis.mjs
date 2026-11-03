@@ -72,4 +72,4 @@ assert.equal(s.pwApplicable, s.awaitingRegistration + s.registeredNotEmitted + 1
 }
 // Segmentos do gráfico PW somam o universo que depende do PW.
 assert.equal(s.pwApplicable - s.awaitingRegistration - s.registeredNotEmitted, 1, "emitidos = restante");
-console.log("sigem_pw_managerial_kpis: universo, cadastro, emissão, aguardando cadastro e CV/cancelados OK");
+console.log("sigem_pw_managerial_kpis: documentos controlados, cadastro, emissão, aguardando cadastro e CV/cancelados OK");

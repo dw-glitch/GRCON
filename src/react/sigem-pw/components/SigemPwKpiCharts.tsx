@@ -84,23 +84,23 @@ export function SigemPwKpiCharts({ summary, selection, onSelect }: Props) {
   const sigemSegments: Segment[] | null = compliant !== null && pending !== null ? [
     { key: "compliant", label: "Em conformidade", value: compliant, tone: "ok", hint: "Revisão alinhada, avaliação favorável e sem ressalvas." },
     { key: "pending", label: "Com pendências", value: pending, tone: "warn", hint: "Exigem ação ou aguardam conclusão do processo." },
-    { key: "other", label: "Em preparação ou sem dados", value: Math.max(0, universe - compliant - pending), tone: "muted", hint: "Documentos ainda em preparação ou com dados insuficientes." },
+    { key: "other", label: "Em preparação ou incompletos", value: Math.max(0, universe - compliant - pending), tone: "muted", hint: "Ainda em preparação ou com dados insuficientes para avaliar." },
   ] : null;
 
   return (
     <div className="spw-charts" id="spw-kpi-charts">
       <button type="button" className="spw-universe" data-kpi="active" aria-pressed={selection === "active"}
-        aria-label={`Universo analisado: ${nf(universe)} documentos únicos vigentes nas LDs ativas, exceto cancelados. Clique para listar todos.`}
+        aria-label={`Documentos controlados: ${nf(universe)} documentos únicos nas LDs ativas, sem os cancelados. Clique para listar todos.`}
         onClick={() => onSelect("active")}>
-        <span className="spw-universe-label">Universo analisado</span>
+        <span className="spw-universe-label">Documentos controlados</span>
         <strong>{nf(universe)}</strong>
-        <small>documentos únicos vigentes nas LDs ativas (cancelados não entram)</small>
+        <small>documentos únicos nas LDs ativas · cancelados não entram</small>
       </button>
 
       <section className="spw-chart-card" aria-labelledby="spw-chart-pw-title">
         <header>
-          <h4 id="spw-chart-pw-title">1 · Cadastro e emissão no ProjectWise</h4>
-          <p>{pwBase !== null ? <><b>{nf(pwBase)}</b> documentos dependem do PW (CV não entra). Cadastrados no PW: <b>{nf(summary.registered || 0)}</b>.</> : "Importe a base PW para ver o andamento."}</p>
+          <h4 id="spw-chart-pw-title">1 · Andamento no ProjectWise</h4>
+          <p>{pwBase !== null ? <><b>{nf(pwBase)}</b> documentos precisam estar no PW (CV não precisa). Já cadastrados: <b>{nf(summary.registered || 0)}</b>.</> : "Importe a base PW para ver o andamento."}</p>
         </header>
         {pwSegments && pwBase ? <StackedBar title="Cadastro e emissão no PW" segments={pwSegments} total={pwBase} selection={selection} onSelect={onSelect} unit="documentos" /> : null}
       </section>
@@ -108,7 +108,7 @@ export function SigemPwKpiCharts({ summary, selection, onSelect }: Props) {
       <section className="spw-chart-card" aria-labelledby="spw-chart-sigem-title">
         <header>
           <h4 id="spw-chart-sigem-title">2 · Situação no SIGEM</h4>
-          <p>Postagem e conformidade sobre o universo de <b>{nf(universe)}</b> documentos.</p>
+          <p>Postagem e conformidade dos <b>{nf(universe)}</b> documentos controlados.</p>
         </header>
         {summary.posted !== null ? <Meter label="Postados no SIGEM" value={summary.posted} total={universe} tone="info" keyName="posted" selection={selection} onSelect={onSelect}
           hint="Localizados na Consulta Geral; postagem não significa aprovação." /> : null}

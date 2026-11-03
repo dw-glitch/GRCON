@@ -214,8 +214,8 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   const section = (title: string) => { overview.push([title, ""]); overviewSections.push(overview.length); };
   line("GRCON | SIGEM × PW", "CONTROLE DOCUMENTAL INTEGRADO");
   line("INDICADOR / FONTE", "VALOR");
-  section("UNIVERSO E CADASTRO NO PW");
-  line("Universo analisado (documentos únicos nas referências vigentes)", summary.active);
+  section("DOCUMENTOS CONTROLADOS E CADASTRO NO PW");
+  line("Documentos controlados (únicos, nas LDs ativas)", summary.active);
   line("Cadastrados no PW (CSG/QTM)", summary.registered);
   line("Emitidos no PW", summary.emitted);
   line("Aguardando cadastro no PW", awaiting);
@@ -226,7 +226,7 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   line("Postados no SIGEM", summary.posted);
   line("Em conformidade", summary.compliant);
   line("Com pendência ou em andamento", summary.pending);
-  section("FORA DO UNIVERSO E CONFLITOS");
+  section("FORA DAS LDS E CONFLITOS");
   line("Cancelados nas referências", report.summary.cancelled);
   line("Conflitos entre referências", report.summary.conflicts);
   line("SIGEM fora das referências (aba “Fora das LDs”)", report.excludedSigem);

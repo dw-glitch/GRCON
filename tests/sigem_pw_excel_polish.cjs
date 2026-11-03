@@ -71,7 +71,7 @@ const labels = new Map(plan.sheets.Resumo.map(row => [row[0], row[1]]));
 const find = prefix => plan.sheets.Resumo.find(row => String(row[0]).startsWith(prefix));
 
 // Indicadores novos: cadastro e emissão são situações distintas.
-assert.equal(find("Universo analisado")[1], 2);
+assert.equal(find("Documentos controlados")[1], 2);
 assert.equal(find("Aguardando cadastro no PW")[1], 0);
 assert.equal(find("Cadastrados, não emitidos")[1], 1);
 assert.equal(find("Atendimento — cadastrados")[1], 1);
@@ -120,8 +120,8 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   const row = label => { for (let i = 1; i <= overview.rowCount; i++) if (String(overview.getCell("A" + i).value).startsWith(label)) return i; return 0; };
   assert.equal(overview.getCell("B" + row("Atendimento — emitidos")).value, 0.5);
   assert.equal(overview.getCell("B" + row("Atendimento — emitidos")).numFmt, "0.0%");
-  assert.equal(overview.getCell("B" + row("Universo analisado")).numFmt, "#,##0");
-  assert.equal(overview.getCell("A3").value, "UNIVERSO E CADASTRO NO PW");
+  assert.equal(overview.getCell("B" + row("Documentos controlados")).numFmt, "#,##0");
+  assert.equal(overview.getCell("A3").value, "DOCUMENTOS CONTROLADOS E CADASTRO NO PW");
   assert.equal(argb(overview.getCell("A3")), "FFEDF3F8", "título de seção destacado");
   assert.equal(overview.pageSetup.fitToWidth, 1);
   // Marca GRCON no cabeçalho (faixa branca) das abas Resumo e Conferência Documental.
