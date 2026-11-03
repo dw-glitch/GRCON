@@ -6,13 +6,29 @@ export function AllocationAssistant(){
  const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot),s=useSyncExternalStore(service.subscribe,service.snapshot);
  const [text,setText]=useState(''),[expanded,setExpanded]=useState(false);const panel=useRef<HTMLElement>(null),mascot=useRef<HTMLDivElement>(null),end=useRef<HTMLDivElement>(null);
  const busy=chat.pending||s.busy;const g=window as unknown as Data;
- useEffect(()=>{if(!chat.open)return;const previous=document.activeElement as HTMLElement;panel.current?.focus();g.GrconMascot?.presentIn?.(mascot.current);g.GrconMascot?.show('hello',{source:'audit-chat',force:true});const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();assistant.close();}if(e.key==='Tab'){const nodes=[...panel.current!.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled)')];if(e.shiftKey&&(document.activeElement===nodes[0]||document.activeElement===panel.current)){e.preventDefault();nodes.at(-1)?.focus();}else if(!e.shiftKey&&document.activeElement===nodes.at(-1)){e.preventDefault();nodes[0]?.focus();}}};document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);g.GrconMascot?.presentIn?.(null);previous?.focus();};},[chat.open]);
+ useEffect(()=>{
+  if(!chat.open)return;
+  const previouslyFocused=document.activeElement as HTMLElement|null;
+  panel.current?.focus();
+  g.GrconMascot?.presentIn?.(mascot.current);
+  g.GrconMascot?.show?.('hello',{source:'audit-chat',force:true});
+  // A floating panel is not modal: keyboard navigation through the Generator stays possible.
+  const closeOnEscape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();assistant.close();}};
+  document.addEventListener('keydown',closeOnEscape);
+  return()=>{
+   document.removeEventListener('keydown',closeOnEscape);
+   g.GrconMascot?.presentIn?.(null);
+   const launcher=document.querySelector<HTMLButtonElement>('.aac-launcher');
+   if(launcher?.isConnected)launcher.focus();
+   else if(previouslyFocused?.isConnected)previouslyFocused.focus();
+  };
+ },[chat.open]);
  useEffect(()=>{if(chat.open)g.GrconMascot?.show(busy?'analyzing':s.error||chat.error||s.summary.pending?'warning':s.total>0&&s.progress===s.total?'success':'idle',{force:true,source:'audit-chat-operation'});},[chat.open,busy,s.error,chat.error,s.summary.pending,s.progress,s.total]);
  useEffect(()=>{end.current?.scrollIntoView?.({block:'nearest'});},[chat.messages]);
  if(!chat.open)return null;
  const groups=s.groups;
- return createPortal(<div className="aac-backdrop"><section ref={panel} tabIndex={-1} className={'aac-panel'+(expanded?' aac-expanded':'')} role="dialog" aria-modal="true" aria-labelledby="aac-title">
-  <header className="aac-header"><div ref={mascot} className="aac-mascot" aria-label="Mascote oficial do GRCON"/><div><small>GRCON · AUDITORIA DOCUMENTAL</small><h2 id="aac-title">Assistente de Auditoria</h2></div><button type="button" onClick={()=>setExpanded(!expanded)} aria-label={expanded?'Reduzir conversa':'Expandir conversa'}>{expanded?'↙':'↗'}</button><button type="button" onClick={assistant.close} aria-label="Fechar conversa">×</button></header>
+ return createPortal(<div className="aac-backdrop"><section ref={panel} tabIndex={-1} className={'aac-panel'+(expanded?' aac-expanded':'')} role="dialog" aria-modal={false} aria-labelledby="aac-title">
+  <header className="aac-header"><div ref={mascot} className="aac-mascot" aria-label="Mascote oficial do GRCON"/><div><small>GRCON · AUDITORIA PREVENTIVA</small><h2 id="aac-title">Robô Auditor</h2></div><button type="button" onClick={()=>setExpanded(!expanded)} aria-label={expanded?'Reduzir conversa':'Expandir conversa'}>{expanded?'↙':'↗'}</button><button type="button" onClick={assistant.close} aria-label="Fechar conversa">×</button></header>
   <div className="aac-messages" role="log" aria-live="polite">{chat.messages.map(m=><article className={'aac-message aac-'+m.role} key={m.id}><small>{m.role==='user'?'Você':'Assistente GRCON'}</small><p>{m.text}</p></article>)}
    {!s.records.length&&<div className="aac-options"><button disabled={busy} onClick={()=>void assistant.current()}>Auditar alocação atual</button><label>Enviar outra alocação<input type="file" multiple accept=".xlsx" disabled={busy} onChange={e=>{void assistant.upload([...e.target.files||[]],'allocation');e.target.value='';}}/></label></div>}
    {Boolean(s.context.sources?.length)&&<details><summary>Arquivos recebidos ({s.context.sources.length})</summary>{s.context.sources.map((f:Data)=><p key={f.sha256}>{f.name} · {f.kind==='ld'?'LD':'Alocação'}</p>)}</details>}
