@@ -32,13 +32,13 @@ assert.match(build, /dist-cloudflare/);
 assert.match(build, /react-dist/);
 assert.match(build, /25 \* 1024 \* 1024/);
 assert.match(verify, /Referências locais quebradas/);
-assert.match(deploy, /branches:\s*\[main\]/);
+assert.doesNotMatch(deploy, /^\s*push:/m); // publicação automática feita pelo Cloudflare Workers Builds; o Actions só roda manualmente
 assert.match(deploy, /workflow_dispatch:/);
 assert.match(deploy, /github\.ref == 'refs\/heads\/main'/);
 assert.match(deploy, /CLOUDFLARE_API_TOKEN/);
 assert.match(deploy, /CLOUDFLARE_ACCOUNT_ID/);
 assert.match(deploy, /wrangler@4\.34\.0/);
-assert.match(validate, /pull_request:/);
+assert.match(validate, /workflow_dispatch:/);
 assert.match(validate, /validar-cloudflare-browser\.cjs/);
 assert.match(validate, /wrangler@4\.34\.0 dev/);
 assert.match(validate, /1440|GRCON_EXPECTED_COMMIT/);
