@@ -113,13 +113,28 @@
     return value;
   }
 
+  // Células do Excel/CSV trazem com frequência hífens tipográficos (‑ − –), caracteres
+  // invisíveis (zero-width, soft hyphen), formas largas (ＣＲ‑５２９０), aspas e ponto final
+  // colados ao código. Nenhum deles faz parte de um código documental: o mesmo documento
+  // escrito assim na LD e no PW/SIGEM deve gerar a mesma chave.
+  function cleanCodeText(value) {
+    const source = text(value);
+    if (!source) return "";
+    return source
+      .normalize("NFKC")
+      .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "")
+      .replace(/[\u2010-\u2015\u2212\uFE58\uFE63]/g, "-")
+      .replace(/^[\s"'“”‘’«»()\[\]]+|[\s"'“”‘’«»()\[\]]+$/g, "")
+      .replace(/[.,;:]+$/, "");
+  }
+
   function canonicalDocumentCode(value) {
     const cacheKey = typeof value === "string" ? value : null;
     if (cacheKey !== null) {
       const hit = canonicalCache.get(cacheKey);
       if (hit !== undefined) return hit;
     }
-    const raw = norm(stripDocumentExtension(value)).replace(/\s*([_.-])\s*/g, "$1");
+    const raw = cleanCodeText(norm(stripDocumentExtension(cleanCodeText(value)))).replace(/\s*([_.-])\s*/g, "$1");
     let result = raw;
     if (raw && !N1710_CODE_RE.test(raw)) {
       const match = raw.match(/^([A-Z0-9]{3})[-_]RNEST[-_]([A-Z0-9]+)[-_](\d+(?:\.\d+){3})[-_]([A-Z0-9]+)[-_]([A-Z0-9]+)[-_](.+)$/);
@@ -955,8 +970,11 @@
     const pwScope = partitionPwCompanyRecords(pwRecords);
     const sourceSigem = normalizeRecords(sigemScope.eligible, "sigem", ldUniverse, enforceLd);
     const sourcePw = normalizeRecords(pwScope.eligible, "pw", ldUniverse, enforceLd);
+    // Com a LD como referência, constar na LD é o critério: um código com aparência
+    // de N-1710 fora do padrão estrito, mas listado na LD, pertence ao universo (antes
+    // era excluído e apareceria como "sem cadastro"/"fora das LDs" mesmo constando nela).
     const isEligible = (record) => requireDocumentReference
-      ? (ldAvailable && record.inQualityLd && !record.n1710Candidate)
+      ? (ldAvailable && record.inQualityLd)
       : (!requireN1710Ld || (!record.n1710Candidate
         && (record.documentClass !== "N-1710" || (ldAvailable && record.inQualityLd))));
     const normalizedSigem = sourceSigem.filter(isEligible);

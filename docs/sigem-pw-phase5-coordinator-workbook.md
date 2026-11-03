@@ -36,3 +36,11 @@ npm run build
 ```
 
 `test:sigem-pw-coordinator` gera XLSX real em memória usando ExcelJS, reabre o arquivo e verifica: três abas, 32/70 colunas, fórmulas F:I, indicadores do painel, valores literais que começam com `=`, estilo, filtros e erros em base obsoleta.
+
+
+## Atualização (03/11/2026) — ajustes pedidos pela coordenação
+
+* A aba principal deixou de se chamar **N-1710** (ela contém ET, N-1710 e CV) e passou a **Conferência Documental**.
+* A coluna **CHECK REV.** (VERDADEIRO/FALSO) foi **removida**: nenhuma outra coluna dependia dela (só lia B e F). O quadro passa a ter 31 colunas `A:AE`: …`F` revisão PW, `G` STATE, `H` Última emissão, `I` AÇÃO, `J` Cadastro, matriz de revisões `0..U` em `K:AE`. As fórmulas F:H continuam apontando para a linha de origem em REL. PW. As pendências passam para `J1` (valor numérico com formato “PENDÊNCIAS: n”) para não colidir com a matriz de revisões.
+* O cabeçalho das abas Resumo e Conferência Documental recebe a **logo GRCON** sobre faixa branca (opcional: sem o arquivo, o relatório é gerado normalmente).
+* A comparação offline com o modelo original (`scripts/sigem-pw-release-parity.cjs`) deixa de ser aplicável a esta aba, por escolha explícita.

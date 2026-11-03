@@ -92,25 +92,26 @@ withOutside.aggregates = { "all:all": { lists: {
   ],
 } } };
 const planOutside = coordinatorPlan(withOutside);
-assert.deepEqual(Object.keys(planOutside.sheets), ["Resumo", "N-1710", "REL. PW", "Fora das LDs"]);
+assert.deepEqual(Object.keys(planOutside.sheets), ["Resumo", "Conferência Documental", "REL. PW", "Fora das LDs"]);
 assert.equal(planOutside.sheets["Fora das LDs"].length, 3, "cabeçalho + 2 registros (duplicata exata colapsada)");
 assert.equal(planOutside.summary.active, plan.summary.active, "fora das LDs não infla os indicadores");
-assert.equal(planOutside.sheets["N-1710"].length, plan.sheets["N-1710"].length);
+assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["Conferência Documental"].length);
 
 (async () => {
-  const { workbook } = buildCoordinatorWorkbook(withOutside, ExcelJS);
+  const logo = { buffer: fs.readFileSync(path.resolve(__dirname, "..", "grcon-logo-report.png")) };
+  const { workbook } = buildCoordinatorWorkbook(withOutside, ExcelJS, logo);
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
-  assert.deepEqual(reopened.worksheets.map(s => s.name), ["Resumo", "N-1710", "REL. PW", "Fora das LDs"]);
+  assert.deepEqual(reopened.worksheets.map(s => s.name), ["Resumo", "Conferência Documental", "REL. PW", "Fora das LDs"]);
   const out = reopened.getWorksheet("Fora das LDs");
   assert.equal(out.getCell("B2").value, "OUT-SIGEM-1");
   assert.equal(out.getCell("A3").value, "PW");
   assert.equal(out.autoFilter, "A1:I3");
   assert.equal(out.views[0].ySplit, 1);
-  const control = reopened.getWorksheet("N-1710");
+  const control = reopened.getWorksheet("Conferência Documental");
   const argb = cell => cell.fill && cell.fill.fgColor && cell.fill.fgColor.argb;
-  assert.equal(argb(control.getCell("K4")), "FFE6F6EE", "emitido: verde discreto");
-  assert.equal(argb(control.getCell("K5")), "FFFFF4DF", "cadastrado e não emitido: âmbar");
+  assert.equal(argb(control.getCell("J4")), "FFE6F6EE", "emitido: verde discreto");
+  assert.equal(argb(control.getCell("J5")), "FFFFF4DF", "cadastrado e não emitido: âmbar");
   assert.equal(control.pageSetup.orientation, "landscape");
   assert.equal(control.pageSetup.fitToWidth, 1);
   const overview = reopened.getWorksheet("Resumo");
@@ -121,6 +122,17 @@ assert.equal(planOutside.sheets["N-1710"].length, plan.sheets["N-1710"].length);
   assert.equal(overview.getCell("A3").value, "UNIVERSO E CADASTRO NO PW");
   assert.equal(argb(overview.getCell("A3")), "FFEDF3F8", "título de seção destacado");
   assert.equal(overview.pageSetup.fitToWidth, 1);
+  // Marca GRCON no cabeçalho (faixa branca) das abas Resumo e Conferência Documental.
+  assert.equal(overview.getImages().length, 1, "logo no Resumo");
+  assert.equal(control.getImages().length, 1, "logo na Conferência Documental");
+  assert.equal(argb(control.getCell("A1")), "FFFFFFFF", "faixa da marca em fundo branco");
+  assert.ok(control.getRow(1).height >= 50 && overview.getRow(1).height >= 50, "altura suficiente para a logo");
+  assert.equal(control.getCell("J1").numFmt, '"PENDÊNCIAS: "0');
+  assert.equal(control.getCell("J1").value, plan.summary.pending, "pendências seguem numéricas");
+  assert.equal(control.getCell("K1").value, plan.sheets["Conferência Documental"][0][10], "totais de revisão não colidem com os indicadores");
+  const plain = new ExcelJS.Workbook();
+  await plain.xlsx.load(await buildCoordinatorWorkbook(withOutside, ExcelJS).workbook.xlsx.writeBuffer());
+  assert.equal(plain.getWorksheet("Resumo").getImages().length, 0, "sem logo disponível o relatório continua válido");
   // Códigos permanecem texto.
   assert.equal(control.getCell("A4").value, code);
   assert.equal(typeof control.getCell("A4").value, "string");
