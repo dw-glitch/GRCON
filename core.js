@@ -48,7 +48,12 @@
     return String(value).trim();
   }
 
-  function norm(value) {
+  // Os mesmos códigos e nomes são normalizados dezenas de vezes por documento
+  // (triagem, índice, filtros). O resultado depende só da string, então um cache
+  // limitado evita refazer NFD + regex a cada chamada.
+  const NORM_CACHE_LIMIT = 60000;
+  const normCache = new Map();
+  function normCompute(value) {
     return text(value)
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -56,6 +61,16 @@
       .toUpperCase()
       .replace(/\s+/g, " ")
       .trim();
+  }
+  function norm(value) {
+    if (typeof value !== "string" || value.length > 400) return normCompute(value);
+    let result = normCache.get(value);
+    if (result === undefined) {
+      if (normCache.size >= NORM_CACHE_LIMIT) normCache.clear();
+      result = normCompute(value);
+      normCache.set(value, result);
+    }
+    return result;
   }
 
 
@@ -308,10 +323,16 @@
     return parts.join(" ");
   }
 
+  const canonicalIdCache = new Map();
   function canonicalId(value) {
-    return norm(value)
-      .replace(/\s*([_.-])\s*/g, "$1")
-      .replace(/\s+/g, " ");
+    if (typeof value !== "string" || value.length > 400) return norm(value).replace(/\s*([_.-])\s*/g, "$1").replace(/\s+/g, " ");
+    let result = canonicalIdCache.get(value);
+    if (result === undefined) {
+      if (canonicalIdCache.size >= NORM_CACHE_LIMIT) canonicalIdCache.clear();
+      result = norm(value).replace(/\s*([_.-])\s*/g, "$1").replace(/\s+/g, " ");
+      canonicalIdCache.set(value, result);
+    }
+    return result;
   }
 
   function key(value) {

@@ -1082,3 +1082,11 @@ html[data-theme="dark"] #grcon-admin-dialog .grcon-admin-nav button[aria-current
 .grcon-maintenance-badge svg{flex:none}
 @media(max-width:960px){.grcon-storage-visuals{grid-template-columns:1fr}}
 @media(max-width:520px){.grcon-storage-card-body{gap:12px}.grcon-storage-donut{width:112px;height:112px;flex-basis:112px}.grcon-storage-donut strong{font-size:21px}}
+
+/* A superfície de login tem role="dialog" e, por isso, caía na regra de
+   gavetas de grcon-final.css (max-width: 680px): o fundo ocupava só parte da
+   tela e o cartão ficava deslocado para a esquerda. Ela é a tela inteira. */
+html[data-app="GRCON"][data-ui-generation="3"] section.grcon-cloud-auth {
+  max-width: none;
+  width: auto;
+}

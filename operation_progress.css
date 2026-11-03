@@ -13,3 +13,10 @@ html[data-theme=dark] .grcon-operation-progress[data-state=completed]{background
 html[data-theme=dark] .grcon-operation-progress[data-state=failed]{background:#482921;color:#ffddd2;border-color:#975d49}
 
 .grcon-operation-progress > span:not(.grcon-operation-announcement){grid-column:1/-1}
+
+/* Operação concluída: vira uma linha discreta (título · mensagem · tempo) e deixa
+   de empurrar os controles principais para baixo da dobra. */
+.grcon-operation-progress[data-state=completed]{grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;padding:6px 12px;margin:6px 0}
+.grcon-operation-progress[data-state=completed] strong,.grcon-operation-progress[data-state=completed] > span:not(.grcon-operation-announcement){grid-column:auto}
+.grcon-operation-progress[data-state=completed] progress{display:none}
+.grcon-operation-progress[data-state=completed] small{white-space:nowrap}
