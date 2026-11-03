@@ -4,6 +4,32 @@ const kinds:Array<[BaseKind,string]>=[['databook','Caminhos Databook'],['eap','H
 export function AllocationApp(){
  const state=useSyncExternalStore(service.subscribe,service.snapshot),[tab,setTab]=useState('generate'),[codes,setCodes]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[scroll,setScroll]=useState(0),[detail,setDetail]=useState<number|null>(null),[mode,setMode]=useState('discipline'),[kind,setKind]=useState<BaseKind>('databook'),[revision,setRevision]=useState(''),[message,setMessage]=useState(''),[sourceInfo,setSourceInfo]=useState(''),[historyQuery,setHistoryQuery]=useState(''),[prefix,setPrefix]=useState('C1O-ALOC-CM'),[unit,setUnit]=useState('UHDT-D'),[startNumber,setStartNumber]=useState(''),[showHidden,setShowHidden]=useState(false);
  const act=(promise:Promise<unknown>)=>{setMessage('');void promise.catch(error=>setMessage(error.message||String(error)));};
+ const assistantBoot=useRef('');
+ const [assistantContext,setAssistantContext]=useState(0);
+ // Re-evaluate enablement even when the contract changes without a Generator store update.
+ useEffect(()=>{
+  const refresh=()=>{assistantBoot.current='';setAssistantContext(v=>v+1);};
+  for(const event of ['grcon:contract-context-changed','grcon:cloud-ready','grcon:cloud-signed-out'])
+   window.addEventListener(event,refresh);
+  return()=>{
+   for(const event of ['grcon:contract-context-changed','grcon:cloud-ready','grcon:cloud-signed-out'])
+    window.removeEventListener(event,refresh);
+  };
+ },[]);
+ // Load the robot's React island lazily once in the active enabled contract.
+ useEffect(()=>{
+  if(!service.assistantEnabled())return;
+  const runtime=(window as unknown as Record<string,any>);
+  const loader=runtime.GRCONModuleLoader;
+  if(typeof loader?.ensure!=='function')return;
+  const contract=String(runtime.GrconCloud?.state?.membership?.contract_id||'default');
+  if(assistantBoot.current===contract)return;
+  assistantBoot.current=contract;
+  void loader.ensure('allocation-auditor').catch((error:Error)=>{
+   assistantBoot.current='';
+   setMessage(error.message||'Não foi possível carregar o Robô Auditor.');
+  });
+ },[state,assistantContext]);
  useEffect(()=>{const seed=state.openRequest;if(seed){setTab('generate');setCodes(seed.document);setDetail(null);}},[state.openRequest]);
  useEffect(()=>{if(!state.rows.length)setDetail(null);},[state.rows.length]);
  const list=useMemo(()=>state.rows.map((row,index)=>({row,index})).filter(({row})=>(!query||[row.document,row.title,row.output.databook,row.identity.discipline,row.identity.eap].join(' ').toUpperCase().includes(query.toUpperCase()))&&(filter==='all'||filter==='missing'&&!row.ldLocated||filter==='notes'&&row.blockers.length>0||filter==='adjusted'&&row.adjusted)),[state.rows,query,filter]);
@@ -16,7 +42,7 @@ export function AllocationApp(){
  const row=detail===null?null:state.rows[detail];
  const history=state.history.filter(run=>JSON.stringify([run.allocation_code,run.documents]).toUpperCase().includes(historyQuery.toUpperCase()));
  return <div className="ag-app">
-  <header className="ag-heading"><div><span className="ag-kicker">FERRAMENTAS ADICIONAIS</span><h2>Gerador de Alocação</h2><button className="secondary-button" disabled={state.busy} onClick={()=>act(service.assistantEnabled()?service.showAssistant():service.auditCurrent())}>{service.assistantEnabled()?'Auditar com o Robô':'Auditar Alocação'}</button><p>Cole os códigos e gere os arquivos. Ajuste os dados quando precisar.</p></div><button className="secondary-button" disabled={state.busy} onClick={()=>act(service.refresh())}>Atualizar</button></header>
+  <header className="ag-heading"><div><span className="ag-kicker">FERRAMENTAS ADICIONAIS</span><h2>Gerador de Alocação</h2><p>Cole os códigos e gere os arquivos. Ajuste os dados quando precisar. Para uma auditoria preventiva, clique no mascote flutuante.</p>{!service.assistantEnabled()&&<small>O Robô Auditor pode ser habilitado pelo Proprietário ADM para este contrato.</small>}</div><button className="secondary-button" disabled={state.busy} onClick={()=>act(service.refresh())}>Atualizar</button></header>
   <nav className="ag-tabs" aria-label="Seções de alocação">{[['generate','Gerar alocação'],['bases','Bases de referência'],['history','Histórico'],['learning','Aprendizado da IA']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}>{label}</button>)}</nav>
   {state.error&&<div className="ag-notice ag-error" role="alert">{state.error}</div>}{message&&<div className="ag-notice" role="status">{message}</div>}
   {state.busy&&state.progress&&<div className="ag-notice" role="status">{state.progress}</div>}
@@ -75,7 +101,7 @@ export function AllocationApp(){
   </div>
   <small>Somente alocações reconhecidas na Central de Alocação publicada. Os status acompanham a base oficial.</small>
   {history.map(run=><article className="ag-history-row" key={run.id}><header>
-   <strong>{run.allocation_code}</strong><button className="text-button" disabled={state.busy} onClick={()=>act(service.auditSavedRun(run))}>Auditar Alocação</button><span>{run.control_status||'Não informado'}</span>
+   <strong>{run.allocation_code}</strong>{service.assistantEnabled()&&<button className="text-button" disabled={state.busy} onClick={()=>act(service.auditSavedRun(run))}>Auditar com o Robô</button>}<span>{run.control_status||'Não informado'}</span>
    <time>{run.control_published_at?new Date(run.control_published_at).toLocaleString('pt-BR'):'Sem data de publicação'}</time>
    </header>
    <p>{(run.documents||[]).map((d:Data)=>d.document+' Rev. '+d.revision).join(' · ')}{run.document_count>20?' · …':''}</p>

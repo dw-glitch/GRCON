@@ -94,7 +94,7 @@ export const service={
  async showAssistant(){await globals.GRCONModuleLoader.ensure('allocation-auditor');globals.GrconAllocationAuditorUi.showAssistant();},
  async auditCurrent(assistantUi=false){
   const rows=state.rows.filter(r=>r.selected);if(!rows.length)throw Error('Selecione documentos para auditar.');
-  const context=await this.auditContext();await globals.GRCONModuleLoader[assistantUi?'ensure':'ensureModule']('allocation-auditor');
+  const context=await this.auditContext();await globals.GRCONModuleLoader.ensure('allocation-auditor');
   await globals.GrconAllocationAuditorUi.open({...context,rows});if(assistantUi)globals.GrconAllocationAuditorUi.showAssistant();
  },
  async auditAllocationReference(reference:string){
@@ -105,7 +105,7 @@ export const service={
  async auditSavedRun(run:Data){
   const context=await this.auditContext();const ticket=epoch;const saved=await rpc('run-detail',{id:run.id});current(ticket);
   const rows=(saved.documents||[]).map((d:Data)=>({document:d.document,revision:d.revision,title:d.title,record:{},output:{discipline:d.discipline,workflow:d.workflow,databook:d.databook,levels:d.levels},identity:{discipline:d.discipline,eap:d.eap}}));
-  await globals.GRCONModuleLoader[this.assistantEnabled()?'ensure':'ensureModule']('allocation-auditor');current(ticket);
+  await globals.GRCONModuleLoader.ensure('allocation-auditor');current(ticket);
   await globals.GrconAllocationAuditorUi.open({...context,rows,allocation:saved.allocation_code,sourceVersions:saved.base_versions});if(this.assistantEnabled())globals.GrconAllocationAuditorUi.showAssistant();
  },
  async generateAudited(rows:Data[],events:Data[],versions:Data){

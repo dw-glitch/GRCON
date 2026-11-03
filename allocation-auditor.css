@@ -147,3 +147,68 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 
 .aac-attachments label,.aac-options label{position:relative;cursor:pointer}.aac-attachments input[type=file],.aac-options label input[type=file]{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.aac-attachments label:focus-within,.aac-options label:focus-within{outline:2px solid #29749a;outline-offset:3px}
 .aac-training{font-family:Inter,Arial,sans-serif;color:#23384b;font-size:14px;line-height:1.5}.aac-training>label{display:flex;flex-direction:column;gap:6px;margin:14px 0}.aac-training input,.aac-training select,.aac-training textarea{font:inherit;color:inherit;background:#fff;border:1px solid #bfceda;border-radius:8px;padding:9px;max-width:100%;box-sizing:border-box}.aac-training textarea,.aac-training>label>select,.aac-training>label>input{width:100%}.aac-training button{font:inherit;border:1px solid #b7cbd9;background:#f3f8fb;color:#205471;border-radius:8px;padding:8px 12px;cursor:pointer}.aac-training button:disabled{opacity:.5;cursor:default}.aac-training>article{margin:16px 0;padding:18px;border:1px solid #cbd9e3;border-radius:12px;background:#fff}.aac-training .ag-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.aac-training [role=status]{border-left:3px solid #29749a;padding:10px;background:#edf6fb}.aac-training fieldset>label{display:flex;flex-direction:column;gap:6px}[data-theme=dark] .aac-training{color:#d8e6f0}[data-theme=dark] .aac-training>article,[data-theme=dark] .aac-training input,[data-theme=dark] .aac-training select,[data-theme=dark] .aac-training textarea{background:#172635;color:#e3eef6;border-color:#425c71}
+
+
+/* Robô Auditor Preventivo — non-modal floating surface anchored to the Generator. */
+.aac-backdrop{position:fixed;inset:0;z-index:12000;background:transparent;display:block;pointer-events:none;padding:0}
+.aac-panel,.aac-panel.aac-expanded{position:absolute;right:18px;bottom:18px;pointer-events:auto;max-width:calc(100vw - 36px);height:min(770px,calc(100dvh - 36px))}
+.aac-panel{width:min(480px,calc(100vw - 36px))}
+.aac-panel.aac-expanded{width:min(860px,calc(100vw - 36px))}
+.aac-launcher{position:fixed;right:22px;bottom:18px;z-index:11999;display:flex;align-items:center;flex-direction:column;gap:4px;border:0;padding:3px 5px;background:transparent;color:var(--text-1,#172c39);cursor:pointer;filter:drop-shadow(0 8px 12px rgba(0,0,0,.18))}
+.aac-launcher-mascot{width:104px;height:104px;display:flex;justify-content:center;align-items:center;pointer-events:none}
+.aac-launcher-caption{max-width:140px;background:var(--surface-1,#fff);border:1px solid var(--border-1,#d8e1e7);border-radius:999px;padding:5px 12px;font-weight:650;font-size:12px;white-space:nowrap}
+.aac-launcher:focus-visible{outline:3px solid #2588b5;outline-offset:2px;border-radius:18px}
+@media(max-width:760px){
+ .aac-backdrop{padding:0}
+ .aac-panel,.aac-panel.aac-expanded{right:0;bottom:0;width:100vw;max-width:100vw;height:min(90dvh,820px);border-radius:18px 18px 0 0}
+ .aac-launcher{right:10px;bottom:12px}
+ .aac-launcher-mascot{width:76px;height:76px}
+}
+
+
+/* Phase 2: maintain a connected launch host while the conversation owns the mascot. */
+.aac-launcher-hidden{visibility:hidden;pointer-events:none}
+.aac-launcher-mascot{min-width:0;min-height:0}
+.aac-launcher #grcon-context-mascot{max-width:100%;max-height:100%}
+.aac-launcher-caption{box-shadow:0 3px 12px rgb(9 36 52 / 12%)}
+.aac-launcher:hover:not(:disabled) .aac-launcher-caption{border-color:var(--brand-600,#28759b);background:var(--surface-2,#f1f7fb)}
+.aac-backdrop{overscroll-behavior:contain}
+.aac-panel{box-shadow:0 22px 72px rgb(13 37 57 / 24%);overscroll-behavior:contain}
+.aac-messages{overscroll-behavior:contain}
+.aac-panel .aac-header{flex:none}
+.aac-panel .aac-header h2{font-size:1rem;line-height:1.3}
+.aac-panel .aac-mascot{overflow:visible}
+@media(min-width:1000px){
+ .aac-launcher{right:max(24px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom))}
+ .aac-panel,.aac-panel.aac-expanded{right:max(24px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom))}
+}
+@media(max-width:760px){
+ .aac-panel,.aac-panel.aac-expanded{bottom:0;right:0;max-height:100dvh;padding-bottom:env(safe-area-inset-bottom)}
+ .aac-launcher{right:max(10px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom))}
+ .aac-panel footer form{align-items:end}
+ .aac-panel footer textarea{max-height:110px}
+}
+@media(prefers-reduced-motion:reduce){
+ .aac-launcher,.aac-panel,.aac-launcher-caption{transition:none!important;animation:none!important}
+}
+
+
+/* Phase 3 — compact, keyboard-accessible conversational actions. */
+.aac-quick-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.aac-quick-actions button{font:600 12px/1.3 Inter,'Segoe UI',sans-serif;border:1px solid var(--border-1,#cbd5df);border-radius:999px;padding:8px 11px;color:var(--text-1,#173345);background:var(--surface-1,#fff);white-space:nowrap}
+.aac-quick-actions button:hover:not(:disabled){border-color:var(--brand-600,#2a7695);background:var(--surface-2,#f2f8fb)}
+.aac-issue-confirm{display:flex;flex-wrap:wrap;align-items:center;gap:9px;padding:12px;background:var(--surface-2,#f4f7fa);border:1px solid var(--border-1,#cddbe2);border-radius:10px}
+.aac-issue-confirm p{width:100%;margin:0;font-size:12px}
+.aac-issue-confirm button{padding:8px 12px;border-radius:8px}
+@media(max-width:760px){.aac-quick-actions{gap:6px}.aac-quick-actions button{font-size:11px;padding:7px 10px}}
+
+
+/* Fase 4 — escolhas de aba somente quando o formato exige intervenção humana. */
+.aac-sheet-selection{display:grid;gap:9px;padding:13px;border-radius:12px;border:1px solid var(--border-1,#d1dce5);background:var(--surface-2,#f4f8fb);font-size:13px}
+.aac-sheet-selection>p{margin:0;font-size:12px;line-height:1.45;color:var(--text-2,#557080)}
+.aac-sheet-selection label{display:grid;gap:5px;min-width:0;font-size:12px;font-weight:650}
+.aac-sheet-selection label>span{overflow-wrap:anywhere}
+.aac-sheet-selection select{min-width:0;max-width:100%;width:100%;background:var(--surface-1,#fff);color:var(--text-1,#173345);border:1px solid var(--border-1,#c9d7df);border-radius:8px;padding:10px;font:inherit}
+.aac-sheet-controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.aac-sheet-controls button{border:1px solid var(--border-1,#c9d7df);border-radius:8px;padding:8px 12px;background:var(--surface-1,#fff);color:var(--text-1,#173345);font:600 12px Inter,'Segoe UI',sans-serif}
+.aac-sheet-controls .primary-button{background:var(--brand-700,#125777);color:#fff;border-color:transparent}
