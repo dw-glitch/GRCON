@@ -342,6 +342,13 @@
   }
 
   async function ensureModule(view) {
+    // Compatibility for old links and saved navigation: never open a standalone Auditor.
+    if (view === "allocation-auditor") {
+      await ensureModule("allocation-generator");
+      await ensure("allocation-auditor");
+      root.GrconAllocationAuditorUi?.showAssistant?.();
+      return;
+    }
     const module = view === "cover-document" ? "additional-tools" : view === "analysis-history" ? "control" : view || "control";
     requestedView = module;
     if (module === "control") {
