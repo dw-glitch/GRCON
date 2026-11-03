@@ -44,7 +44,7 @@
     // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
     "additional-tools": [],
     "allocation-generator": ["react-dist/allocation-app.js"],
-    "allocation-auditor": ["allocation_auditor_core.js", "allocation_auditor_assistant.js", "react-dist/allocation-auditor-app.js"],
+    "allocation-auditor": ["allocation_auditor_core.js", "allocation_auditor_assistant.js", "allocation_auditor_corrections.js", "allocation_auditor_learning.js", "react-dist/allocation-auditor-app.js"],
     "title-corrector": ["react-dist/title-corrector-app.js"],
     "allocation-dashboard": ["allocation_dashboard_core.js", "allocation_dashboard_app.js"],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core
@@ -342,6 +342,17 @@
   }
 
   async function ensureModule(view) {
+    // Compatibility for old links and saved navigation: never open a standalone Auditor.
+    if (view === "allocation-auditor") {
+      await ensureModule("allocation-generator");
+      if (!root.GrconAllocationGeneratorUi?.assistantEnabled?.()) {
+        root.GrconNotify?.("O Robô Auditor não está habilitado para este contrato. Consulte o Proprietário ADM.", "warning");
+        return;
+      }
+      await ensure("allocation-auditor");
+      root.GrconAllocationAuditorUi?.showAssistant?.();
+      return;
+    }
     const module = view === "cover-document" ? "additional-tools" : view === "analysis-history" ? "control" : view || "control";
     requestedView = module;
     if (module === "control") {

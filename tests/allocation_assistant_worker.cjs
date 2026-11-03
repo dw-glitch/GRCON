@@ -33,7 +33,7 @@ const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes
  assert.notEqual(C.key({...row,sourceFile:'a.xlsx',sourceRow:2}),C.key({...row,sourceFile:'b.xlsx',sourceRow:2}));
  const pack=await request('assistant-package',{...context,rows:[row],progress:1,total:1,sessionId:'qa',sources:[],files:[],events:[],exceptions:[]});
  const zip=await sandbox.JSZip.loadAsync(pack.bytes,{checkCRC32:true});
- const bytes=await zip.file('01_Relatorio_Auditoria.xlsx').async('uint8array');const wb=sandbox.XLSX.read(bytes,{type:'array',cellFormula:true});
+ const bytes=await zip.file('GRCON_Auditoria_Preventiva/01_Relatorio_Auditoria.xlsx').async('uint8array');const wb=sandbox.XLSX.read(bytes,{type:'array',cellFormula:true});
  assert.deepEqual([...wb.SheetNames],['RESUMO','DETALHAMENTO']);assert.ok(wb.Sheets.DETALHAMENTO['!autofilter']);
  assert.equal(pack.manifest.outputs[0].sha256.length,64);assert.equal(pack.manifest.validation.technicalValidationOnly,true);
  await assert.rejects(request('assistant-package',{...context,rows:[row],progress:1,total:2}),/Conclua/);

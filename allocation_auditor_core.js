@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.2.0';
+ const VERSION='1.3.0';
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
  const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet,text(r.sourceFile),text(r.sourceSheet),text(r.sourceRow),text(r.allocation),text(r.sourceHash)]);
@@ -69,15 +69,47 @@
  function applicable(context){const a=context.applicability||{};return a.confirmed===true&&a.contract===context.contract&&a.source===ET&&['N','P','Q','R'].includes(a.revision)&&Boolean(text(a.evidence));}
  function finding(id,category,field,message,evidence,opts={}){return {id,category,field,message,evidence,ruleVersion:VERSION,source:opts.source||'Integridade operacional',severity:opts.severity||'pending',origin:opts.origin||'LD',humanReview:true,...opts};}
  function buildTree(paths,version){const nodes=new Map();for(const entry of paths||[]){const p=text(entry.databook||entry.path).split('|');if(p.some(x=>!x.trim()))continue;for(let i=0;i<p.length;i++){const full=p.slice(0,i+1).join('|');nodes.set(full,{id:JSON.stringify([version,full]),parent:i?JSON.stringify([version,p.slice(0,i).join('|')]):null,label:p[i],path:full,version});}}return nodes;}
+ function fiscalFamily(document){
+  const parsed=parts(document);
+  if(!parsed||norm(parsed.project)!=='RNEST'||!parsed.report||!parsed.discipline)return '';
+  return norm(parsed.discipline)+'|'+norm(parsed.report);
+ }
+ const FISCAL_FAMILY_CATEGORIES=new Set(['title','code','tag','databook','hierarchy','workflow','scope']);
  function prepare(context){
-  const byDocument=new Map(),batches=new Map(),tags=new Map(),paths=new Map(),eaps=new Map(),ld=new Map();
-  for(const h of context.history||[]){if(h.contract&&h.contract!==context.contract)continue;const a=byDocument.get(h.document)||[];a.push(h);byDocument.set(h.document,a);}
+  const byDocument=new Map(),byFamilyCategory=new Map(),batches=new Map(),tags=new Map(),paths=new Map(),eaps=new Map(),ld=new Map();
+  for(const h of context.history||[]){
+   // Preserve narrowly scoped existing history while never generalizing an
+   // unscoped record into a recurrent family rule.
+   if(h.contract&&h.contract!==context.contract)continue;
+   const exact=byDocument.get(h.document)||[];
+   exact.push(h);byDocument.set(h.document,exact);
+   if(h.contract!==context.contract)continue;
+   const family=fiscalFamily(h.document);
+   if(!family)continue;
+   for(const issue of classifyComment(h.fiscalComment)){
+    if(!FISCAL_FAMILY_CATEGORIES.has(issue.category))continue;
+    const key=family+'|'+issue.category,list=byFamilyCategory.get(key)||[];
+    list.push(h);byFamilyCategory.set(key,list);
+   }
+  }
   for(const r of context.records||[]){const k=JSON.stringify([r.document,r.revision||'',r.allocation||r.sourceFile||'']);batches.set(k,(batches.get(k)||0)+1);}
   for(const kind of ['appendix','li','scon'])for(const t of context.bases?.[kind]||[]) {const tag=text(t.tag||t.TAG);if(tag)tags.set(tag,{...t,kind});}
   for(const p of context.bases?.databook||[])paths.set(text(p.databook),p);
   for(const e of context.bases?.eap||[]){const code=text(e.code);if(!code)continue;const list=eaps.get(code)||[];list.push(e);eaps.set(code,list);}
   for(const r of context.ldRecords||[]){const list=ld.get(text(r.document))||[];list.push(r);ld.set(text(r.document),list);}
-  return {byDocument,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
+  // Preaggregate historical recurrence once per audit. Large allocations must not
+  // repeatedly scan thousands of fiscal comments for every document.
+  const recurringFamilies=new Map();
+  for(const [key,entries] of byFamilyCategory){
+   const distinct=new Map();
+   for(const h of entries)if(h.document&&!distinct.has(h.document))distinct.set(h.document,h);
+   if(distinct.size<3)continue;
+   recurringFamilies.set(key,{
+    distinctDocuments:distinct.size,
+    samples:[...distinct.values()].slice(0,3).map(h=>({document:h.document,revision:h.revision,comment:h.fiscalComment,allocation:h.allocation,source:h.sourceFile,sourceVersion:h.sourceVersion||h.sourceHash||'',sheet:h.sourceSheet||h.ldSheet||'',row:h.sourceRow||'',returnedAt:h.returnedAt||''}))
+   });
+  }
+  return {byDocument,byFamilyCategory:recurringFamilies,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
  }
 
  // Compatibiliza um código documental longo com seu último ancestral cadastrado.
@@ -119,11 +151,15 @@
     if(!text(r.purpose))add('ALLOCATION-PURPOSE-MISSING','history','purpose','O Propósito de Emissão Original está vazio.',[{file:r.sourceFile,row:r.sourceRow}],{origin:'Alocação'});
    }
   if(!enforced)add('ET-APPLICABILITY','code','document','Aplicabilidade e revisão da ET ainda não comprovadas para este contrato.',[],{origin:'Base normativa'});
+  const catalogRApplicable=enforced&&context.applicability?.revision==='R';
+  if(enforced&&!catalogRApplicable)add('ET-REVISION-NEEDS-VALIDATION','code','document','A revisão aplicável da ET é '+context.applicability.revision+', mas o validador incorporado usa a revisão R. Não aplicar as regras da revisão R como não conformidades confirmadas.',[{source:ET,applicableRevision:context.applicability.revision,catalogRevision:'R',contract:context.contract}],{source:'Controle de aplicabilidade normativa',origin:'Base normativa',severity:'pending',normativeProof:false});
   if(context.validateDocument){
    const validation=context.validateDocument(r.document);
    for(const error of validation.errors||[]){
-    const et=/^ET-/.test(error.code),matched=(context.bases?.norms||[]).find(n=>n.source===error.source&&n.contract===context.contract&&n.applicabilityEvidence&&n.confirmed===true);
-    const confirmed=et?enforced&&context.applicability.revision==='R':Boolean(matched);
+    const et=/^ET(?:-|_)/.test(String(error.code||''));
+    if(et&&enforced&&!catalogRApplicable)continue;
+    const matched=(context.bases?.norms||[]).find(n=>n.source===error.source&&n.contract===context.contract&&n.applicabilityEvidence&&n.confirmed===true);
+    const confirmed=et?catalogRApplicable:Boolean(matched);
     add('CATALOG-'+error.code,'code',error.field||'document',error.message,[{value:r.document,source:error.source,baseVersion:context.versions?.norms,applicability:matched?.applicabilityEvidence||context.applicability?.evidence||''}],{severity:confirmed?'error':'pending',source:error.source||'Catálogo normativo incorporado'});
    }
    if(validation.kind==='unknown')add('NORMATIVE-UNRECOGNIZED','code','document','Documento não reconhecido pelos validadores normativos incorporados.',[{value:r.document}]);
@@ -133,7 +169,7 @@
   if(p){
    r.tag=r.tag||p.tag;r.eap=r.eap||p.eap;r.discipline=r.discipline||p.discipline;
    const reference={source:ET,revision:context.applicability?.revision||'',contract:context.contract,evidence:context.applicability?.evidence||''};
-   const rule=(id,item,message)=>add(id,'code','document',message,[{...reference,item,value:p.tag}],{severity:enforced?'error':'pending',source:ET+' '+item,origin:'LD'});
+   const rule=(id,item,message)=>add(id,'code','document',message,[{...reference,item,value:p.tag}],{severity:catalogRApplicable?'error':'pending',source:ET+' '+item,origin:'LD'});
    if(/[çÇ?|!@#$%¨&*(),\s]/.test(p.tag))rule('ET-7172-CHARACTERS','7.1.7.2','Grupo 7 contém caractere proibido na ET.');
    const nonTagged=r.nonTagged===true||/^nt-/i.test(p.tag);
    if(nonTagged&&!p.tag.startsWith('nt-'))rule('ET-7173-NT','7.1.7.3','Item não tagueado: o Grupo 7 deve iniciar com nt- minúsculo.');
@@ -166,6 +202,13 @@
       }
     }
    }
+  // A Workflow/discipline discrepancy is a preventive warning, not a guessed correction.
+  const alias={ELE:'ELETRICA',TUB:'TUBULACAO',HVAC:'HVAC',CVL:'CIVIL'};
+  const workflowCategory=workflowDiscipline(r.workflow);
+  const documentCategory=alias[norm(r.discipline)]||'';
+  if(workflowCategory&&documentCategory&&workflowCategory!==documentCategory){
+   add('WORKFLOW-DISCIPLINE-CONFLICT','workflow','workflow','A disciplina identificada no Workflow diverge da disciplina explicitamente codificada. Confira a LD e a tabela aplicável antes do envio.',[{document:r.document,codeDiscipline:r.discipline,workflow:r.workflow,workflowDiscipline:workflowCategory,sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow}],{severity:context.homologated?.workflows?'pending':'suggestion',origin:'Workflow / LD',normativeProof:false});
+  }
   const workflows=context.bases?.workflows||[];
   if(!text(r.workflow))add('WORKFLOW-MISSING','workflow','workflow','Workflow não informado. Verifique a necessidade de definição.',[]);
   else if(workflows.length&&!workflows.some(w=>text(w.workflow)===r.workflow))add('WORKFLOW-UNKNOWN','workflow','workflow','Workflow não localizado na referência carregada.',[{workflow:r.workflow}]);
@@ -174,7 +217,29 @@
   const history=(index.byDocument.get(r.document)||[]).filter(h=>(!h.revision||!r.revision||h.revision===r.revision)&&sameLd(h,r));
   if(classifyComment(r.fiscalComment).length)add('FISCAL-CURRENT','history','fiscalComment','A planilha contém apontamento fiscal cujo atendimento precisa ser conferido.',[{comment:r.fiscalComment,decision:decision(r.fiscalComment,r.status),file:r.sourceFile,sheet:r.sourceSheet,row:r.sourceRow}],{source:'Retorno fiscal específico'});
   if(r.commentDataIssue)add('FISCAL-NON-TEXT','history','fiscalComment',r.commentDataIssue,[{value:r.fiscalCommentRaw,row:r.sourceRow}],{source:'Qualidade da fonte fiscal'});
-  for(const h of history){if(classifyComment(h.fiscalComment).length)add('FISCAL-PRECEDENT','history','fiscalComment','Apontamento fiscal anterior requer avaliação de atendimento.',[{comment:h.fiscalComment,decision:h.fiscalDecision,allocation:h.allocation,file:h.sourceFile,sheet:h.sourceSheet,row:h.sourceRow,date:h.returnedAt,revisionKnown:Boolean(h.revision)}],{source:'Precedente específico',origin:'Consultar apontamento original'});}
+  for(const h of history){
+   const issues=classifyComment(h.fiscalComment);
+   if(!issues.length)continue;
+   // Only a demonstrably unchanged value makes the old comment a pending risk.
+   // The presence of a historic rejection alone is never a fresh nonconformity.
+   const unchanged=issues.some(issue=>['title','workflow','databook','tag','discipline'].includes(issue.field)&&text(h[issue.field])&&text(r[issue.field])&&norm(h[issue.field])===norm(r[issue.field]));
+   add(unchanged?'FISCAL-UNCHANGED-PRECEDENT':'FISCAL-PRECEDENT','history','fiscalComment',
+    unchanged?'Um valor citado em apontamento anterior permanece igual. Confira a correção antes do envio.':'Há apontamento histórico para esta ocorrência. Consulte a evidência anterior, sem presumir que a falha ainda existe.',
+    [{comment:h.fiscalComment,decision:h.fiscalDecision,allocation:h.allocation,file:h.sourceFile,sourceVersion:h.sourceVersion||h.sourceHash||'',sheet:h.sourceSheet,row:h.sourceRow,date:h.returnedAt,revisionKnown:Boolean(h.revision),unchangedValue:unchanged}],
+    {severity:unchanged?'pending':'suggestion',source:'Precedente fiscal específico (não normativo)',origin:'Histórico Fiscal 01',normativeProof:false});
+  }
+  const family=fiscalFamily(r.document);
+  if(family&&index.byFamilyCategory){
+   const categories=['title','code','tag','databook','hierarchy','workflow','scope'];
+   for(const category of categories){
+    const recurrence=index.byFamilyCategory.get(family+'|'+category);
+    if(!recurrence)continue; // A single document resubmitted several times is not recurrence.
+    add('FISCAL-FAMILY-'+category,'history','fiscalComment',
+      'A Fiscal 01 apontou esta categoria em documentos distintos da mesma família técnica. Avalie a evidência específica antes do envio; a recorrência não comprova defeito nesta alocação.',
+      [{family,category,distinctDocuments:recurrence.distinctDocuments,samples:recurrence.samples}],
+      {severity:'suggestion',source:'Recorrência histórica Fiscal 01 (não normativa)',origin:'Precedentes da família',normativeProof:false,humanReview:true});
+   }
+  }
   const status=f.some(x=>x.severity==='error')?'Correções pendentes':f.some(x=>x.severity==='pending')?'Verificações inconclusivas':f.some(x=>x.severity==='suggestion')?'Sugestões de melhoria':'Sem não conformidades detectadas';
   return {...r,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto'};
  }

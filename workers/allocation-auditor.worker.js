@@ -2,7 +2,7 @@
 importScripts('../xlsx.full.min.js','../jszip.min.js',
  '../vendor/recon/document_title_standard.js','../vendor/recon/document_title_standard_r.js',
  '../vendor/recon/allocation_normative_catalogs.js','../vendor/recon/allocation_normative_rules.js',
- '../allocation_auditor_core.js','../allocation_auditor_revision.js','../allocation_auditor_assistant.js','../allocation_auditor_package.js');
+ '../allocation_auditor_core.js','../allocation_auditor_revision.js','../allocation_auditor_assistant.js','../allocation_auditor_corrections.js','../allocation_auditor_package.js');
 const C=self.GrconAllocationAuditorCore;
 let context=null,prepared=null;
 const cache=new Map();
@@ -33,7 +33,7 @@ async function operation(op,input){
   const sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');
   return {...C.parseRows(XLSX.utils.sheet_to_json(book.Sheets[input.sheet],{header:1,defval:'',raw:true}),{contract:input.contract,sourceFile:input.file.name,sourceSheet:input.sheet,sourceHash:sha,allocation:input.allocation||''}),sha256:sha};
  }
- if(op==='context'){context={...input,validateDocument:self.RECONAllocationNorms.validateDocument};prepared=C.prepare(context);return {records:context.records.length,treeNodes:prepared.tree.size};}
+ if(op==='context'){cache.clear();context={...input,validateDocument:self.RECONAllocationNorms.validateDocument};prepared=C.prepare(context);return {records:context.records.length,treeNodes:prepared.tree.size};}
  if(op==='batch'){if(!context)throw Error('Contexto ausente.');return Promise.all(context.records.slice(input.first,input.first+input.count).map(async r=>{
   const duplicateKey=JSON.stringify([r.document,r.revision||'',r.allocation||r.sourceFile||'']);
   const signature=JSON.stringify([C.VERSION,context.contract,context.versions,context.applicability,context.homologated,r,prepared.ld.get(r.document),prepared.byDocument.get(r.document),prepared.batches.get(duplicateKey)]);
