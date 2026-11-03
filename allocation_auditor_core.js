@@ -95,7 +95,19 @@
   for(const p of context.bases?.databook||[])paths.set(text(p.databook),p);
   for(const e of context.bases?.eap||[]){const code=text(e.code);if(!code)continue;const list=eaps.get(code)||[];list.push(e);eaps.set(code,list);}
   for(const r of context.ldRecords||[]){const list=ld.get(text(r.document))||[];list.push(r);ld.set(text(r.document),list);}
-  return {byDocument,byFamilyCategory,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
+  // Preaggregate historical recurrence once per audit. Large allocations must not
+  // repeatedly scan thousands of fiscal comments for every document.
+  const recurringFamilies=new Map();
+  for(const [key,entries] of byFamilyCategory){
+   const distinct=new Map();
+   for(const h of entries)if(h.document&&!distinct.has(h.document))distinct.set(h.document,h);
+   if(distinct.size<3)continue;
+   recurringFamilies.set(key,{
+    distinctDocuments:distinct.size,
+    samples:[...distinct.values()].slice(0,3).map(h=>({document:h.document,revision:h.revision,comment:h.fiscalComment,allocation:h.allocation,source:h.sourceFile}))
+   });
+  }
+  return {byDocument,byFamilyCategory:recurringFamilies,batches,tags,paths,eaps,ld,tree:buildTree(context.bases?.databook,context.versions?.databook)};
  }
 
  // Compatibiliza um código documental longo com seu último ancestral cadastrado.
@@ -218,12 +230,11 @@
   if(family&&index.byFamilyCategory){
    const categories=['title','code','tag','databook','hierarchy','workflow','scope'];
    for(const category of categories){
-    const historical=index.byFamilyCategory.get(family+'|'+category)||[];
-    const distinct=[...new Map(historical.filter(h=>h.document).map(h=>[h.document,h])).values()];
-    if(distinct.length<3)continue; // Never generalize from repeated submissions of one document.
+    const recurrence=index.byFamilyCategory.get(family+'|'+category);
+    if(!recurrence)continue; // A single document resubmitted several times is not recurrence.
     add('FISCAL-FAMILY-'+category,'history','fiscalComment',
       'A Fiscal 01 apontou esta categoria em documentos distintos da mesma família técnica. Avalie a evidência específica antes do envio; a recorrência não comprova defeito nesta alocação.',
-      [{family,category,distinctDocuments:distinct.length,samples:distinct.slice(0,3).map(h=>({document:h.document,revision:h.revision,comment:h.fiscalComment,allocation:h.allocation,source:h.sourceFile}))}],
+      [{family,category,distinctDocuments:recurrence.distinctDocuments,samples:recurrence.samples}],
       {severity:'suggestion',source:'Recorrência histórica Fiscal 01 (não normativa)',origin:'Precedentes da família',normativeProof:false,humanReview:true});
    }
   }
