@@ -94,6 +94,8 @@ withOutside.aggregates = { "all:all": { lists: {
 const planOutside = coordinatorPlan(withOutside);
 assert.deepEqual(Object.keys(planOutside.sheets), ["Resumo", "Conferência Documental", "REL. PW", "Fora das LDs"]);
 assert.equal(planOutside.sheets["Fora das LDs"].length, 3, "cabeçalho + 2 registros (duplicata exata colapsada)");
+assert.equal(plan.sheets["Conferência Documental"][2][10], "ABA");
+assert.equal(planOutside.sheets["Fora das LDs"][0][9], "CLASSE");
 assert.equal(planOutside.summary.active, plan.summary.active, "fora das LDs não infla os indicadores");
 assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["Conferência Documental"].length);
 
@@ -106,7 +108,7 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   const out = reopened.getWorksheet("Fora das LDs");
   assert.equal(out.getCell("B2").value, "OUT-SIGEM-1");
   assert.equal(out.getCell("A3").value, "PW");
-  assert.equal(out.autoFilter, "A1:I3");
+  assert.equal(out.autoFilter, "A1:J3");
   assert.equal(out.views[0].ySplit, 1);
   const control = reopened.getWorksheet("Conferência Documental");
   const argb = cell => cell.fill && cell.fill.fgColor && cell.fill.fgColor.argb;
@@ -129,7 +131,7 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   assert.ok(control.getRow(1).height >= 50 && overview.getRow(1).height >= 50, "altura suficiente para a logo");
   assert.equal(control.getCell("J1").numFmt, '"PENDÊNCIAS: "0');
   assert.equal(control.getCell("J1").value, plan.summary.pending, "pendências seguem numéricas");
-  assert.equal(control.getCell("K1").value, plan.sheets["Conferência Documental"][0][10], "totais de revisão não colidem com os indicadores");
+  assert.equal(control.getCell("L1").value, plan.sheets["Conferência Documental"][0][11], "totais de revisão não colidem com os indicadores");
   const plain = new ExcelJS.Workbook();
   await plain.xlsx.load(await buildCoordinatorWorkbook(withOutside, ExcelJS).workbook.xlsx.writeBuffer());
   assert.equal(plain.getWorksheet("Resumo").getImages().length, 0, "sem logo disponível o relatório continua válido");
@@ -138,3 +140,12 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   assert.equal(typeof control.getCell("A4").value, "string");
   console.log("sigem_pw_excel_polish: resumo em seções, KPIs de cadastro/emissão, aba Fora das LDs condicional, cores de status, impressão e texto literal OK");
 })().catch(error => { console.error(error); process.exit(1); });
+// Contrato do painel gráfico (fonte): barras empilhadas clicáveis que filtram a relação.
+{
+  const chart = fs.readFileSync(path.resolve(__dirname, "..", "src/react/sigem-pw/components/SigemPwKpiCharts.tsx"), "utf8");
+  assert.match(chart, /spw-chart-bar/);
+  assert.match(chart, /aria-label=\{`\$\{item\.label\}: \$\{nf\(item\.value\)\}/, "segmentos acessíveis com texto, não só cor");
+  for (const key of ["emitted", "notEmitted", "awaiting", "compliant", "pending", "posted", "other", "active"]) assert.ok(chart.includes(`"${key}"`), key);
+  const overview = fs.readFileSync(path.resolve(__dirname, "..", "src/react/sigem-pw/components/SigemPwManagerialOverview.tsx"), "utf8");
+  assert.match(overview, /<SigemPwKpiCharts /);
+}

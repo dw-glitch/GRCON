@@ -65,4 +65,11 @@ assert.equal(s.pwApplicable, s.awaitingRegistration + s.registeredNotEmitted + 1
   assert.equal(unready.summary.awaitingRegistration, null, "base ausente nunca vira zero confirmado");
   assert.equal(unready.summary.registeredNotEmitted, null);
 }
+// Coluna ABA: a aba da LD de origem (filtro por classe de código no Excel).
+{
+  const withSheet = reconcileManagerial(state([ref(a, { sheetName: "N-1710" }), ref(d, { sheetName: "CV" }), ref(b, { documentClass: "ET", sheetName: "" })], [], []));
+  assert.deepEqual(withSheet.rows.map(r => r.sheet), ["N-1710", "CV", "ET"]);
+}
+// Segmentos do gráfico PW somam o universo que depende do PW.
+assert.equal(s.pwApplicable - s.awaitingRegistration - s.registeredNotEmitted, 1, "emitidos = restante");
 console.log("sigem_pw_managerial_kpis: universo, cadastro, emissão, aguardando cadastro e CV/cancelados OK");

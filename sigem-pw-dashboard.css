@@ -1432,3 +1432,48 @@
 @media(max-width:1280px){#sigem-pw-dashboard-module .spw-managerial-grid--primary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){#sigem-pw-dashboard-module .spw-managerial-grid--primary,#sigem-pw-dashboard-module .spw-managerial-grid--secondary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){#sigem-pw-dashboard-module .spw-managerial-grid--primary,#sigem-pw-dashboard-module .spw-managerial-grid--secondary{grid-template-columns:minmax(0,1fr)}}
+
+/* Painel gráfico da visão gerencial: universo → ProjectWise → SIGEM. */
+#sigem-pw-dashboard-module .spw-charts{display:grid;grid-template-columns:minmax(190px,.7fr) minmax(0,2fr) minmax(0,1.6fr);gap:14px;margin:14px 0 20px;align-items:stretch}
+#sigem-pw-dashboard-module .spw-universe{appearance:none;font:inherit;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:6px;padding:18px;border:1px solid var(--border,#dce4eb);border-left:5px solid var(--info-500,#2f6fa3);border-radius:14px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(15,23,42,.04)}
+#sigem-pw-dashboard-module .spw-universe-label{font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted,#66798a)}
+#sigem-pw-dashboard-module .spw-universe strong{font-size:2.4rem;line-height:1;font-variant-numeric:tabular-nums;color:var(--text-strong,#17324a)}
+#sigem-pw-dashboard-module .spw-universe small{font-size:.74rem;color:var(--text-muted,#66798a);line-height:1.4}
+#sigem-pw-dashboard-module .spw-universe[aria-pressed=true]{outline:2px solid var(--spw-accent,#177e65);outline-offset:-2px}
+#sigem-pw-dashboard-module .spw-chart-card{display:flex;flex-direction:column;gap:12px;padding:16px 18px;border:1px solid var(--border,#dce4eb);border-radius:14px;background:var(--surface,#fff);min-width:0}
+#sigem-pw-dashboard-module .spw-chart-card h4{margin:0;font-size:.9rem;color:var(--text-strong,#17324a)}
+#sigem-pw-dashboard-module .spw-chart-card header p{margin:4px 0 0;font-size:.76rem;color:var(--text-muted,#66798a);line-height:1.45}
+#sigem-pw-dashboard-module .spw-chart-bar{display:flex;gap:3px;height:38px;border-radius:10px;overflow:hidden}
+#sigem-pw-dashboard-module .spw-chart-seg{appearance:none;border:0;padding:0;margin:0;font:inherit;font-size:.72rem;font-weight:700;color:#fff;cursor:pointer;min-width:6px;display:flex;align-items:center;justify-content:center;transition:filter .15s}
+#sigem-pw-dashboard-module .spw-chart-seg:disabled{cursor:default;opacity:.35}
+#sigem-pw-dashboard-module .spw-chart-seg:not(:disabled):hover{filter:brightness(1.08)}
+#sigem-pw-dashboard-module .spw-chart-seg[aria-pressed=true]{outline:3px solid var(--text-strong,#17324a);outline-offset:-3px}
+#sigem-pw-dashboard-module .spw-chart-seg:focus-visible,#sigem-pw-dashboard-module .spw-chart-legend button:focus-visible,#sigem-pw-dashboard-module .spw-meter:focus-visible,#sigem-pw-dashboard-module .spw-universe:focus-visible{outline:3px solid var(--spw-accent,#177e65);outline-offset:2px}
+#sigem-pw-dashboard-module [data-tone=ok]{--tone:#2f8f68}
+#sigem-pw-dashboard-module [data-tone=warn]{--tone:#c98a1b}
+#sigem-pw-dashboard-module [data-tone=bad]{--tone:#c74b43}
+#sigem-pw-dashboard-module [data-tone=muted]{--tone:#8796a5}
+#sigem-pw-dashboard-module [data-tone=info]{--tone:#2f6fa3}
+#sigem-pw-dashboard-module .spw-chart-seg{background:var(--tone)}
+#sigem-pw-dashboard-module .spw-chart-legend{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+#sigem-pw-dashboard-module .spw-chart-legend button{appearance:none;width:100%;font:inherit;text-align:left;cursor:pointer;display:grid;grid-template-columns:12px 1fr;column-gap:8px;row-gap:1px;padding:8px 10px;border:1px solid var(--border,#dce4eb);border-radius:10px;background:var(--surface-soft,#f7fafc)}
+#sigem-pw-dashboard-module .spw-chart-legend button:disabled{cursor:default;opacity:.6}
+#sigem-pw-dashboard-module .spw-chart-legend button[aria-pressed=true]{border-color:var(--tone);box-shadow:inset 0 0 0 1px var(--tone)}
+#sigem-pw-dashboard-module .spw-chart-legend i{grid-row:1/4;align-self:center;width:12px;height:12px;border-radius:3px;background:var(--tone)}
+#sigem-pw-dashboard-module .spw-chart-legend-label{font-size:.74rem;font-weight:700;color:var(--text-strong,#17324a)}
+#sigem-pw-dashboard-module .spw-chart-legend strong{font-size:1.25rem;font-variant-numeric:tabular-nums;color:var(--text-strong,#17324a);grid-column:2}
+#sigem-pw-dashboard-module .spw-chart-legend em{font-style:normal;font-size:.74rem;font-weight:700;color:var(--tone);grid-column:2}
+#sigem-pw-dashboard-module .spw-chart-legend small{grid-column:2;font-size:.66rem;color:var(--text-muted,#66798a);line-height:1.35}
+#sigem-pw-dashboard-module .spw-meter{appearance:none;font:inherit;text-align:left;width:100%;cursor:pointer;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--border,#dce4eb);border-radius:10px;background:var(--surface-soft,#f7fafc)}
+#sigem-pw-dashboard-module .spw-meter[aria-pressed=true]{border-color:var(--tone);box-shadow:inset 0 0 0 1px var(--tone)}
+#sigem-pw-dashboard-module .spw-meter-head{display:flex;justify-content:space-between;gap:10px;font-size:.76rem;font-weight:700;color:var(--text-strong,#17324a)}
+#sigem-pw-dashboard-module .spw-meter-head small{font-weight:500;color:var(--text-muted,#66798a)}
+#sigem-pw-dashboard-module .spw-meter-track{height:10px;border-radius:6px;background:var(--border,#dce4eb);overflow:hidden}
+#sigem-pw-dashboard-module .spw-meter-track span{display:block;height:100%;background:var(--tone);border-radius:6px}
+@media(max-width:1560px){#sigem-pw-dashboard-module .spw-charts{grid-template-columns:1fr 1fr}#sigem-pw-dashboard-module .spw-universe{grid-column:1/-1;flex-direction:row;align-items:center;gap:16px}}
+@media(max-width:760px){#sigem-pw-dashboard-module .spw-charts{grid-template-columns:1fr}}
+#sigem-pw-dashboard-module .spw-chart{display:flex;flex-direction:column;gap:12px}
+#sigem-pw-dashboard-module .spw-chart-legend{align-items:stretch}
+#sigem-pw-dashboard-module .spw-chart-legend li{display:flex}
+#sigem-pw-dashboard-module .spw-chart-legend button{height:100%;align-content:start}
+#sigem-pw-dashboard-module .spw-chart-card .spw-meter{margin-bottom:0}

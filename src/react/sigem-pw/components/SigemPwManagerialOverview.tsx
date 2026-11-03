@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SigemPwState } from "../types/domain";
+import { SigemPwKpiCharts } from "./SigemPwKpiCharts";
 import { reconcileManagerial, type ManagerialDocument } from "../services/sigemPwManagerial";
 
-type KpiKey = "active" | "registered" | "emitted" | "awaiting" | "notEmitted" | "posted" | "compliant" | "pending";
+type KpiKey = "active" | "registered" | "emitted" | "awaiting" | "notEmitted" | "posted" | "compliant" | "pending" | "other";
 type Selection = KpiKey | "all";
 const PAGE_SIZE = 25;
 
@@ -24,6 +25,7 @@ function matchesKpi(row: ManagerialDocument, key: Selection): boolean {
     case "posted": return row.sigemPosted;
     case "compliant": return row.situation === "Em conformidade";
     case "pending": return row.situation === "Com pendência" || row.situation === "Em andamento";
+    case "other": return row.situation === "Em preparação" || row.situation === "Dados insuficientes";
   }
 }
 function priority(row: ManagerialDocument): number {
@@ -45,41 +47,17 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
   useEffect(() => { if (selectedCode) evidenceRef.current?.scrollIntoView({ block: "nearest" }); }, [selectedCode]);
   const report = useMemo(() => reconcileManagerial(state), [state.ld, state.pw, state.sigem, state.model, state.result]);
   const sum = report.summary;
-  const percent = (part: number | null) => sum.pwApplicable && part !== null ? `${((part / sum.pwApplicable) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% dos documentos que dependem do PW` : "";
-  const registeredShare = sum.pwApplicable !== null && sum.awaitingRegistration !== null ? sum.pwApplicable - sum.awaitingRegistration : null;
-  const emittedShare = registeredShare !== null && sum.registeredNotEmitted !== null ? registeredShare - sum.registeredNotEmitted : null;
-  type Kpi = { key: KpiKey; label: string; value: number | null; tip: string; note?: string; tone?: "ok" | "warn" | "bad" };
-  const primary: Kpi[] = [
-    { key: "active", label: "Universo analisado", value: sum.active, tip: "Documentos únicos vigentes nas referências (LDs) ativas, exceto cancelados." },
-    { key: "registered", label: "Cadastrados no PW", value: sum.registered, tip: "Constam na consulta PW (CSG/QTM), emitidos ou não.", note: percent(registeredShare), tone: "ok" },
-    { key: "emitted", label: "Emitidos no PW", value: sum.emitted, tip: "Cadastrados com evidência de emissão no ProjectWise.", note: percent(emittedShare), tone: "ok" },
-    { key: "awaiting", label: "Aguardando cadastro", value: sum.awaitingRegistration, tip: "Vigentes que dependem do PW e ainda não constam na consulta PW.", tone: "bad" },
-    { key: "notEmitted", label: "Cadastrados, não emitidos", value: sum.registeredNotEmitted, tip: "Constam no PW como cadastrados, sem emissão.", tone: "warn" },
+  const kpis: { key: KpiKey; label: string; value: number | null }[] = [
+    { key: "active", label: "Universo analisado", value: sum.active },
+    { key: "registered", label: "Cadastrados no PW", value: sum.registered },
+    { key: "emitted", label: "Emitidos no PW", value: sum.emitted },
+    { key: "awaiting", label: "Aguardando cadastro", value: sum.awaitingRegistration },
+    { key: "notEmitted", label: "Cadastrados, não emitidos", value: sum.registeredNotEmitted },
+    { key: "posted", label: "Postados no SIGEM", value: sum.posted },
+    { key: "compliant", label: "Em conformidade", value: sum.compliant },
+    { key: "pending", label: "Com pendências", value: sum.pending },
+    { key: "other", label: "Em preparação ou sem dados", value: sum.active !== null && sum.compliant !== null && sum.pending !== null ? Math.max(0, sum.active - sum.compliant - sum.pending) : null },
   ];
-  const secondary: Kpi[] = [
-    { key: "posted", label: "Postados no SIGEM", value: sum.posted, tip: "Registros localizados na Consulta Geral; não significa aprovação." },
-    { key: "compliant", label: "Em conformidade", value: sum.compliant, tip: "Revisões alinhadas, avaliação favorável e sem ressalvas.", tone: "ok" },
-    { key: "pending", label: "Com pendências", value: sum.pending, tip: "Requerem ação ou aguardam conclusão do processo.", tone: "warn" },
-  ];
-  const kpis = [...primary, ...secondary];
-  const renderCard = (card: Kpi) => (
-    <button
-      type="button"
-      key={card.key}
-      className="spw-managerial-card"
-      data-kpi={card.key}
-      data-tone={card.tone || "neutral"}
-      aria-pressed={selection === card.key}
-      aria-label={card.label + ": " + fmt(card.value) + ". " + card.tip + (card.note ? " " + card.note + "." : "")}
-      title={card.tip}
-      disabled={card.value === null}
-      onClick={() => setKpi(card.key)}
-    >
-      <span>{card.label}</span>
-      <strong>{fmt(card.value)}</strong>
-      <small>{card.note || card.tip}</small>
-    </button>
-  );
   const filtered = useMemo(() => report.rows.filter(row => {
     if (!matchesKpi(row, selection)) return false;
     if (situation && row.situation !== situation) return false;
@@ -103,12 +81,7 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
           <span>{report.reason} Um dado ausente aparece como “—”, nunca como zero confirmado.</span>
         </div>
       ) : null}
-      <div className="spw-managerial-grid spw-managerial-grid--primary" role="group" aria-label="Cadastro e emissão no PW — clique para filtrar documentos">
-        {primary.map(renderCard)}
-      </div>
-      <div className="spw-managerial-grid spw-managerial-grid--secondary" role="group" aria-label="Acompanhamento no SIGEM — clique para filtrar documentos">
-        {secondary.map(renderCard)}
-      </div>
+      <SigemPwKpiCharts summary={report.summary} selection={selection} onSelect={(key) => setKpi(key)} />
 
       <div className="spw-managerial-workspace" aria-labelledby="spw-managerial-list-title">
         <div className="spw-managerial-list-heading">

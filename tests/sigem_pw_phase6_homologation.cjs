@@ -78,7 +78,7 @@ assert.ok(report.summary.pending<=report.summary.active);
 const plan=coordinatorPlan(state);
 assert.deepEqual(Object.keys(plan.sheets),["Resumo","Conferência Documental","REL. PW"]);
 assert.equal(plan.sheets["Conferência Documental"].length,DOCUMENTS+3);
-assert.equal(plan.sheets["Conferência Documental"][2].length,31);
+assert.equal(plan.sheets["Conferência Documental"][2].length,32);
 assert.equal(plan.sheets["REL. PW"].length,PW_ROWS+1);
 assert.equal(plan.sheets["REL. PW"][0].length,70);
 assert.equal(plan.sheets["REL. PW"][PW_ROWS].length,70);
