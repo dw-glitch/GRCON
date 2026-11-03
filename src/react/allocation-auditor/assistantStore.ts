@@ -104,6 +104,7 @@ export const assistant={
  status(){return execute(async(speak)=>speak(snapshotStatus()));},
  help(){return execute(async(speak)=>speak(help()));},
  current(){return execute(async(speak)=>{
+  if(state.pendingSheets.length){speak('Confirme ou cancele primeiro as abas das planilhas externas.');return;}
   const g=window as unknown as Data;
   if(typeof g.GrconAllocationGeneratorUi?.auditCurrentInChat!=='function')
    throw Error('Abra o Gerador de Alocação e selecione os documentos que deseja conferir.');
@@ -201,6 +202,9 @@ export const assistant={
    if(/^(status|situacao|andamento|progresso|resumo)(\s|\?|$)/.test(normalized)){speak(snapshotStatus());return;}
    const g=window as unknown as Data;
    const intent=g.GrconAllocationAssistant.intent(request);
+   if(state.pendingSheets.length&&['audit','resume','package'].includes(intent)){
+    speak('Antes de continuar, selecione as abas pendentes ou cancele esse lote de arquivos.');return;
+   }
    switch(intent){
     case 'audit':{
      const ref=g.GrconAllocationAssistant.allocationReference(request);
@@ -266,6 +270,7 @@ export const assistant={
   speak('Decisão registrada para '+group.rows.length+' ocorrência(s) do mesmo contexto. As cópias serão verificadas ao preparar o pacote.');
  });},
  restore(id:string){return execute(async(speak)=>{
+  if(state.pendingSheets.length){speak('Cancele primeiro a seleção de abas da importação pendente.');return;}
   const result=await service.assistantRpc('session-read',{id});
   if(result.payload.runId)await service.restoreById(result.payload.runId);
   emit({sessionId:id,revision:result.revision,messages:result.payload.messages||[]});
