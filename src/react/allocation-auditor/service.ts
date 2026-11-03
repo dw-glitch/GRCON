@@ -65,13 +65,17 @@ export const service={
    if(!candidate)throw Error(file.name+': mais de uma aba documental possível ('+compatible.map(x=>x.name).join(', ')+'). Selecione a aba correta para continuar.');
    const parsed=await compute('parse',{file,sheet:candidate.name,contract:c.membership.contract_id,allocation:identifyAllocation(file.name)});current(t);
    if(parsed.records.some((r:Data)=>Boolean(r.returnedAt||(parsed.columns?.fiscalComment>=0&&r.fiscalComment))))throw Error(file.name+': a planilha possui retorno ou comentário identificado da fiscalização. O Robô Auditor recebe alocações antes da submissão; comentários fiscais anteriores são usados como precedentes separados.');
+   // STATUS/OBSERVACAO in a draft is an internal note, never a Fiscal 01 response.
+   const normalizedRecords=parsed.records.map((r:Data)=>parsed.columns?.fiscalComment<0&&r.fiscalComment?{
+    ...r,inputStatusObservation:r.fiscalComment,fiscalComment:'',commentFindings:[],fiscalDecision:'nao-comprovado'
+   }:r);
    const named=seenNames.get(file.name);
    if(named&&named!==parsed.sha256)throw Error(file.name+': o lote contém arquivos diferentes com o mesmo nome. Renomeie uma cópia.');
    const old=(state.context.sources||[]).find((x:Data)=>x.name===file.name&&x.kind==='allocation');
    if(old&&old.sha256!==parsed.sha256)throw Error(file.name+': já existe outro conteúdo com esse nome. Renomeie a nova cópia para preservar a origem.');
    seenNames.set(file.name,parsed.sha256);
    entries.push({name:file.name,sha256:parsed.sha256,kind:'allocation',sheet:candidate.name,model:parsed.model,documentCount:parsed.records.length,correctionMode:parsed.model==='official-16'?'official-16':'audit-only'});
-   records.push(...parsed.records);
+   records.push(...normalizedRecords);
   }
   const all=[...state.records,...records];
   const unique=new Map(all.map(r=>[JSON.stringify([r.contract,r.sourceHash||r.sourceFile||r.document,r.sourceSheet||'',r.sourceRow||'',r.allocation||'',r.document,r.revision]),r]));
