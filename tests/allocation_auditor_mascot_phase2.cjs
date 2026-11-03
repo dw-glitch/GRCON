@@ -29,7 +29,7 @@ assert.match(chat,/aria-modal=\{false\}/);
 assert.match(chat,/useLayoutEffect/,'Transfer mascot before paint');
 assert.match(chat,/querySelector<HTMLElement>\('\.aac-launcher-mascot'\)/,'Return mascot to existing launcher');
 assert.match(chat,/data-grcon-mascot-runtime/,'Chat handles late mascot initialization');
-assert.match(chat,/show\?\.\('hello'/,'Official hello state');
+assert.match(chat,/working\?'analyzing':'hello'/,'Official hello state when idle');
 assert.match(chat,/show\?\.\('analyzing'/,'Official busy state');
 assert.match(chat,/show\?\.\('warning'/,'Official warning state');
 assert.match(chat,/show\?\.\('success'/,'Official success state');
