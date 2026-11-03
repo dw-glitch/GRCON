@@ -142,7 +142,7 @@
   if(context.validateDocument){
    const validation=context.validateDocument(r.document);
    for(const error of validation.errors||[]){
-    const et=/^ET-/.test(error.code);
+    const et=/^ET(?:-|_)/.test(String(error.code||''));
     if(et&&enforced&&!catalogRApplicable)continue;
     const matched=(context.bases?.norms||[]).find(n=>n.source===error.source&&n.contract===context.contract&&n.applicabilityEvidence&&n.confirmed===true);
     const confirmed=et?catalogRApplicable:Boolean(matched);
