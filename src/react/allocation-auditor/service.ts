@@ -56,6 +56,7 @@ export const service={
   for(const file of files){
    const tabs=await compute('inspect',{file});current(t);
    const compatible=(tabs as Data[]).filter(x=>['official-16','mapped'].includes(x.model)&&x.documentCount>0);
+   if(!compatible.length)throw Error(file.name+': não encontrei uma aba com códigos documentais e cabeçalhos reconhecíveis. Confira o arquivo antes do envio.');
    const official=compatible.filter(x=>x.model==='official-16');
    const officialGeneral=official.filter(x=>x.name.toUpperCase()==='GERAL');
    const mappedGeneral=compatible.filter(x=>x.name.toUpperCase()==='GERAL');
@@ -107,7 +108,7 @@ export const service={
   const previous=state,previousRequest=saveRequest,previousEvents=savedEvents,previousMeta=saveMetadata;
   const unchanged=Boolean(state.context.checkpoint)&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.kind==='ld'&&old.sha256===e.sha256));
   const previousLd=(state.context.sources||[]).filter((x:Data)=>x.kind==='ld')
-   .map((x:Data)=>[x.name,sourceFiles.get(x.sha256)] as const).filter((pair):pair is readonly [string,File]=>Boolean(pair[1]));
+   .map((x:Data)=>[x.name as string,sourceFiles.get(x.sha256)] as const).filter((pair:readonly [string,File|undefined]):pair is readonly [string,File]=>Boolean(pair[1]));
   const allLd=[...new Map<string,File>([...previousLd,...files.map(f=>[f.name,f] as const)]).values()];
   // importLd clears obsolete findings/decisions, never the underlying allocation records.
   await service.importLd(allLd);current(t);
