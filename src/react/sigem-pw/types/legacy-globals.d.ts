@@ -8,6 +8,7 @@ import type {
   SigemPwRecord,
   SigemPwResult,
   SigemPwRevisionScope,
+  SigemPwSnapshot,
   SigemPwState,
   WorkerModelPayload,
 } from "./domain";
@@ -58,6 +59,8 @@ interface SigemPwDashboardCoreApi {
   aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }, options?: { revisionScope?: SigemPwRevisionScope }): SigemPwResult;
   loadBases(): Promise<{ sigem: SigemPwBase; pw: SigemPwBase; ld: SigemPwBase; history: SigemPwHistory }>;
   loadHistory(): Promise<SigemPwHistory>;
+  loadHistoryIndex(): Promise<SigemPwHistory>;
+  loadHistorySnapshot(id: string): Promise<SigemPwSnapshot | null>;
   saveSigemBase(base: SigemPwBase): Promise<SigemPwBase>;
   savePwBase(base: SigemPwBase, ld?: SigemPwBase | SigemPwRecord[]): Promise<SigemPwBase>;
   saveLdAndReprocessPw(ld: SigemPwBase, pw: SigemPwBase): Promise<{ ld: SigemPwBase; pw: SigemPwBase | null }>;

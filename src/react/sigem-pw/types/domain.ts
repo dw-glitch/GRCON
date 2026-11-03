@@ -52,6 +52,10 @@ export interface SigemPwBase {
 
 export interface SigemPwSnapshot extends SigemPwBase {
   meta: SigemPwBaseMeta;
+  /** Versão carregada só pelo índice: `records` está vazio; use recordCount e Core.loadHistorySnapshot(id). */
+  indexOnly?: boolean;
+  recordCount?: number;
+  sourceRecordCount?: number;
 }
 
 export interface SigemPwHistory {

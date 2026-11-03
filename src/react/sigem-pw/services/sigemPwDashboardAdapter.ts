@@ -7,6 +7,7 @@ import type {
   SigemPwRecord,
   SigemPwResult,
   SigemPwRevisionScope,
+  SigemPwSnapshot,
   SigemPwState,
   SigemPwUiSnapshot,
   WorkerModelPayload,
@@ -83,6 +84,21 @@ const subscribers = new Set<Subscriber>();
 let refreshPromise: Promise<void> | null = null;
 let externalListenersInstalled = false;
 let lastModelSources = "";
+// Verdadeiro enquanto ESTE módulo grava a Consulta Geral: os eventos que a
+// gravação dispara (shared-sigem-updated) já estão refletidos no estado local.
+let ownSigemImport = false;
+
+// Tempos reais das últimas etapas (ms). Disponível em window.GrconSigemPwPerf()
+// para diagnóstico em produção; não registra nenhum dado documental.
+const perfLog: Record<string, number> = {};
+async function timed<T>(label: string, task: () => Promise<T>): Promise<T> {
+  const started = performance.now();
+  try { return await task(); }
+  finally {
+    perfLog[label] = Math.round(performance.now() - started);
+    try { performance.measure?.(`spw:${label}`, { start: started, end: performance.now() }); } catch { /* medição opcional */ }
+  }
+}
 
 function Core() {
   const api = window.GrconSigemPwDashboard;
@@ -135,6 +151,21 @@ function setBusy(busy: boolean, label = ""): void {
   dispatchMascot(busy, label);
   emit();
 }
+/** Progresso por etapa real da importação (sem percentuais inventados). */
+function stage(step: number, total: number, label: string): void {
+  state.progressMessage = `Etapa ${step} de ${total} · ${label}`;
+  emit();
+}
+class ImportStageError extends Error {
+  constructor(readonly stageLabel: string, cause: unknown, fallback: string) {
+    super(messageOf(cause, fallback));
+    this.name = "ImportStageError";
+  }
+}
+function stageFailure(label: string, error: unknown, fallback: string): ImportStageError {
+  return error instanceof ImportStageError ? error : new ImportStageError(label, error, fallback);
+}
+
 function yieldFrame(): Promise<void> {
   return new Promise((resolve) => {
     if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(() => resolve());
@@ -186,10 +217,18 @@ function renderFromModel(resetPage: boolean): void {
   if (resetPage) state.page = 1;
   const classKey = state.filters.documentClass || "all";
   const aggregateKey = `${state.revisionScope}:${classKey}` as keyof typeof state.aggregates;
-  state.result = state.aggregates[aggregateKey] || state.aggregates[`all:${classKey}` as keyof typeof state.aggregates]
-    || Core().aggregateModel(state.model, {documentClass: state.filters.documentClass}, {revisionScope: state.revisionScope});
+  if (!state.aggregates[aggregateKey]) {
+    // Agregado ainda não calculado (troca de classe/escopo): calcula uma vez e guarda.
+    (state.aggregates as unknown as Record<string, unknown>)[aggregateKey as string] = Core().aggregateModel(
+      state.model, state.filters.documentClass ? { documentClass: state.filters.documentClass } : {}, { revisionScope: state.revisionScope });
+  }
+  state.result = state.aggregates[aggregateKey];
   state.readiness = Readiness().assess(state, state.aggregates.all);
   emit();
+}
+
+function scopedAggregateKey(scope: SigemPwRevisionScope, documentClass: string): string {
+  return `${scope}:${documentClass || "all"}`;
 }
 
 function modelInWorker(generation: number): Promise<WorkerModelPayload> {
@@ -206,16 +245,20 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
     worker.addEventListener("message", (event: MessageEvent<WorkerModelPayload>) => {
       const payload = event.data || { ok: false };
       cleanup();
-      if (payload.ok && payload.type === "model" && payload.model && payload.aggregates) resolve(payload);
+      if (payload.ok && payload.type === "model" && payload.model && payload.aggregates) { perfLog["worker.compute"] = Number((payload as { computeMs?: number }).computeMs) || 0; resolve(payload); }
       else reject(new Error(payload.error || "O Worker não conseguiu montar o comparativo."));
     }, { once: true });
     worker.addEventListener("error", (event) => {
       cleanup();
       reject(event.error || new Error(event.message || "Worker do comparativo falhou."));
     }, { once: true });
+    const sentAt = performance.now();
+    worker.addEventListener("message", () => { perfLog["worker.roundtrip"] = Math.round(performance.now() - sentAt); }, { once: true });
     worker.postMessage({
       type: "model",
       generation,
+      // Calcula só o agregado em exibição (+ "all:all", usado na prontidão).
+      aggregateKeys: [...new Set(["all:all", scopedAggregateKey(state.revisionScope, state.filters.documentClass)])],
       sigemRecords: state.sigem.records,
       pwRecords: state.pw.records,
       ldRecords: state.ld.records,
@@ -224,6 +267,10 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
       pwAvailable: Boolean(state.pw.meta),
     });
   });
+}
+
+function modelSourcesKey(): string {
+  return [state.sigem.meta?.snapshotId, state.pw.meta?.snapshotId, state.ld.meta?.snapshotId, state.pw.meta?.scopeLdSnapshotId].join("|");
 }
 
 async function rebuildModelAsync(): Promise<boolean> {
@@ -249,35 +296,23 @@ async function rebuildModelAsync(): Promise<boolean> {
       generation,
       model,
       aggregates: (() => {
-        const allScope = {
-          all: core.aggregateModel(model, {}, { revisionScope: "all" }),
-          ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
-          "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "all" }),
-          CV: core.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "all" }),
-        };
-        const revision0Scope = {
-          all: core.aggregateModel(model, {}, { revisionScope: "revision0" }),
-          ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "revision0" }),
-          "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "revision0" }),
-          CV: core.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "revision0" }),
-        };
-        return {
-          ...allScope,
-          "revision0:all": revision0Scope.all,
-          "revision0:ET": revision0Scope.ET,
-          "revision0:N-1710": revision0Scope["N-1710"],
-          "revision0:CV": revision0Scope.CV,
-          "all:all": allScope.all,
-          "all:ET": allScope.ET,
-          "all:N-1710": allScope["N-1710"],
-          "all:CV": allScope.CV,
-        };
+        const wanted = [...new Set(["all:all", scopedAggregateKey(state.revisionScope, state.filters.documentClass)])];
+        const output: Record<string, unknown> = {};
+        for (const key of wanted) {
+          const [scope, label] = key.split(":");
+          output[key] = core.aggregateModel(model, label === "all" ? {} : { documentClass: label }, { revisionScope: scope === "revision0" ? "revision0" : "all" });
+          if (scope === "all") output[label] = output[key];
+        }
+        return output as unknown as WorkerModelPayload["aggregates"];
       })(),
     };
   }
   if (generation !== state.modelGeneration || built.generation !== generation || !built.model || !built.aggregates) return false;
   state.model = built.model;
   state.aggregates = built.aggregates;
+  // Registra as fontes do modelo recém-montado: um refresh posterior só refaz o
+  // cálculo se as fontes realmente mudaram.
+  lastModelSources = modelSourcesKey();
   return true;
 }
 
@@ -391,13 +426,18 @@ async function parsePwFile(file: File, fileMeta: Record<string, unknown>): Promi
 
 async function importSigem(file: File): Promise<void> {
   if (state.busy) return;
-  setBusy(true, "Validando e indexando a Consulta Geral…");
+  const TOTAL = 4;
+  let current = "validação do arquivo";
+  setBusy(true, `Etapa 1 de ${TOTAL} · Validando o arquivo da Consulta Geral…`);
   await yieldFrame();
+  ownSigemImport = true;
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await window.GRCONModuleLoader.ensure("xlsx");
     const conference = await ensureConferenceRuntime();
     let prepared: PreparedConferenceImport;
+    current = "leitura dos registros";
+    stage(2, TOTAL, "Lendo e indexando os registros por documento + revisão…");
     if (window.GrconSharedSigemQuery) {
       const base = await window.GrconSharedSigemQuery.parseFile(file);
       prepared = await conference.prepareParsedImport({ ok: true, ...base }, window.GrconHistory?.read?.() || [], { reason: "sigem-pw-dashboard" }) as PreparedConferenceImport;
@@ -414,6 +454,8 @@ async function importSigem(file: File): Promise<void> {
     }
     const candidate: SigemPwBase = { meta: {...prepared.parsed.meta,localContext:importContext()}, records: prepared.parsed.records };
     if (window.GrconImportReview && !await window.GrconImportReview.review("sigem",candidate,state.sigem)) return;
+    current = "gravação da base";
+    stage(3, TOTAL, "Salvando a nova base e registrando o histórico…");
     const previousHistory = state.history;
     const recorded = await registerHistoryBeforeActivation("sigem", candidate, { reason: "sigem-import" });
     const historySourceSnapshotId = recorded.sigem?.snapshot?.id;
@@ -434,38 +476,51 @@ async function importSigem(file: File): Promise<void> {
     await window.GrconSharedSigemQuery?.setLocal(candidate);
     const shared = window.GrconSharedSigemQuery?.current();
     if (shared?.meta) await conference.saveBase(shared);
+    current = "atualização dos resultados";
+    stage(4, TOTAL, "Atualizando indicadores, tabelas e comparações…");
     state.sigem = shared?.meta ? await Core().saveSigemBase(shared) : saved;
-    state.history = await Core().loadHistory();
+    state.history = await Core().loadHistoryIndex();
     await rebuildModelAsync();
     renderFromModel(true);
     window.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: prepared.summary, changes: prepared.changes, baseMeta: state.sigem.meta, source: "sigem-pw-dashboard" } }));
-    notify(`Consulta Geral atualizada: ${fmt(state.model?.sigemEntries?.size || 0)} registros por código + revisão, com todas as classes.`, "success");
+    notify(`Consulta Geral atualizada: ${fmt(state.model?.sigemEntries?.size || 0)} registros por código + revisão. Os resultados foram recalculados.`, "success");
   } catch (error) {
-    console.error("[SIGEM×PW] Consulta Geral:", error);
-    notify(messageOf(error, "Não foi possível atualizar a Consulta Geral. A última base válida foi mantida."), "error");
+    const failure = stageFailure(current, error, "Não foi possível atualizar a Consulta Geral.");
+    console.error(`[SIGEM×PW] Consulta Geral (${failure.stageLabel}):`, error);
+    notify(`Falha na etapa de ${failure.stageLabel}: ${failure.message} A última base válida foi mantida.`, "error");
   } finally {
+    ownSigemImport = false;
     setBusy(false);
   }
 }
 
 async function importPw(file: File): Promise<void> {
   if (state.busy) return;
-  setBusy(true, "Validando e indexando a base ProjectWise…");
+  const TOTAL = 5;
+  let current = "validação do arquivo";
+  setBusy(true, `Etapa 1 de ${TOTAL} · Validando o arquivo da base ProjectWise…`);
   await yieldFrame();
   try {
     if (!/\.(?:csv|txt)$/i.test(file.name || "")) throw new Error("A relação ProjectWise deve ser fornecida em CSV.");
+    current = "leitura dos registros";
+    stage(2, TOTAL, "Lendo e normalizando os registros…");
     const importedAt = new Date().toISOString();
-    const parsed = await parsePwFile(file, { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt, mappingProfile: window.GrconImportReview?.profile() });
+    const parsed = await timed("importPw.parse", () => parsePwFile(file, { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt, mappingProfile: window.GrconImportReview?.profile() }));
+    current = "verificação de consistência";
+    stage(3, TOTAL, "Verificando colunas, empresas (CSG/QTM) e consistência…");
+    await yieldFrame();
     const candidate = Core().sanitizePwBase({ meta: {...parsed.meta,localContext:importContext()}, records: parsed.records }, state.ld);
     if (window.GrconImportReview && !await window.GrconImportReview.review("pw",{...candidate,records:candidate.sourceRecords||candidate.records},{...state.pw,records:state.pw.sourceRecords||state.pw.records})) return;
+    current = "gravação da base";
+    stage(4, TOTAL, "Salvando a nova base e registrando o histórico…");
     const previousHistory = state.history;
-    const recorded = await registerHistoryBeforeActivation("pw", candidate, { reason: "pw-import" });
+    const recorded = await timed("importPw.history", () => registerHistoryBeforeActivation("pw", candidate, { reason: "pw-import" }));
     const historySourceSnapshotId = recorded.pw?.snapshot?.id;
     if (!candidate.meta || !historySourceSnapshotId) throw new Error("Snapshot PW validado não foi confirmado.");
     candidate.meta.historySourceSnapshotId = historySourceSnapshotId;
     let saved: SigemPwBase;
     try {
-      saved = await Core().savePwBase(candidate, state.ld);
+      saved = await timed("importPw.persist", () => Core().savePwBase(candidate, state.ld));
     } catch (error) {
       try {
         await rollbackStagedImport(recorded, [[Core().PW_BASE_KEY, state.pw], [Core().HISTORY_KEY, previousHistory]]);
@@ -474,16 +529,19 @@ async function importPw(file: File): Promise<void> {
       }
       throw new Error(`${messageOf(error, "Falha ao ativar a base ProjectWise.")} A base anterior e o histórico foram restaurados.`);
     }
+    current = "atualização dos resultados";
+    stage(5, TOTAL, "Atualizando indicadores, tabelas e comparações…");
     state.pw = saved;
     state.analysisPwId = window.GrconSharedPwQuery?.current()?.meta ? text(saved.meta?.snapshotId) : "";
-    state.history = await Core().loadHistory();
-    await rebuildModelAsync();
+    state.history = await Core().loadHistoryIndex();
+    await timed("importPw.model", rebuildModelAsync);
     renderFromModel(true);
     window.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard" } }));
-    notify(`Base PW atualizada: ${fmt(state.model?.pwEntries?.size || 0)} cadastros por código + revisão; todos os estados foram incluídos.`, "success");
+    notify(`Base PW atualizada: ${fmt(state.model?.pwEntries?.size || 0)} cadastros por código + revisão. Os resultados foram recalculados.`, "success");
   } catch (error) {
-    console.error("[SIGEM×PW] ProjectWise:", error);
-    notify(messageOf(error, "Não foi possível atualizar a base ProjectWise. A última base válida foi mantida."), "error");
+    const failure = stageFailure(current, error, "Não foi possível atualizar a base ProjectWise.");
+    console.error(`[SIGEM×PW] ProjectWise (${failure.stageLabel}):`, error);
+    notify(`Falha na etapa de ${failure.stageLabel}: ${failure.message} A última base válida foi mantida.`, "error");
   } finally {
     setBusy(false);
   }
@@ -550,7 +608,7 @@ async function persistReferenceBase(candidateLd: SigemPwBase, description: strin
   }
   state.ld = saved.ld;
   if (saved.pw) state.pw = saved.pw;
-  state.history = await Core().loadHistory();
+  state.history = await Core().loadHistoryIndex();
   await rebuildModelAsync();
   renderFromModel(true);
   if (saved.pw) window.dispatchEvent(new CustomEvent("grcon:pw-base-updated", {
@@ -638,11 +696,11 @@ async function refresh(reason = ""): Promise<void> {
       restoreSessionHints();
       const resetApplied = await clearPreStage7BasesOnce();
       ensureSharedSigemHistoryCompatibility();
-      await window.GrconSharedSigemQuery?.refresh();
-      const bases = await Core().loadBases();
+      await timed("refresh.sharedSigem", async () => { await window.GrconSharedSigemQuery?.refresh(); });
+      const bases = await timed("refresh.loadBases", () => Core().loadBases());
       const shared = window.GrconSharedSigemQuery?.current();
       state.officialSigem = shared?.meta || null;
-      state.sigemVersions = await window.GrconSharedSigemQuery?.listVersions() || [];
+      state.sigemVersions = await timed("refresh.sigemVersions", async () => await window.GrconSharedSigemQuery?.listVersions() || []);
       if (shared?.meta) {
         if (bases.sigem?.meta?.snapshotId !== shared.meta.snapshotId) {
           const recorded = await registerHistoryBeforeActivation("sigem", shared, { pwBase: bases.pw, ldRecords: bases.ld?.records || [], reason: "shared-general-query" });
@@ -652,7 +710,7 @@ async function refresh(reason = ""): Promise<void> {
           JSON.stringify(bases.sigem.meta?.[key]) !== JSON.stringify(value));
         if (projectionChanged) {
           bases.sigem = await Core().saveSigemBase(shared);
-          bases.history = await Core().loadHistory();
+          bases.history = await Core().loadHistoryIndex();
         }
       } else if (window.GrconSharedSigemQuery && window.GrconCloud?.state?.online
         && window.GrconCloud.state.membership?.workspace_id
@@ -676,15 +734,16 @@ async function refresh(reason = ""): Promise<void> {
         const shared = state.pwVersions.some(item => item.snapshot_id === state.analysisPwId);
         const selected = shared && window.GrconSharedPwQuery
           ? Core().sanitizePwBase(await window.GrconSharedPwQuery.loadSnapshot(state.analysisPwId, state.pwVersions), bases.ld)
-          : bases.history.snapshots.find(item => item.meta.kind === "pw" && item.meta.snapshotId === state.analysisPwId);
+          : bases.history.snapshots.some(item => item.meta.kind === "pw" && item.meta.snapshotId === state.analysisPwId)
+            ? await Core().loadHistorySnapshot(state.analysisPwId) || undefined
+            : undefined;
         if (selected) state.pw = selected;
         else state.analysisPwId = ""; // A selected local snapshot may have been removed.
       }
       state.ld = bases.ld?.meta ? bases.ld : EMPTY_BASE();
       state.history = bases.history;
       state.analysisError = "";
-      const sources = [state.sigem.meta?.snapshotId, state.pw.meta?.snapshotId, state.ld.meta?.snapshotId, state.pw.meta?.scopeLdSnapshotId].join("|");
-      if (!state.model || sources !== lastModelSources) { await rebuildModelAsync(); lastModelSources = sources; }
+      if (!state.model || modelSourcesKey() !== lastModelSources) await timed("refresh.model", rebuildModelAsync);
       state.ready = true;
       renderFromModel(true);
       if (resetApplied) notify("Bases anteriores SIGEM, PW e LD removidas. O módulo está pronto para novas importações.", "success");
@@ -898,7 +957,7 @@ async function exportCurrentList(): Promise<void> {
 }
 
 async function openHistory(): Promise<void> {
-  state.history = await Core().loadHistory();
+  state.history = await Core().loadHistoryIndex();
   state.historyDialogOpen = true;
   emit();
 }
@@ -914,7 +973,7 @@ async function removeSnapshot(id: string): Promise<void> {
     if (state.analysisPwId === id) state.analysisPwId = "";
     await Core().deleteSnapshot(id);
     await refresh("base excluída");
-    state.history = await Core().loadHistory();
+    state.history = await Core().loadHistoryIndex();
     emit();
     notify("Base excluída do histórico.", "success");
   } catch (error) {
@@ -984,12 +1043,17 @@ async function saveBaseDate(): Promise<void> {
     dashboardUpdated = true;
     const history = window.GrconSigemPwHistory;
     if (!history?.updateSourceSnapshotDate) throw new Error("O histórico evolutivo não está disponível; a data anterior foi preservada.");
+    // O estado guarda só o índice do histórico; os registros completos são lidos
+    // sob demanda e apenas quando o identificador da fonte não está registrado.
+    const fingerprintRecords = text(original?.meta?.historySourceSnapshotId) ? [] : ((original as SigemPwSnapshot | null)?.indexOnly
+      ? (await Core().loadHistorySnapshot(snapshotId))?.records || []
+      : original?.records || []);
     historySnapshotId = text(original?.meta?.historySourceSnapshotId)
-      || (history.contentFingerprint ? `${system}:${history.contentFingerprint(system, original?.records || [])}` : "");
+      || (history.contentFingerprint ? `${system}:${history.contentFingerprint(system, fingerprintRecords)}` : "");
     const historyResult = historySnapshotId ? await history.updateSourceSnapshotDate(system, historySnapshotId, parsed.toISOString()) : null;
     if (!historyResult) throw new Error("A base não foi localizada no histórico evolutivo; a data anterior foi preservada.");
     historyUpdated = true;
-    state.history = await Core().loadHistory();
+    state.history = await Core().loadHistoryIndex();
     if (state[system].meta?.snapshotId === snapshotId && result.current?.meta) state[system] = result.current;
     state.dateEditor = { ...state.dateEditor, open: false };
     renderFromModel(false);
@@ -1085,16 +1149,19 @@ async function publishPw(): Promise<void> {
 function installExternalListeners(): () => void {
   if (externalListenersInstalled) return () => undefined;
   externalListenersInstalled = true;
+  (window as unknown as Record<string, unknown>).GrconSigemPwPerf = () => ({ ...perfLog });
   const scope = (event: Event) => setRevisionScope((event as CustomEvent).detail?.scope);
   window.addEventListener("grcon:sigem-pw-revision-scope-changed", scope);
   setRevisionScope(document.documentElement.dataset.sigemPwRevisionScope === "revision0" ? "revision0" : "all");
   const conference = (event: Event) => {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
-    if (detail?.source !== "sigem-pw-dashboard") void refresh("Consulta Geral atualizada em outro módulo");
+    if (!ownSigemImport && detail?.source !== "sigem-pw-dashboard") void refresh("Consulta Geral atualizada em outro módulo");
   };
   const pw = (event: Event) => {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
-    if (detail?.source !== "sigem-pw-dashboard" && detail?.source !== "sigem-pw-dashboard-ld") void refresh("base PW atualizada em outro módulo");
+    // Eventos emitidos por este próprio módulo (importação, referências) já
+    // atualizaram o estado; reagir a eles repetia leitura de bases e modelo.
+    if (!String(detail?.source || "").startsWith("sigem-pw-dashboard")) void refresh("base PW atualizada em outro módulo");
   };
   const dates = () => { if (!state.busy) void refresh("metadados compartilhados atualizados"); };
   // O Proprietário ADM só pode gerenciar versões depois da confirmação assíncrona da permissão.

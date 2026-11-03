@@ -1406,3 +1406,29 @@
 }
 
 #sigem-pw-dashboard-module .spw-legacy-toolbar{display:flex;justify-content:flex-end;padding:12px 16px 0}
+
+/* Faixa de bases em uso + indicadores agrupados (cadastro/emissão no PW e acompanhamento SIGEM). */
+#sigem-pw-dashboard-module .spw-active-bases{display:flex;gap:12px;align-items:stretch;margin:10px 0 12px;padding:10px 12px;border:1px solid var(--border,#dce4eb);border-radius:12px;background:var(--surface,#fff)}
+#sigem-pw-dashboard-module .spw-active-bases ul{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none;flex:1;min-width:0}
+#sigem-pw-dashboard-module .spw-active-bases li{display:flex;flex-direction:column;gap:2px;min-width:0;padding:6px 10px;border-left:3px solid var(--border,#dce4eb)}
+#sigem-pw-dashboard-module .spw-active-bases li[data-loaded="true"]{border-left-color:var(--success-500,#398c61)}
+#sigem-pw-dashboard-module .spw-active-bases li[data-loaded="false"]{border-left-color:var(--warning-500,#b7791f)}
+#sigem-pw-dashboard-module .spw-active-bases-label{font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted,#66798a)}
+#sigem-pw-dashboard-module .spw-active-bases strong{font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sigem-pw-dashboard-module .spw-active-bases small{font-size:.72rem;color:var(--text-muted,#66798a);line-height:1.35}
+#sigem-pw-dashboard-module .spw-active-bases .spw-base-status{align-self:flex-start;margin-top:2px}
+#sigem-pw-dashboard-module .spw-active-bases > button{align-self:center;white-space:nowrap}
+@media(max-width:1000px){#sigem-pw-dashboard-module .spw-active-bases{flex-direction:column}#sigem-pw-dashboard-module .spw-active-bases ul{grid-template-columns:minmax(0,1fr)}#sigem-pw-dashboard-module .spw-active-bases > button{align-self:flex-start}}
+
+#sigem-pw-dashboard-module .spw-managerial-grid--primary{grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:10px}
+#sigem-pw-dashboard-module .spw-managerial-grid--secondary{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:0}
+#sigem-pw-dashboard-module .spw-managerial-grid--secondary .spw-managerial-card{padding:11px 14px}
+#sigem-pw-dashboard-module .spw-managerial-grid--secondary .spw-managerial-card strong{font-size:1.35rem}
+#sigem-pw-dashboard-module .spw-managerial-card{border-left:4px solid transparent}
+#sigem-pw-dashboard-module .spw-managerial-card[data-tone="ok"]{border-left-color:var(--success-500,#398c61)}
+#sigem-pw-dashboard-module .spw-managerial-card[data-tone="warn"]{border-left-color:var(--warning-500,#b7791f)}
+#sigem-pw-dashboard-module .spw-managerial-card[data-tone="bad"]{border-left-color:var(--danger-500,#c74b43)}
+#sigem-pw-dashboard-module .spw-managerial-card[data-tone="neutral"]{border-left-color:var(--info-500,#2f6fa3)}
+@media(max-width:1280px){#sigem-pw-dashboard-module .spw-managerial-grid--primary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){#sigem-pw-dashboard-module .spw-managerial-grid--primary,#sigem-pw-dashboard-module .spw-managerial-grid--secondary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){#sigem-pw-dashboard-module .spw-managerial-grid--primary,#sigem-pw-dashboard-module .spw-managerial-grid--secondary{grid-template-columns:minmax(0,1fr)}}

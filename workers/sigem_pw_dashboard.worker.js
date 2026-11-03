@@ -36,31 +36,26 @@ self.addEventListener("message", (event) => {
         ? { requireN1710Ld: true, requireDocumentReference: true, ldAvailable: Boolean(payload.ldAvailable),
             sigemAvailable: Boolean(payload.sigemAvailable), pwAvailable: Boolean(payload.pwAvailable) }
         : undefined;
+      const startedAt = Date.now();
       const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || [], settings);
-      const allScope = {
-        all: Dashboard.aggregateModel(model, {}, { revisionScope: "all" }),
-        ET: Dashboard.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
-        "N-1710": Dashboard.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "all" }),
-        CV: Dashboard.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "all" }),
-      };
-      const revision0Scope = {
-        all: Dashboard.aggregateModel(model, {}, { revisionScope: "revision0" }),
-        ET: Dashboard.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "revision0" }),
-        "N-1710": Dashboard.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "revision0" }),
-        CV: Dashboard.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "revision0" }),
-      };
-      const aggregates = {
-        ...allScope,
-        "revision0:all": revision0Scope.all,
-        "revision0:ET": revision0Scope.ET,
-        "revision0:N-1710": revision0Scope["N-1710"],
-        "revision0:CV": revision0Scope.CV,
-        "all:all": allScope.all,
-        "all:ET": allScope.ET,
-        "all:N-1710": allScope["N-1710"],
-        "all:CV": allScope.CV,
-      };
-      self.postMessage({ ok: true, type: "model", generation: payload.generation, model, aggregates });
+      // Cada agregado carrega todas as listas de comparação (dezenas de MB
+      // clonados para a thread principal). A interface exibe um por vez; por isso
+      // só os pedidos em `aggregateKeys` são calculados. Sem a lista (chamadores
+      // antigos), mantém o conjunto completo.
+      const requested = Array.isArray(payload.aggregateKeys) && payload.aggregateKeys.length ? new Set(payload.aggregateKeys) : null;
+      const classes = [["all", {}], ["ET", { documentClass: "ET" }], ["N-1710", { documentClass: "N-1710" }], ["CV", { documentClass: "CV" }]];
+      const aggregates = {};
+      for (const scope of ["all", "revision0"]) {
+        for (const [label, filters] of classes) {
+          const key = `${scope}:${label}`;
+          const aliased = scope === "all" && requested && requested.has(label);
+          if (requested && !requested.has(key) && !aliased) continue;
+          const value = Dashboard.aggregateModel(model, filters, { revisionScope: scope });
+          aggregates[key] = value;
+          if (scope === "all") aggregates[label] = value;
+        }
+      }
+      self.postMessage({ ok: true, type: "model", generation: payload.generation, model, aggregates, computeMs: Date.now() - startedAt });
       return;
     }
     const source = new TextDecoder("utf-8").decode(new Uint8Array(payload.buffer || new ArrayBuffer(0)));

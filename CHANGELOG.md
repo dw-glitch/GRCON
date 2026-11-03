@@ -1,3 +1,10 @@
+## Em desenvolvimento — SIGEM × PW: estabilidade, desempenho e relatório
+
+- Histórico de bases do SIGEM × PW passa a ser gravado em índice + partes (antes: um único valor do IndexedDB). Corrige a falha “serialized keys and/or value are too large” que impedia importar uma 2ª base PW grande; mede-se (30 mil documentos) importação de PW 19,5 s → 10,7 s e abertura com bases persistidas 9,3 s → 5,5 s. Detalhes e limites em `docs/sigem-pw-estabilidade-desempenho-20261103.md`.
+- Importação por etapas reais, erro com a etapa que falhou, sem refresh/rebuild duplicados; `GrconSigemPwPerf()` expõe tempos por etapa.
+- Indicadores: Universo analisado, Cadastrados, Emitidos, Aguardando cadastro e Cadastrados não emitidos (com %), mais faixa “Bases em uso”.
+- Excel gerencial: Resumo em seções com percentuais, aba “Fora das LDs” condicional, cores de status e impressão ajustada.
+
 ## Em desenvolvimento — GRDT unificado + Cofre documental
 
 - Fazer GRDT classifica cada documento + revisão pelo Histórico compartilhado completo como primeira postagem, nova revisão ou repostagem; a regra é consultiva e não retira a autonomia do operador.

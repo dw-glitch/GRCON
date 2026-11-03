@@ -108,8 +108,13 @@ function sourceRegression() {
   assert.match(evolutionAppSource, /id="spw-evo-date-start"/);
   assert.match(evolutionAppSource, /id="spw-evo-date-end"/);
   assert.match(workerSource, /payload\.type === "model"/, "o worker deve aceitar a montagem completa do comparativo");
-  assert.match(workerSource, /Dashboard\.aggregateModel\(model, \{ documentClass: "N-1710" \}, \{ revisionScope: "all" \}\)/, "worker deve pré-calcular todas as revisões");
-  assert.match(workerSource, /Dashboard\.aggregateModel\(model, \{ documentClass: "N-1710" \}, \{ revisionScope: "revision0" \}\)/, "worker deve pré-calcular revisão 0");
+  // Contrato de desempenho: cada agregado serializado pesa dezenas de MB. O worker calcula
+  // somente os agregados pedidos (`aggregateKeys`); os demais saem sob demanda na troca de filtro.
+  assert.match(workerSource, /payload\.aggregateKeys/, "worker deve calcular apenas os agregados solicitados");
+  assert.match(workerSource, /Dashboard\.aggregateModel\(model, filters, \{ revisionScope: scope \}\)/, "worker deve montar agregados por escopo de revisão e classe");
+  assert.match(workerSource, /\["all", "revision0"\]/, "worker deve conhecer os escopos todas as revisões e revisão 0");
+  assert.match(dashboardAppSource, /aggregateKeys: \[\.\.\.new Set\(\["all:all", scopedAggregateKey\(/, "a interface deve pedir só o agregado em exibição");
+  assert.match(dashboardAppSource, /if \(!state\.aggregates\[aggregateKey\]\)/, "agregado ausente deve ser calculado uma única vez sob demanda");
   assert.doesNotMatch(indexSource, /id="workspace-new-tab"/, "o atalho Nova tarefa removido não deve voltar");
   assert.doesNotMatch(indexSource, /id="workspace-status"/, "o marcador de aba livre removido não deve voltar");
   assert.doesNotMatch(indexSource, /src="task_center\.js"/, "o botão Tarefas removido não deve voltar");

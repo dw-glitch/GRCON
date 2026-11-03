@@ -5,9 +5,15 @@ import { getPwOriginalMatrix } from "./sigemPwRawPw";
 type CellValue = string | number;
 export type Matrix = CellValue[][];
 export interface CoordinatorPlan {
-  sheets: Record<"Resumo" | "N-1710" | "REL. PW", Matrix>;
+  sheets: Record<"Resumo" | "N-1710" | "REL. PW", Matrix> & { "Fora das LDs"?: Matrix };
   /** Excel rows for the N-1710 table (zero-based array indices start at row 4). */
-  formulas: Array<{ excelRow: number; f: string; g: string; h: string; i: string; results: [string, string, string, string] }>;
+  formulas: Array<{
+    excelRow: number; f: string; g: string; h: string; i: string; results: [string, string, string, string];
+    /** Situação PW do documento, usada apenas para o destaque visual da coluna Cadastro. */
+    pwSituation: "emitted" | "registered" | "missing" | "notApplicable";
+  }>;
+  /** Linhas (1-based) da aba Resumo que são títulos de seção. */
+  overviewSections: number[];
   summary: { active: number; registered: number; emitted: number; posted: number; compliant: number; pending: number };
   pwColumns: number;
 }
@@ -33,6 +39,7 @@ interface ExcelSheet {
   views?: Array<Record<string, unknown>>;
   autoFilter?: string;
   pageSetup?: Record<string, unknown>;
+  headerFooter?: Record<string, unknown>;
 }
 interface ExcelWorkbook {
   addWorksheet(name: string): ExcelSheet;
@@ -165,7 +172,9 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
     const i = sourceFormula(sourceRow, emissionColumn);
     const gValue = sameRevision(row.referenceRevision, row.pwRevision) ? "VERDADEIRO" : "FALSO";
     const results: [string, string, string, string] = [row.pwRevision, gValue, row.pwState, row.pwLastEmission];
-    formulas.push({ excelRow: number, f, g, h, i, results });
+    const pwSituation: CoordinatorPlan["formulas"][number]["pwSituation"] = row.pwNotApplicable ? "notApplicable"
+      : !row.pwRegistered ? "missing" : row.pwEmitted ? "emitted" : "registered";
+    formulas.push({ excelRow: number, f, g, h, i, results, pwSituation });
     master.push([
       row.code, row.referenceRevision, row.title, row.referenceStatus, row.sigemStatus,
       ...results, row.action, row.pwNotApplicable ? "Não aplicável (CV)"
@@ -177,30 +186,73 @@ export function coordinatorPlan(state: SigemPwState): CoordinatorPlan {
   // O modelo do coordenador é referência de INFORMAÇÕES, não de ordem visual.
   // A aba antes vazia ("SIGEM") dá lugar a um resumo útil sem fabricar
   // linhas da Consulta Geral. A base PW mantém todas as 70 colunas originais.
-  const overview: Matrix = [
-    ["GRCON | SIGEM × PW", "CONTROLE DOCUMENTAL INTEGRADO"],
-    ["INDICADOR / FONTE", "VALOR"],
-    ["Documentos ativos nas referências", summary.active],
-    ["Cadastrados no PW (CSG/QTM)", summary.registered],
-    ["Emitidos no PW", summary.emitted],
-    ["Postados no SIGEM", summary.posted],
-    ["Em conformidade", summary.compliant],
-    ["Com pendência ou em andamento", summary.pending],
-    ["Cancelados nas referências", report.summary.cancelled],
-    ["Conflitos entre referências", report.summary.conflicts],
-    ["SIGEM fora das referências", report.excludedSigem],
-    ["PW fora das referências", report.excludedPw],
-    ["Empresa considerada (PW, coluna C)", "CSG / QTM"],
-    ["Consulta Geral utilizada", text(state.sigem.meta?.fileName)],
-    ["Base PW utilizada", text(state.pw.meta?.fileName)],
-    ["Referências documentais", text(state.ld.meta?.fileName)],
-    ["Critério de análise", "Código e revisão independentes; Previsto no PW = cadastrado, não emitido"],
-    ["Observação", "Comentários da fiscalização não equivalem a conformidade plena"],
-    ["Fonte do SIGEM", "Consulta Geral ativa do GRCON; não preencher dados fictícios"],
-  ];
+  const sum = report.summary;
+  const dependsOnPw = safeNumber(sum.pwApplicable);
+  const awaiting = safeNumber(sum.awaitingRegistration);
+  const notEmitted = safeNumber(sum.registeredNotEmitted);
+  const registeredShare = dependsOnPw - awaiting;
+  const emittedShare = registeredShare - notEmitted;
+  const ratio = (part: number) => dependsOnPw ? part / dependsOnPw : 0;
+  const dateOf = (value: unknown) => {
+    const date = new Date(text(value));
+    return text(value) && !Number.isNaN(date.getTime()) ? date.toLocaleString("pt-BR") : "";
+  };
+  const overviewSections: number[] = [];
+  const overview: Matrix = [];
+  const line = (label: string, value: CellValue = "") => { overview.push([label, value]); };
+  const section = (title: string) => { overview.push([title, ""]); overviewSections.push(overview.length); };
+  line("GRCON | SIGEM × PW", "CONTROLE DOCUMENTAL INTEGRADO");
+  line("INDICADOR / FONTE", "VALOR");
+  section("UNIVERSO E CADASTRO NO PW");
+  line("Universo analisado (documentos únicos nas referências vigentes)", summary.active);
+  line("Cadastrados no PW (CSG/QTM)", summary.registered);
+  line("Emitidos no PW", summary.emitted);
+  line("Aguardando cadastro no PW", awaiting);
+  line("Cadastrados, não emitidos", notEmitted);
+  line("Atendimento — cadastrados (% dos que dependem do PW)", ratio(registeredShare));
+  line("Atendimento — emitidos (% dos que dependem do PW)", ratio(emittedShare));
+  section("ACOMPANHAMENTO NO SIGEM");
+  line("Postados no SIGEM", summary.posted);
+  line("Em conformidade", summary.compliant);
+  line("Com pendência ou em andamento", summary.pending);
+  section("FORA DO UNIVERSO E CONFLITOS");
+  line("Cancelados nas referências", report.summary.cancelled);
+  line("Conflitos entre referências", report.summary.conflicts);
+  line("SIGEM fora das referências (aba “Fora das LDs”)", report.excludedSigem);
+  line("PW fora das referências (aba “Fora das LDs”)", report.excludedPw);
+  section("ORIGEM DOS DADOS");
+  line("Gerado em", new Date().toLocaleString("pt-BR"));
+  line("Consulta Geral utilizada", text(state.sigem.meta?.fileName));
+  line("Data da Consulta Geral", dateOf(state.sigem.meta?.referenceDate || state.sigem.meta?.importedAt));
+  line("Base PW utilizada", text(state.pw.meta?.fileName));
+  line("Data da base PW", dateOf(state.pw.meta?.importedAt));
+  line("Referências documentais", text(state.ld.meta?.fileName));
+  line("Empresa considerada (PW, coluna C)", "CSG / QTM");
+  section("CRITÉRIOS");
+  line("Critério de análise", "Código e revisão independentes; Previsto no PW = cadastrado, não emitido");
+  line("Percentuais", "Calculados sobre os documentos que dependem do PW (exclui CV e cancelados)");
+  line("Observação", "Comentários da fiscalização não equivalem a conformidade plena");
+  line("Fonte do SIGEM", "Consulta Geral ativa do GRCON; não preencher dados fictícios");
+  // Documentos fora das LDs ficam separados e não entram nos indicadores acima.
+  // Usa SEMPRE o agregado completo (todas as revisões, todas as classes), nunca
+  // a lista filtrada que esteja na tela.
+  const lists = (state.aggregates?.["all:all"] || state.result)?.lists;
+  const outside: Matrix = [["ORIGEM", "DOCUMENTO", "REVISÃO", "STATUS SIGEM", "STATUS PW", "EMISSÃO PW", "EMPRESA PW (COL. C)", "LINHA NO ARQUIVO PW", "SITUAÇÃO"]];
+  const seenOutside = new Set<string>();
+  for (const [origin, rows] of [["SIGEM", lists?.sigemN1710OutsideLd || []], ["PW", lists?.pwN1710OutsideLd || []]] as const) {
+    for (const item of rows) {
+      const mark = origin + "|" + text(item.document) + "|" + text(item.revision);
+      if (seenOutside.has(mark)) continue;
+      seenOutside.add(mark);
+      outside.push([origin, text(item.document), text(item.revision), text(item.sigemStatus), text(item.pwStatus), text(item.pwEmission), text(item.pwCompany), text(item.pwSourceRow), text(item.situation)]);
+    }
+  }
   return {
-    sheets: { "Resumo": overview, "N-1710": master, "REL. PW": [pw.headers, ...pw.rows] },
-    formulas, summary, pwColumns: 70,
+    sheets: {
+      "Resumo": overview, "N-1710": master, "REL. PW": [pw.headers, ...pw.rows],
+      ...(outside.length > 1 ? { "Fora das LDs": outside } : {}),
+    },
+    formulas, summary, pwColumns: 70, overviewSections,
   };
 }
 /** Compatibility for tests/consumers of the earlier matrix-only contract. */
@@ -216,6 +268,8 @@ function formatHeader(cell: ExcelCell, fill: string = GRCON.navy): void {
 function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.views = [{ state: "frozen", xSplit: 2, ySplit: 3, topLeftCell: "C4" }];
   sheet.autoFilter = `A3:AF${Math.max(4, plan.sheets["N-1710"].length)}`;
+  sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:3" };
+  sheet.headerFooter = { oddFooter: "&LGRCON · SIGEM × PW&CPágina &P de &N&R&D" };
   sheet.getRow(1).height = 28;
   sheet.getRow(2).height = 22;
   sheet.getRow(3).height = 35;
@@ -246,12 +300,19 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
     const row = sheet.getRow(excelRow);
     row.height = 24;
     // Style only operational cells: avoid huge per-cell styles on data sources.
-    for (const column of ["A", "B", "G", "J", "K"]) {
+    for (const column of ["A", "B", "G", "J"]) {
       const cell = sheet.getCell(`${column}${excelRow}`);
       cell.font = { name: "Aptos", size: 9, color: { argb: GRCON.ink } };
       cell.alignment = { vertical: "middle", wrapText: false };
       if (idx % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.pale } };
     }
+    const registration = sheet.getCell(`K${excelRow}`);
+    registration.font = { name: "Aptos", size: 9, bold: info.pwSituation !== "registered", color: { argb: GRCON.ink } };
+    registration.alignment = { vertical: "middle", horizontal: "center" };
+    const registrationFill = info.pwSituation === "emitted" ? GRCON.green
+      : info.pwSituation === "registered" ? GRCON.amber
+      : info.pwSituation === "missing" ? GRCON.red : GRCON.muted;
+    registration.fill = { type: "pattern", pattern: "solid", fgColor: { argb: registrationFill } };
     const action = text(plan.sheets["N-1710"][excelRow - 1][9]);
     const situation = sheet.getCell(`J${excelRow}`);
     if (/Sem ação necessária/.test(action)) situation.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.green } };
@@ -269,26 +330,54 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
     }
   }
 }
-function styleOverview(sheet: ExcelSheet, rows: number): void {
+function styleOverview(sheet: ExcelSheet, plan: CoordinatorPlan): void {
+  const rows = plan.sheets.Resumo.length;
   sheet.views = [{ state: "frozen", ySplit: 2, topLeftCell: "A3" }];
-  sheet.getColumn(1).width = 47;
-  sheet.getColumn(2).width = 78;
+  sheet.pageSetup = { orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:2" };
+  sheet.headerFooter = { oddFooter: "&LGRCON · SIGEM × PW&CPágina &P de &N&R&D" };
+  sheet.getColumn(1).width = 62;
+  sheet.getColumn(2).width = 70;
   sheet.getRow(1).height = 33;
   sheet.getRow(2).height = 27;
   for (const col of ["A", "B"]) {
     formatHeader(sheet.getCell(col + "1"), GRCON.navy);
     formatHeader(sheet.getCell(col + "2"), GRCON.teal);
   }
+  const sections = new Set(plan.overviewSections);
   for (let index = 3; index <= rows; index++) {
     const label = sheet.getCell("A" + index);
     const value = sheet.getCell("B" + index);
-    label.font = { name: "Aptos", size: 10, bold: index <= 12, color: { argb: GRCON.ink } };
-    value.font = { name: "Aptos", size: 10, bold: index <= 12, color: { argb: GRCON.ink } };
-    if (index % 2) for (const cell of [label, value]) {
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.pale } };
+    sheet.getRow(index).height = sections.has(index) ? 24 : 21;
+    if (sections.has(index)) {
+      for (const cell of [label, value]) {
+        cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: GRCON.navy } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRCON.muted } };
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+        cell.border = { bottom: { style: "thin", color: { argb: GRCON.border } } };
+      }
+      continue;
     }
-    sheet.getRow(index).height = 22;
+    label.font = { name: "Aptos", size: 10, color: { argb: GRCON.ink } };
+    value.font = { name: "Aptos", size: 10, bold: typeof plan.sheets.Resumo[index - 1][1] === "number", color: { argb: GRCON.ink } };
+    label.alignment = { vertical: "middle", wrapText: true };
+    value.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+    value.border = { bottom: { style: "hair", color: { argb: GRCON.border } } };
+    label.border = { bottom: { style: "hair", color: { argb: GRCON.border } } };
+    if (/^Atendimento/.test(text(plan.sheets.Resumo[index - 1][0]))) value.numFmt = "0.0%";
+    else if (typeof plan.sheets.Resumo[index - 1][1] === "number") value.numFmt = "#,##0";
   }
+}
+function styleOutside(sheet: ExcelSheet, rows: number): void {
+  sheet.views = [{ state: "frozen", ySplit: 1, topLeftCell: "A2" }];
+  sheet.autoFilter = `A1:I${Math.max(2, rows)}`;
+  sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:1" };
+  sheet.getRow(1).height = 30;
+  [12, 58, 10, 24, 24, 16, 20, 16, 42].forEach((width, index) => {
+    const column = sheet.getColumn(index + 1);
+    column.width = width;
+    column.numFmt = "@";
+    formatHeader(sheet.getCell(`${columnLetter(index)}1`), GRCON.slate);
+  });
 }
 function stylePw(sheet: ExcelSheet, dataRows: number): void {
   sheet.views = [{ state: "frozen", xSplit: 3, ySplit: 1, topLeftCell: "D2" }];
@@ -307,13 +396,18 @@ export function buildCoordinatorWorkbook(state: SigemPwState, excel: Coordinator
   if (workbook.calcProperties) workbook.calcProperties.fullCalcOnLoad = true;
   const overview = workbook.addWorksheet("Resumo");
   plan.sheets.Resumo.forEach(row => overview.addRow(row));
-  styleOverview(overview, plan.sheets.Resumo.length);
+  styleOverview(overview, plan);
   const main = workbook.addWorksheet("N-1710");
   plan.sheets["N-1710"].forEach(row => main.addRow(row));
   styleMain(main, plan);
   const pw = workbook.addWorksheet("REL. PW");
   plan.sheets["REL. PW"].forEach(row => pw.addRow(row));
   stylePw(pw, plan.sheets["REL. PW"].length);
+  if (plan.sheets["Fora das LDs"]) {
+    const outside = workbook.addWorksheet("Fora das LDs");
+    plan.sheets["Fora das LDs"].forEach(row => outside.addRow(row));
+    styleOutside(outside, plan.sheets["Fora das LDs"].length);
+  }
   // A fonte SIGEM permanece a Consulta Geral; nenhum dado fictício é exportado.
   return { workbook, plan };
 }

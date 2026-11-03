@@ -4,6 +4,7 @@ import { SigemPwHeader } from "./components/SigemPwHeader";
 import { SigemPwReadiness } from "./components/SigemPwReadiness";
 import { SigemPwAnalysisSources } from "./components/SigemPwAnalysisSources";
 import { SigemPwBases } from "./components/SigemPwBases";
+import { SigemPwActiveBases } from "./components/SigemPwActiveBases";
 import { SigemPwSystemsSummary } from "./components/SigemPwSystemsSummary";
 import { SigemPwManagerialOverview } from "./components/SigemPwManagerialOverview";
 import { SigemPwRevisionScopeSelector } from "./components/SigemPwRevisionScopeSelector";
@@ -25,6 +26,7 @@ function fmt(value: number): string {
 export function SigemPwDashboardApp() {
   const { state, adapter } = useSigemPwDashboard();
   const legacyRef = useRef<HTMLDetailsElement>(null);
+  const sourcesRef = useRef<HTMLDetailsElement>(null);
   // After an operator opens the source manager, a base refresh must not
   // silently hide the activate/delete/date controls mid-workflow.
   const [sourceOpenOverride, setSourceOpenOverride] = useState<boolean | null>(null);
@@ -52,6 +54,11 @@ export function SigemPwDashboardApp() {
         onHistory={() => { void adapter.openHistory(); }}
         onCoordinatorExport={() => { void adapter.exportCoordinatorWorkbook(); }}
       />
+
+      <SigemPwActiveBases state={state} onManage={() => {
+        setSourceOpenOverride(true);
+        window.requestAnimationFrame(() => sourcesRef.current?.scrollIntoView({ block: "nearest", behavior: "auto" }));
+      }} />
 
       <div className="spw-progress" id="spw-progress" hidden={!state.busy} role="status" aria-live="polite">
         <i aria-hidden="true"></i>
@@ -99,7 +106,7 @@ export function SigemPwDashboardApp() {
         </details>
       </UiPanel>
 
-      <details className="spw-sources-disclosure" open={sourceOpenOverride ?? loadedBases < 3}
+      <details ref={sourcesRef} className="spw-sources-disclosure" open={sourceOpenOverride ?? loadedBases < 3}
         onToggle={(event) => setSourceOpenOverride(event.currentTarget.open)}>
         <summary>Gerenciar fontes de comparação · {loadedBases}/3 bases carregadas</summary>
       <UiPanel className="spw-section-panel spw-bases-panel" labelledBy="spw-bases-title">

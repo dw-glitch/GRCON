@@ -125,7 +125,7 @@ export function buildReferenceBase(
       ...(previous.meta || {}),
       // Every activation/import must create a fresh snapshot; never overwrite previous history IDs.
       snapshotId: "",
-      fileName: `Referências documentais (${sources.filter(s => s.active).length} ativas)`,
+      fileName: `Referências documentais (${sources.filter(s => s.active).length} ${sources.filter(s => s.active).length === 1 ? "ativa" : "ativas"})`,
       importedAt: now,
       sourceImportedAt: now,
       fileSize: sources.reduce((total, source) => total + source.fileSize, 0),
