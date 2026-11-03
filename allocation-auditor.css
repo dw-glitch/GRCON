@@ -201,3 +201,14 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 .aac-issue-confirm p{width:100%;margin:0;font-size:12px}
 .aac-issue-confirm button{padding:8px 12px;border-radius:8px}
 @media(max-width:760px){.aac-quick-actions{gap:6px}.aac-quick-actions button{font-size:11px;padding:7px 10px}}
+
+
+/* Fase 4 — escolhas de aba somente quando o formato exige intervenção humana. */
+.aac-sheet-selection{display:grid;gap:9px;padding:13px;border-radius:12px;border:1px solid var(--border-1,#d1dce5);background:var(--surface-2,#f4f8fb);font-size:13px}
+.aac-sheet-selection>p{margin:0;font-size:12px;line-height:1.45;color:var(--text-2,#557080)}
+.aac-sheet-selection label{display:grid;gap:5px;min-width:0;font-size:12px;font-weight:650}
+.aac-sheet-selection label>span{overflow-wrap:anywhere}
+.aac-sheet-selection select{min-width:0;max-width:100%;width:100%;background:var(--surface-1,#fff);color:var(--text-1,#173345);border:1px solid var(--border-1,#c9d7df);border-radius:8px;padding:10px;font:inherit}
+.aac-sheet-controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.aac-sheet-controls button{border:1px solid var(--border-1,#c9d7df);border-radius:8px;padding:8px 12px;background:var(--surface-1,#fff);color:var(--text-1,#173345);font:600 12px Inter,'Segoe UI',sans-serif}
+.aac-sheet-controls .primary-button{background:var(--brand-700,#125777);color:#fff;border-color:transparent}
