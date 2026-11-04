@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { SigemPwState } from "../types/domain";
+import { SigemPwKpiCharts } from "./SigemPwKpiCharts";
 import { filterPwOperations, PW_ACTIONS, PW_INDICATORS, reconcilePwOperations, type PwFilters, type PwIndicator } from "../services/sigemPwOperations";
 
 const PAGE_SIZE = 25;
@@ -19,11 +20,14 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
   return <section className="spw-managerial spw-pw-operations" id="spw-managerial-overview" aria-label="Demanda da equipe PW">
     {!base.ready ? <div className="spw-empty spw-managerial-warning" role="status"><strong>Comparação incompleta</strong><span>{base.reason} Os indicadores ficam indisponíveis até a conclusão.</span></div> : null}
     <p className="spw-operation-unit">Unidade: <strong>pares documento + revisão únicos</strong>. Revisão 0 independente. Os indicadores e o Excel usam o mesmo escopo da relação abaixo.</p>
+    {base.ready ? <SigemPwKpiCharts totals={report.totals} pairs={report.rows.length} reconciliation={base.reconciliation}
+      selection={filters.indicator || "all"} onSelect={(key) => change({ indicator: filters.indicator === key ? "all" : key })}
+      revisionScope={filters.revisionScope || "all"} onRevisionScopeChange={(value) => change({ revisionScope: value })} /> : null}
     <div className="spw-operation-kpis" aria-label="Indicadores da equipe PW">
       {PW_INDICATORS.map(item => <button key={item.key} type="button" disabled={!base.ready} className="spw-operation-kpi" data-indicator={item.key}
         aria-pressed={filters.indicator === item.key} onClick={() => change({ indicator: filters.indicator === item.key ? "all" : item.key })}>
         <span>{item.label}</span><strong>{base.ready ? fmt(report.totals[item.key]) : "—"}</strong>
-        <small>{item.key === "sigem" ? "Na Consulta Geral e no escopo operacional" : item.key === "registerAbsent" ? "Ausentes da Consulta Geral ativa" : "Documento + revisão"}</small>
+        <small>{item.key === "sigem" ? "Na Consulta Geral e no escopo operacional" : item.key === "registerAbsent" ? "Ausentes da Consulta Geral ativa" : item.key === "registered" ? "Aguardando emissão + emitidos" : "Documento + revisão"}</small>
       </button>)}
     </div>
     <div className="spw-managerial-toolbar">

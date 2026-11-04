@@ -11,7 +11,7 @@ function importTs(file) {
   if (cache.has(resolved)) return cache.get(resolved).exports;
   const module = { exports: {} }; cache.set(resolved, module);
   const code = ts.transpileModule(fs.readFileSync(resolved, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }, fileName: resolved }).outputText;
-  new Function("require", "module", "exports", code)(name => name.startsWith(".") ? importTs(path.join(path.dirname(file), name + (name.endsWith("Overview") ? ".tsx" : ".ts"))) : require(name), module, module.exports);
+  new Function("require", "module", "exports", code)(name => name.startsWith(".") ? importTs(path.join(path.dirname(file), name + (/(?:Overview|KpiCharts)$/.test(name) ? ".tsx" : ".ts"))) : require(name), module, module.exports);
   return module.exports;
 }
 global.window = { GrconSigemPwDashboard: Core };
@@ -30,7 +30,7 @@ function state(refs, sigem, pwRows) {
   return { ld: { meta: { fileName: "LDs ativas" }, records: refs }, sigem: { meta: { fileName: "Consulta Geral", sourceRowCount: sigem.length }, records: sigem }, pw: base, model: { normalizedPw: base.records, normalizedSigem: sigem }, analysisError: "", busy: false };
 }
 const count = (s, expected) => assert.deepEqual(run(s).totals, expected);
-const t = (sigem=0, registerSigem=0, registerAbsent=0, issue=0, issued=0) => ({ sigem, registerSigem, registerAbsent, issue, issued });
+const t = (sigem=0, registerSigem=0, registerAbsent=0, issue=0, issued=0) => ({ sigem, registerSigem, registerAbsent, registered: issue + issued, issue, issued });
 // 1/2: mutually exclusive registration groups, faithfully based on the active query.
 count(state([ref(1)], [sig(1)], []), t(1,1));
 count(state([ref(1)], [], []), t(0,0,1));
@@ -44,8 +44,23 @@ count(blankIssued, t(1,0,0,1)); // unknown revision cannot prove emission.
 // 6: outside documents remain in the raw reconciliation, never become PW work.
 const outside = run(state([ref(1)], [sig(1),sig(99)], []));
 assert.deepEqual(outside.totals,t(1,1));
-assert.deepEqual(outside.reconciliation,{ records:2,documents:2,pairs:2,inScopePairs:1,outsidePairs:1,duplicates:0,invalid:0,omitted:0 });
+assert.deepEqual(outside.reconciliation,{ records:2,documents:2,pairs:2,inScopePairs:1,outsidePairs:1,duplicates:0,invalid:0,omitted:0,revision0:{ pairs:2,inScopePairs:1,outsidePairs:1 } });
 assert.equal(outside.outside.length,1);
+// Cadastrados no PW (= emitir + emitidos) e a conferência da Consulta Geral seguem o filtro de revisão 0.
+{
+  const mixedRev = state([ref(1,"0"),ref(2,"A")], [sig(1,"0"),sig(1,"A"),sig(2,"A"),sig(77,"0")], [pw(1,"0","Sim"),pw(2,"A","Previsto")]);
+  const all = run(mixedRev), rev0 = filter(all,{ revisionScope:"revision0" });
+  assert.equal(all.totals.registered, all.totals.issue + all.totals.issued);
+  assert.equal(filter(all,{ indicator:"registered" }).rows.length, all.totals.registered);
+  assert.equal(rev0.rows.every(row=>row.revision==="0"), true);
+  assert.equal(rev0.totals.registered, rev0.totals.issue + rev0.totals.issued);
+  assert.ok(rev0.totals.registered < all.totals.registered || all.totals.registered === 0, "revisão 0 mostra só o que é da revisão 0");
+  // pares da Consulta Geral: integral x revisão 0
+  assert.equal(all.reconciliation.pairs, 4);
+  assert.equal(all.reconciliation.revision0.pairs, 2);
+  assert.equal(all.reconciliation.revision0.inScopePairs, 1);
+  assert.equal(all.reconciliation.revision0.outsidePairs, 1);
+}
 // 7/12: LD B, SIGEM 0/A/B, PW 0 emitted + A planned. Three independent revisions.
 const revisions = state([ref(1,"B")], [sig(1,"0"),sig(1,"A"),sig(1,"B")], [pw(1,"0","Sim"),pw(1,"A")]);
 count(revisions,t(3,1,0,1,1));
@@ -150,7 +165,7 @@ count(after,t(1,0,0,0,1)); assert.equal(prior.rows[0].action,"Cadastrar no PW");
   const {SigemPwManagerialOverview}=importTs("src/react/sigem-pw/components/SigemPwManagerialOverview.tsx");
   const mount=createRoot(document.getElementById("root")); let exportFilters;
   await React.act(async()=>mount.render(React.createElement(SigemPwManagerialOverview,{state:mixed,onExport:value=>exportFilters=value})));
-  assert.equal(document.querySelectorAll(".spw-operation-kpi").length,5);
+  assert.equal(document.querySelectorAll(".spw-operation-kpi").length,6,"cinco indicadores originais + Cadastrados no PW");
   const registration=document.querySelector('[data-indicator="registerAbsent"]');
   await React.act(async()=>registration.click());
   assert.equal(registration.getAttribute("aria-pressed"),"true");

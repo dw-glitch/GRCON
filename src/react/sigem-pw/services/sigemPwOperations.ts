@@ -3,7 +3,7 @@ import { managerialDocumentKey } from "./sigemPwManagerial";
 
 export const PW_ACTIONS = ["Cadastrar no PW", "Emitir no PW", "Concluído"] as const;
 export type PwAction = typeof PW_ACTIONS[number];
-export type PwIndicator = "all" | "sigem" | "registerSigem" | "registerAbsent" | "issue" | "issued";
+export type PwIndicator = "all" | "sigem" | "registerSigem" | "registerAbsent" | "registered" | "issue" | "issued";
 export interface PwFilters {
   query?: string; documentClass?: string; action?: string; sigem?: string;
   revisionScope?: "all" | "revision0"; indicator?: PwIndicator;
@@ -15,7 +15,9 @@ export interface PwOperation {
   pwRegistered: boolean; pwEmitted: boolean; pwEvidence?: SigemPwRecord;
 }
 export interface PwTotals {
-  sigem: number; registerSigem: number; registerAbsent: number; issue: number; issued: number;
+  sigem: number; registerSigem: number; registerAbsent: number;
+  /** Pares com cadastro PW comprovado (CSG/QTM): os que aguardam emissão mais os já emitidos. */
+  registered: number; issue: number; issued: number;
 }
 export interface PwDiagnostic {
   source: string; code: string; revision: string; reason: string; sourceRow: string;
@@ -27,6 +29,8 @@ export interface PwOperationsReport {
   reconciliation: {
     records: number; documents: number; pairs: number; inScopePairs: number;
     outsidePairs: number; duplicates: number; invalid: number; omitted: number | null;
+    /** Mesma conferência restrita à revisão 0 (acompanha o filtro "Somente revisão 0"). */
+    revision0: { pairs: number; inScopePairs: number; outsidePairs: number };
   };
 }
 const text = (value: unknown) => String(value ?? "").trim();
@@ -49,17 +53,19 @@ function emittedEvidence(row: SigemPwRecord): boolean {
   return [flags.CURRENT, flags.HISTORICAL].includes(norm(row.lastEmission));
 }
 const pair = (key: string, rev: string) => JSON.stringify([key, rev]);
-const totals = (): PwTotals => ({ sigem: 0, registerSigem: 0, registerAbsent: 0, issue: 0, issued: 0 });
+const totals = (): PwTotals => ({ sigem: 0, registerSigem: 0, registerAbsent: 0, registered: 0, issue: 0, issued: 0 });
 export const PW_INDICATORS: Array<{ key: Exclude<PwIndicator, "all">; label: string }> = [
   { key: "sigem", label: "No SIGEM" },
   { key: "registerSigem", label: "Cadastrar no PW — SIGEM" },
   { key: "registerAbsent", label: "Cadastrar no PW — Não postados" },
+  { key: "registered", label: "Cadastrados no PW" },
   { key: "issue", label: "Emitir no PW" },
   { key: "issued", label: "Emitidos no PW" },
 ];
 function count(target: PwTotals, row: PwOperation) {
   if (row.inSigem) target.sigem++;
   if (row.action === "Cadastrar no PW") target[row.inSigem ? "registerSigem" : "registerAbsent"]++;
+  if (row.pwRegistered) target.registered++;
   if (row.action === "Emitir no PW") target.issue++;
   if (row.action === "Concluído") target.issued++;
 }
@@ -72,6 +78,7 @@ function matches(row: PwOperation, filters: PwFilters): boolean {
   if (i === "sigem" && !row.inSigem) return false;
   if (i === "registerSigem" && !(row.inSigem && row.action === "Cadastrar no PW")) return false;
   if (i === "registerAbsent" && !(!row.inSigem && row.action === "Cadastrar no PW")) return false;
+  if (i === "registered" && !row.pwRegistered) return false;
   if (i === "issue" && row.action !== "Emitir no PW") return false;
   if (i === "issued" && row.action !== "Concluído") return false;
   const needle = norm(filters.query);
@@ -101,7 +108,7 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
     : !state.model ? "Aguarde a comparação das bases." : "");
   const report: PwOperationsReport = {
     ready: !reason, reason, rows: [], totals: totals(), byClass: [], diagnostics: [], outside: [],
-    reconciliation: { records: state.sigem.records.length, documents: 0, pairs: 0, inScopePairs: 0, outsidePairs: 0, duplicates: 0, invalid: 0, omitted: null },
+    reconciliation: { records: state.sigem.records.length, documents: 0, pairs: 0, inScopePairs: 0, outsidePairs: 0, duplicates: 0, invalid: 0, omitted: null, revision0: { pairs: 0, inScopePairs: 0, outsidePairs: 0 } },
   };
   const refs = new Map<string, SigemPwRecord[]>();
   const sigem = new Map<string, Map<string, SigemPwRecord[]>>();
@@ -130,7 +137,12 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
       report.diagnostics.push(diagnostic("SIGEM", row, "Repetição de documento + revisão (não soma novamente)"));
     } else {
       seenPairs.add(id);
-      if (refs.has(key)) report.reconciliation.inScopePairs++; else report.reconciliation.outsidePairs++;
+      const inRefs = refs.has(key);
+      if (inRefs) report.reconciliation.inScopePairs++; else report.reconciliation.outsidePairs++;
+      if (rev === "0") {
+        report.reconciliation.revision0.pairs++;
+        if (inRefs) report.reconciliation.revision0.inScopePairs++; else report.reconciliation.revision0.outsidePairs++;
+      }
     }
     if (!refs.has(key)) { report.outside.push(diagnostic("SIGEM", row, "Não consta nas LDs ativas")); continue; }
     const revisions = sigem.get(key) || new Map<string, SigemPwRecord[]>();

@@ -1648,3 +1648,6 @@
 .spw-pw-operations .spw-managerial-list-heading { margin-top: 20px; }
 @media (max-width: 1000px) { .spw-operation-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .spw-operation-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .spw-operation-kpi { padding: 12px; } }
+/* Medidor do gráfico: a barra precisa ser bloco para aparecer (botões herdam display global). */
+#sigem-pw-dashboard-module .spw-charts button.spw-meter{display:grid;justify-items:stretch;text-align:left}
+#sigem-pw-dashboard-module .spw-charts .spw-meter-track{display:block;width:100%}
