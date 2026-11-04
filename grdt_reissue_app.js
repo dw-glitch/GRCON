@@ -319,7 +319,8 @@
     await root.GrconSharedSigemQuery?.refresh();
     const validation = Core.validateRows(state.rows);
     if (!validation.valid) {
-      notify("Complete todos os campos destacados antes de gerar a repostagem.", "warning");
+      const conflict = (validation.revisionConflicts || [])[0];
+      notify(conflict ? conflict.message : "Complete todos os campos destacados antes de gerar a repostagem.", conflict ? "error" : "warning");
       return;
     }
     setBusy(true);

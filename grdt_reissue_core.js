@@ -209,10 +209,15 @@
   }
   function validateRows(rows) {
     const source = rows || [];
+    // Mesma regra inviolável da emissão: uma GRDT nunca leva revisões diferentes do mesmo documento.
+    const conflicts = Emission && typeof Emission.revisionConflicts === "function"
+      ? Emission.revisionConflicts(source.map((row) => ({ document: row && row.item && row.item.document, revision: row && row.item && row.item.revision })))
+      : [];
     return {
-      valid: source.length > 0 && source.every((row) => !(row.errors || itemErrors(row.item)).length),
+      valid: source.length > 0 && conflicts.length === 0 && source.every((row) => !(row.errors || itemErrors(row.item)).length),
       rowCount: source.length,
       incomplete: source.filter((row) => (row.errors || itemErrors(row.item)).length),
+      revisionConflicts: conflicts,
     };
   }
   function sharedPersistenceStatus(records, storedRecords) {

@@ -137,6 +137,19 @@
     }
     return null;
   }
+  // Revisões que a Consulta Geral conhece para o documento (qualquer status).
+  // Usada pela regra de sequência de revisões da eGRDT.
+  function knownRevisions(document, ctx) {
+    const layer = ctx?.activeLayer || (ctx?.shared ? "shared" : ctx?.local ? "local" : "");
+    if (!layer) return [];
+    const map = ctx?.[`${layer}Revisions`];
+    if (!map) return [];
+    const exactKey = `@exact:${canonical(document)}`;
+    const searchKeys = map.has(exactKey) ? [exactKey] : keys(document);
+    const found = new Set();
+    for (const documentKey of searchKeys) for (const rev of map.get(documentKey) || []) found.add(rev);
+    return [...found];
+  }
   function validate(base) {
     if (!Array.isArray(base?.records) || !base.records.length) throw new Error("Consulta Geral vazia; a versão anterior foi mantida.");
     if (base.records.length > 100000) throw new Error("A Consulta Geral excede 100.000 registros.");
@@ -144,5 +157,5 @@
     if (!base.records.some((r) => text(r.status))) throw new Error("A Consulta Geral não contém status SIGEM.");
     return base;
   }
-  return Object.freeze({ text, canonical, keys, revision, activeLayer, activeBase, index, context, resolve, previousAnalysis, validate });
+  return Object.freeze({ text, canonical, keys, revision, activeLayer, activeBase, index, context, resolve, previousAnalysis, knownRevisions, validate });
 });

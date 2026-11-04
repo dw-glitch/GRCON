@@ -65,12 +65,17 @@
     const allocation = allocationAlert(row);
     const unresolved = unresolvedStatus(row);
     const previousAnalysis = Boolean(row?.blockingRevision);
-    const autoAllowed = automaticStatusKinds.has(kind) && !allocation && !unresolved && !previousAnalysis;
+    // Revisão fora de sequência: INVIOLÁVEL. Existe uma revisão anterior do mesmo
+    // documento ainda não concluída no SIGEM; esta só entra depois dela.
+    const sequence = row && row.revisionSequenceBlock ? row.revisionSequenceBlock : null;
+    const autoAllowed = automaticStatusKinds.has(kind) && !allocation && !unresolved && !previousAnalysis && !sequence;
     return {
       status, kind, allocation, autoAllowed, unresolved, previousAnalysis,
+      sequenceBlocked: Boolean(sequence),
       manualOnly: !autoAllowed,
       autoEligible: Boolean(row && row.decision === Core.READY && !row.hardBlock && autoAllowed),
-      label: allocation === "not_allocated" ? "Não Alocado"
+      label: sequence ? `Aguarda a revisão ${sequence.revision}`
+        : allocation === "not_allocated" ? "Não Alocado"
         : allocation === "conflict" ? "Conflito de alocação"
         : unresolved ? (/NAO (?:LOCALIZAD|ENCONTRAD)|NAO CONSTA/.test(norm(status)) || row?.documentLookup?.matched === false ? 'Não localizado' : 'Status não identificado')
         : previousAnalysis ? `Revisão ${row.blockingRevision} em análise`
@@ -91,6 +96,8 @@
   function selectionAuthorized(row, index, selectedIndices, manualIndices) {
     if (!row || !selectedIndices || !selectedIndices.has(index)) return false;
     const policy = selectionPolicy(row);
+    // Nenhuma autorização manual libera uma revisão fora de sequência.
+    if (policy.sequenceBlocked) return false;
     return !policy.manualOnly || Boolean(manualIndices && manualIndices.has(index) && manualStatusApprovalValid(row));
   }
   return Object.freeze({ origin, extensions, historyKind, matches, searchText,

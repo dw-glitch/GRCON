@@ -1310,6 +1310,7 @@
     state.pendingAllocationBundle = snapshot.pendingAllocationBundle || { rows: [], entries: [], documentCount: 0, pdfCount: 0 };
     state.selected = new Set(snapshot.selectedIndices || []);
     state.manualForceInclude = new Set(snapshot.manualForceIndices || []);
+    refreshRevisionSequence();
     reconcileSelectedRows(); // Cache antigo não autoriza status SIGEM restrito.
     state.expanded.clear();
     state.resultVersion += 1;
@@ -1942,12 +1943,14 @@
   }
 
   function rowCanBeSelected(row) {
-    // A triagem orienta a seleção automática; a escolha manual fica disponível.
-    return Boolean(row);
+    // A triagem orienta a seleção automática; a escolha manual fica disponível,
+    // EXCETO para revisão fora de sequência (ver emission.js): essa nunca entra.
+    return Boolean(row && !row.revisionSequenceBlock);
   }
 
   function rowCanBeEdited(row) {
-    return Boolean(row && (rowCanBeSelected(row) || row.blockCode === "discipline_confirmation"));
+    // A revisão detectada pode estar errada: a linha continua editável mesmo bloqueada.
+    return Boolean(row);
   }
 
   // Regra única de elegibilidade: histórico e repostagem não liberam status SIGEM.
@@ -1961,6 +1964,13 @@
   function setRowSelected(index, checked, notify = true) {
     const row = state.results[index];
     if (checked) {
+      // INVIOLÁVEL: revisão fora de sequência não entra, nem por marcação manual.
+      if (row && row.revisionSequenceBlock) {
+        if (notify) showToast(`Revisão ${row.revision} não pode entrar agora: a revisão ${row.revisionSequenceBlock.revision} ainda não foi concluída no SIGEM. Poste uma revisão por vez, em sequência.`, "error");
+        state.selected.delete(index);
+        state.manualForceInclude.delete(index);
+        return false;
+      }
       if (!rowCanBeSelected(row)) {
         if (notify) showToast("Documento não encontrado na seleção atual.", "warn");
         return false;
@@ -2410,6 +2420,42 @@
     return C.grdtStatusForRevision(group, revision, shared?.context?.(), row.document, official);
   }
 
+  // Revisões anteriores de um documento conhecidas fora dos arquivos desta análise:
+  // LD, Colar SIGEM e Consulta Geral. A regra de sequência (emission.js) usa isto
+  // para barrar uma revisão posterior enquanto uma anterior não foi postada.
+  function knownRevisionsOfDocument(row) {
+    const documentKey = row && (row.documentKey || C.key(row.document));
+    const group = state.index && state.index.byDocument && state.index.byDocument.get(documentKey);
+    const shared = window.GrconSharedSigemQuery;
+    const context = shared && shared.context ? shared.context() : null;
+    const found = new Map();
+    const add = (revision, source) => {
+      const normalized = C.normalizeRevision(revision);
+      if (normalized && !found.has(normalized)) found.set(normalized, source);
+    };
+    ((group && group.records) || []).forEach((item) => add(item.revision, "LD"));
+    ((group && group.history) || []).forEach((item) => add(item.revision, "Colar SIGEM"));
+    const queryCore = window.GrconSharedSigemQueryCore;
+    if (queryCore && queryCore.knownRevisions && context) {
+      (queryCore.knownRevisions(row.document, context) || []).forEach((revision) => add(revision, "Consulta Geral"));
+    }
+    return [...found].map(([revision, source]) => {
+      let status = "Não Postado";
+      try {
+        if (group) status = (C.statusForRevision(group, revision, context) || {}).status || status;
+      } catch (error) { console.debug("[App] status da revisão conhecida:", error); }
+      return { revision, source, status };
+    });
+  }
+
+  // Recalcula quais linhas esperam uma revisão anterior. Deve rodar depois de
+  // qualquer mudança de revisão ou de status, para a tela e o plano concordarem.
+  function refreshRevisionSequence() {
+    if (!E || !E.applyRevisionSequence) return;
+    E.applyRevisionSequence(state.results, { earlierKnown: knownRevisionsOfDocument });
+    state.filteredCache = { signature: "", indices: [] };
+  }
+
   function applyRowSigemStatus(row, resolved) {
     if (!row || !resolved) return;
     row.status = resolved.status;
@@ -2476,6 +2522,8 @@
       databook: row.record && row.record.databook || "",
     };
     if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
+    // A revisão mudou: a ordem das revisões do documento também.
+    refreshRevisionSequence();
     state.resultVersion += 1;
     state.filteredCache = { signature: "", indices: [] };
     return { ok: true, manual: row.revisionManual };
@@ -2698,6 +2746,8 @@
       refreshPendingAllocationBundle();
       state.selected.clear();
       state.manualForceInclude.clear();
+      state.results.forEach((row, index) => { row._resultIndex = index; });
+      refreshRevisionSequence();
       state.results.forEach((row, index) => {
         if (rowCanAutoInclude(row)) state.selected.add(index);
       });
@@ -3006,8 +3056,10 @@
       refreshPendingAllocationBundle();
       state.selected.clear();
       state.manualForceInclude.clear();
+      state.results.forEach((row, index) => { row._resultIndex = index; });
+      // Uma revisão por documento, em sequência: antes de qualquer seleção automática.
+      refreshRevisionSequence();
       state.results.forEach((row, index) => {
-        row._resultIndex = index;
         if (rowCanAutoInclude(row)) state.selected.add(index);
       });
       state.resultVersion += 1;
@@ -3193,6 +3245,7 @@
 
   function decisionClass(value, row) {
     if (row && TriageQuery.allocationAlert(row) === "not_allocated") return "blocked";
+    if (row && row.revisionSequenceBlock) return "blocked";
     if (row && TriageQuery.allocationAlert(row) === "conflict") return "review";
     if (row && TriageQuery.unresolvedStatus(row)) return 'review';
     if (row && row.hardBlock) return "blocked";
@@ -3214,6 +3267,8 @@
       // Conflito, por outro lado, não é uma recusa confirmada.
       if (row && TriageQuery.allocationAlert(row) === "not_allocated") return "bloqueado";
       if (row && TriageQuery.allocationAlert(row) === "conflict") return "revisar";
+      // Revisão fora de sequência: sempre "Não incluir".
+      if (row && row.revisionSequenceBlock) return "bloqueado";
       if (row && TriageQuery.unresolvedStatus(row)) return 'nao_localizado';
       if (row && row.blockingRevision) return "bloqueado";
       const policy = row ? rowStatusPolicy(row) : null;
@@ -4166,7 +4221,10 @@
       const apendice = apendiceInfo(row);
       const databook = record.databook || "—";
       const manualSelection = manuallyIncluded(row, index);
-      const selectionTitle = allocationAlert
+      const sequenceBlock = row.revisionSequenceBlock || null;
+      const selectionTitle = sequenceBlock
+        ? `Não pode entrar agora: ${sequenceBlock.message}`
+        : allocationAlert
         ? `${statusPolicy.label}: não incluir automaticamente na GRDT. ${statusPolicy.kind === "analysis" ? `Também em análise no SIGEM${row.blockingRevision ? ` (rev. ${row.blockingRevision})` : ""}. ` : ""}Inclusão manual disponível somente para exceção operacional.`
         : statusPolicy.manualOnly
         ? (row.blockingRevision
