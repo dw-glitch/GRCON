@@ -16,7 +16,7 @@ export interface PwOperation {
 }
 export interface PwTotals {
   sigem: number; registerSigem: number; registerAbsent: number;
-  /** Pares com cadastro PW comprovado (CSG/QTM): os que aguardam emissão mais os já emitidos. */
+  /** Revisões de documentos com cadastro PW comprovado (CSG/QTM): as que aguardam emissão mais as já emitidas. */
   registered: number; issue: number; issued: number;
 }
 export interface PwDiagnostic {
@@ -55,12 +55,12 @@ function emittedEvidence(row: SigemPwRecord): boolean {
 const pair = (key: string, rev: string) => JSON.stringify([key, rev]);
 const totals = (): PwTotals => ({ sigem: 0, registerSigem: 0, registerAbsent: 0, registered: 0, issue: 0, issued: 0 });
 export const PW_INDICATORS: Array<{ key: Exclude<PwIndicator, "all">; label: string }> = [
-  { key: "sigem", label: "No SIGEM" },
-  { key: "registerSigem", label: "Cadastrar no PW — SIGEM" },
-  { key: "registerAbsent", label: "Cadastrar no PW — Não postados" },
-  { key: "registered", label: "Cadastrados no PW" },
-  { key: "issue", label: "Emitir no PW" },
-  { key: "issued", label: "Emitidos no PW" },
+  { key: "sigem", label: "Constam no SIGEM" },
+  { key: "registerSigem", label: "A cadastrar no PW — já constam no SIGEM" },
+  { key: "registerAbsent", label: "A cadastrar no PW — não constam no SIGEM" },
+  { key: "registered", label: "Cadastradas no PW" },
+  { key: "issue", label: "A emitir no PW" },
+  { key: "issued", label: "Emitidas no PW" },
 ];
 function count(target: PwTotals, row: PwOperation) {
   if (row.inSigem) target.sigem++;
@@ -134,7 +134,7 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
     const id = pair(key, rev);
     if (seenPairs.has(id)) {
       report.reconciliation.duplicates++;
-      report.diagnostics.push(diagnostic("SIGEM", row, "Repetição de documento + revisão (não soma novamente)"));
+      report.diagnostics.push(diagnostic("SIGEM", row, "Mesma revisão do mesmo documento repetida (conta uma vez)"));
     } else {
       seenPairs.add(id);
       const inRefs = refs.has(key);
@@ -153,7 +153,7 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
   if (report.ready && (!refs.size || (state.sigem.records.length > 0 && !seenPairs.size))) {
     report.ready = false;
     report.reason = !refs.size ? "As referências não contêm códigos interpretáveis. Reimporte as bases."
-      : "A Consulta Geral contém registros, mas nenhum par documento + revisão interpretável. Reimporte a base.";
+      : "A Consulta Geral contém registros, mas nenhuma revisão de documento interpretável. Reimporte a base.";
   }
   const originalRows = Number(state.sigem.meta?.sourceRowCount);
   if (Number.isFinite(originalRows) && originalRows >= state.sigem.records.length) report.reconciliation.omitted = originalRows - state.sigem.records.length;
@@ -185,7 +185,7 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
     const seenPw = new Set<string>();
     for (const entry of pw.get(key) || []) {
       const rev = revisionOf(entry);
-      if (seenPw.has(rev)) report.diagnostics.push(diagnostic("PW", entry, "Repetição de documento + revisão; evidência preservada na relação PW original"));
+      if (seenPw.has(rev)) report.diagnostics.push(diagnostic("PW", entry, "Mesma revisão do mesmo documento repetida no PW; evidência preservada na relação PW original"));
       seenPw.add(rev);
     }
     for (const rev of required) {
@@ -202,7 +202,7 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
       const inSigem = entries.length > 0;
       report.rows.push({ key: pair(key, rev), documentKey: key, code: codeOf(reference), title: text(reference.title), revision: rev,
         documentClass, referenceStatus: text(reference.status), sources, action: !registered ? "Cadastrar no PW" : emitted ? "Concluído" : "Emitir no PW",
-        inSigem, sigemSituation: inSigem ? "No SIGEM" : "Não consta na Consulta Geral",
+        inSigem, sigemSituation: inSigem ? "Consta no SIGEM" : "Não consta na Consulta Geral",
         sigemStatus: [...new Set(entries.map(row => text(row.status || row.sigemStatus)).filter(Boolean))].join("; "),
         pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence });
     }

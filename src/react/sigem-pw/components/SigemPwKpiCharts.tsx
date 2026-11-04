@@ -6,7 +6,7 @@ export type ChartKey = Exclude<PwIndicator, "all"> | "all";
 interface Props {
   /** Totais do escopo atual (os mesmos dos cinco indicadores, da relação e do Excel). */
   totals: PwTotals;
-  /** Pares documento + revisão no escopo atual. */
+  /** Revisões de documentos no escopo atual (cada revisão de cada documento conta uma vez). */
   pairs: number;
   /** Conciliação da Consulta Geral integral (antes dos filtros). */
   reconciliation: PwOperationsReport["reconciliation"];
@@ -113,8 +113,8 @@ function Meter({ label, value, total, tone, hint, keyName, selection, onSelect }
 }
 
 /**
- * Painel gráfico da demanda da equipe PW. Unidade: par documento + revisão.
- * Responde, em ordem: quantos pares estão no escopo, em que ponto do PW cada um
+ * Painel gráfico da demanda da equipe PW. Unidade: revisão de documento.
+ * Responde, em ordem: quantas revisões estão no escopo, em que ponto do PW cada um
  * está e como a Consulta Geral se relaciona com as referências. Cada trecho filtra
  * a relação logo abaixo e usa exatamente os mesmos totais dos indicadores e do Excel.
  */
@@ -122,34 +122,34 @@ export function SigemPwKpiCharts({ totals, pairs, reconciliation, selection, onS
   const [tip, setTip] = useState<Tip | null>(null);
   const scope = revisionScope === "revision0" ? "somente a revisão 0" : "todas as revisões";
   const pwSegments: Segment[] = [
-    { key: "issued", label: "Emitidos no PW", value: totals.issued, tone: "ok", hint: "Emissão comprovada da própria revisão. Ação: Concluído." },
-    { key: "issue", label: "Emitir no PW", value: totals.issue, tone: "warn", hint: "Cadastro comprovado, emissão da revisão ainda pendente." },
-    { key: "registerSigem", label: "Cadastrar no PW — SIGEM", value: totals.registerSigem, tone: "bad", hint: "A revisão já está na Consulta Geral e não tem cadastro PW aplicável." },
-    { key: "registerAbsent", label: "Cadastrar no PW — Não postados", value: totals.registerAbsent, tone: "info", hint: "Revisão requerida pela referência, ausente da Consulta Geral e sem cadastro PW. Ausência na consulta não prova falta de postagem." },
+    { key: "issued", label: "Emitidas no PW", value: totals.issued, tone: "ok", hint: "Emissão comprovada no PW. Na lista aparecem como Concluído." },
+    { key: "issue", label: "A emitir no PW", value: totals.issue, tone: "warn", hint: "Já cadastradas no PW; falta emitir." },
+    { key: "registerSigem", label: "A cadastrar — já constam no SIGEM", value: totals.registerSigem, tone: "bad", hint: "Já aparecem no SIGEM e ainda não foram cadastradas no PW." },
+    { key: "registerAbsent", label: "A cadastrar — não constam no SIGEM", value: totals.registerAbsent, tone: "info", hint: "Exigidas pelas LDs, fora da Consulta Geral e sem cadastro no PW. Não constar na consulta não prova que falta postar." },
   ];
-  // A conferência da Consulta Geral acompanha o filtro de revisões: revisão 0 mostra só os pares da revisão 0.
+  // A conferência da Consulta Geral acompanha o filtro de revisões: revisão 0 mostra só as revisões 0.
   const recon = revisionScope === "revision0" ? reconciliation.revision0 : reconciliation;
   const inLd = recon.inScopePairs;
   const outside = recon.outsidePairs;
   const consulted = recon.pairs;
   const outsideHint = outside === 0
-    ? "Todos os pares da Consulta Geral constam nas referências ativas."
-    : `${nf(outside)} par(es) da Consulta Geral estão fora das referências ativas.`;
+    ? "Todas as revisões da Consulta Geral constam nas LDs ativas."
+    : `${nf(outside)} revisão(ões) da Consulta Geral não consta(m) nas LDs ativas.`;
 
   return (
     <div className="spw-charts" id="spw-kpi-charts">
       <button type="button" className="spw-universe" data-kpi="all"
-        aria-label={`Pares documento mais revisão no escopo: ${nf(pairs)}. Clique para listar todos.`}
+        aria-label={`Revisões de documentos no escopo: ${nf(pairs)}. Cada revisão de cada documento conta uma vez. Clique para listar todas.`}
         onClick={() => onSelect("all")}>
-        <span className="spw-universe-label">Pares no escopo</span>
+        <span className="spw-universe-label">Revisões de documentos</span>
         <strong>{nf(pairs)}</strong>
-        <small>documento + revisão · {scope}</small>
+        <small>cada revisão de cada documento conta uma vez · {scope}</small>
       </button>
 
       <section className="spw-chart-card" aria-labelledby="spw-chart-pw-title">
         <header>
           <h4 id="spw-chart-pw-title">1 · Trabalho da equipe PW</h4>
-          <p>De <b>{nf(pairs)}</b> pares, <b>{nf(totals.issued)}</b> já têm emissão comprovada. O restante é demanda do PW: cadastrar ou emitir.</p>
+          <p>De <b>{nf(pairs)}</b> revisões de documentos, <b>{nf(totals.issued)}</b> já foram emitidas no PW. As demais dependem da equipe PW: cadastrar ou emitir.</p>
         </header>
         <fieldset className="spw-chart-scope">
           <legend className="spw-sr-only">Revisões consideradas</legend>
@@ -157,23 +157,23 @@ export function SigemPwKpiCharts({ totals, pairs, reconciliation, selection, onS
           <label><input type="radio" name="spw-chart-scope" checked={revisionScope === "revision0"} onChange={() => onRevisionScopeChange("revision0")} /><span>Somente revisão 0</span></label>
         </fieldset>
         {pairs > 0
-          ? <SegmentedBar title="Trabalho da equipe PW" segments={pwSegments} total={pairs} selection={selection} onSelect={onSelect} unit="pares" onTip={setTip} />
-          : <p className="spw-chart-empty">Nenhum par documento + revisão neste escopo.</p>}
-        <Meter label="Cadastrados no PW" value={totals.registered} total={pairs} tone="info" keyName="registered" selection={selection} onSelect={onSelect}
-          hint="Pares com cadastro comprovado no PW (CSG/QTM): os que aguardam emissão mais os já emitidos." />
+          ? <SegmentedBar title="Trabalho da equipe PW" segments={pwSegments} total={pairs} selection={selection} onSelect={onSelect} unit="revisões" onTip={setTip} />
+          : <p className="spw-chart-empty">Nenhuma revisão de documento neste escopo.</p>}
+        <Meter label="Cadastradas no PW" value={totals.registered} total={pairs} tone="info" keyName="registered" selection={selection} onSelect={onSelect}
+          hint="Cadastro comprovado no PW (empresas CSG/QTM): as que aguardam emissão mais as já emitidas." />
       </section>
 
       <section className="spw-chart-card" aria-labelledby="spw-chart-sigem-title">
         <header>
-          <h4 id="spw-chart-sigem-title">2 · Presença na Consulta Geral</h4>
-          <p>Pares documento + revisão da Consulta Geral ({scope}) e quantos deles constam nas referências ativas. A conferência usa a Consulta Geral integral, antes dos demais filtros.</p>
+          <h4 id="spw-chart-sigem-title">2 · O que consta no SIGEM</h4>
+          <p>Revisões de documentos que aparecem na Consulta Geral ({scope}) e quantas delas estão nas LDs ativas. A conferência usa a Consulta Geral inteira, antes dos demais filtros.</p>
         </header>
         <div className="spw-sigem-stat">
-          <span>No SIGEM (escopo atual)</span>
+          <span>Constam no SIGEM (escopo atual)</span>
           <strong>{nf(totals.sigem)}</strong>
-          <small>pares na Consulta Geral e no escopo operacional · {scope}</small>
+          <small>revisões de documentos na Consulta Geral · {scope}</small>
         </div>
-        <Meter label="Constam nas referências" value={inLd} total={consulted} tone="ok" keyName="sigem" selection={selection} onSelect={onSelect} hint={outsideHint} />
+        <Meter label="Constam nas LDs ativas" value={inLd} total={consulted} tone="ok" keyName="sigem" selection={selection} onSelect={onSelect} hint={outsideHint} />
       </section>
       <Tooltip tip={tip} />
     </div>

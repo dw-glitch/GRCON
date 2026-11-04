@@ -121,11 +121,11 @@ count(after,t(1,0,0,0,1)); assert.equal(prior.rows[0].action,"Cadastrar no PW");
   }
   assert.equal(historicalMain.getCell("H4").result,"Não");
   const historicalSummary=new Map(historicalBook.plan.sheets.Resumo.map(row=>[row[0],row[1]]));
-  assert.equal(historicalSummary.get("Emitir no PW"),0);
-  assert.equal(historicalSummary.get("Emitidos no PW"),2);
+  assert.equal(historicalSummary.get("A emitir no PW"),0);
+  assert.equal(historicalSummary.get("Emitidas no PW"),2);
   const mixed=state([ref(1,"B"),ref(2),ref(3,"I",{documentClass:"ET",sheetName:"ET"}),ref(4,"AA")],[sig(1,"0"),sig(1,"A"),sig(1,"B"),sig(3,"I"),sig(99)],[pw(1,"0","Sim"),pw(1,"A"),pw(3,"I")]);
   const original=run(mixed);
-  for(const filters of [{},{revisionScope:"revision0"},{documentClass:"ET"},{indicator:"registerAbsent"},{action:"Emitir no PW"},{query:"001"},{sigem:"No SIGEM"}]) {
+  for(const filters of [{},{revisionScope:"revision0"},{documentClass:"ET"},{indicator:"registerAbsent"},{action:"Emitir no PW"},{query:"001"},{sigem:"Consta no SIGEM"}]) {
     const projected=filter(original,filters);
     const {workbook,plan}=buildCoordinatorWorkbook(mixed,ExcelJS,undefined,filters);
     assert.deepEqual(plan.report.totals,projected.totals);
@@ -165,7 +165,7 @@ count(after,t(1,0,0,0,1)); assert.equal(prior.rows[0].action,"Cadastrar no PW");
   const {SigemPwManagerialOverview}=importTs("src/react/sigem-pw/components/SigemPwManagerialOverview.tsx");
   const mount=createRoot(document.getElementById("root")); let exportFilters;
   await React.act(async()=>mount.render(React.createElement(SigemPwManagerialOverview,{state:mixed,onExport:value=>exportFilters=value})));
-  assert.equal(document.querySelectorAll(".spw-operation-kpi").length,6,"cinco indicadores originais + Cadastrados no PW");
+  assert.equal(document.querySelectorAll(".spw-operation-kpi").length,6,"cinco indicadores originais + Cadastradas no PW");
   const registration=document.querySelector('[data-indicator="registerAbsent"]');
   await React.act(async()=>registration.click());
   assert.equal(registration.getAttribute("aria-pressed"),"true");
