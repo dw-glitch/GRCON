@@ -166,7 +166,7 @@
   }
   html[data-app="GRCON"][data-ui-generation="3"] #results-scroll {
     max-width: 100%;
-    max-height: min(65vh, 680px);
+    max-height: min(78vh, 900px);
     overflow: auto;
     scrollbar-gutter: stable;
     overscroll-behavior-inline: contain;
