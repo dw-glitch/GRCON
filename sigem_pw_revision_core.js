@@ -134,6 +134,61 @@
     return output.sort((a, b) => rank(b.revision) - rank(a.revision) || b.sourceRow - a.sourceRow);
   }
 
+  // Tom visual do status de uma revisão. Informativo: não altera a classificação
+  // do motor, só ajuda a ler o ciclo (postada/emitida, em análise, recusada...).
+  function statusTone(status, kind, emitted) {
+    const value = norm(status);
+    if (kind === "pw") {
+      if (emitted) return "done";
+      return !value || value === "PREVISTO" ? "planned" : "registered";
+    }
+    if (!value) return "none";
+    if (value.includes("NAO POSTAD")) return "planned";
+    if (value.includes("RECUS") || value.includes("REJEIT")) return "bad";
+    if (value.includes("ANALISE")) return "progress";
+    if (value.includes("POSTAD") || value.includes("COMENT") || value.includes("APROVAD") || value.includes("ACEIT")) return "done";
+    return "other";
+  }
+
+  /**
+   * Ciclo completo de revisões de um documento nos dois sistemas.
+   * Cada coluna é uma revisão existente em pelo menos um sistema, em ordem
+   * crescente. `sigemSkipped`/`pwSkipped` marcam a revisão que o OUTRO sistema
+   * tem, que este sistema não tem e que já ficou para trás da sua última
+   * revisão (ou seja, foi pulada). Revisões ausentes nos dois lados não viram
+   * coluna: o motor não as inventa.
+   */
+  function revisionMatrix(sigemItems, pwItems) {
+    const columns = new Map();
+    const cell = (item, kind) => item ? {
+      status: text(item.status),
+      emitted: kind === "pw" ? Boolean(item.emitted) : null,
+      tone: statusTone(item.status, kind, item.emitted),
+    } : null;
+    const collect = (items, field, kind) => (items || []).forEach((item) => {
+      const label = text(item && item.revision);
+      const itemRank = rank(label);
+      // Rótulos com espaço (ex.: o marcador "Não informada no PW") não são revisões.
+      if (!label || /\s/.test(label) || itemRank < 0) return;
+      const key = norm(label);
+      if (!columns.has(key)) columns.set(key, { revision: label, rank: itemRank, sigem: null, pw: null, sigemSkipped: false, pwSkipped: false });
+      const column = columns.get(key);
+      if (!column[field]) column[field] = cell(item, kind);
+    });
+    collect(sigemItems, "sigem", "sigem");
+    collect(pwItems, "pw", "pw");
+    const ordered = [...columns.values()].sort((a, b) => a.rank - b.rank);
+    const highest = (field) => ordered.reduce((max, column) => column[field] ? Math.max(max, column.rank) : max, -1);
+    const highestSigem = highest("sigem");
+    const highestPw = highest("pw");
+    const skipped = { sigem: [], pw: [] };
+    ordered.forEach((column) => {
+      if (!column.sigem && column.pw && column.rank < highestSigem) { column.sigemSkipped = true; skipped.sigem.push(column.revision); }
+      if (!column.pw && column.sigem && column.rank < highestPw) { column.pwSkipped = true; skipped.pw.push(column.revision); }
+    });
+    return { columns: ordered, skipped, hasSkipped: skipped.sigem.length + skipped.pw.length > 0 };
+  }
+
   function documentStructure(document) {
     const record = document && Array.isArray(document.rows) && document.rows.length ? document.rows[0] : null;
     const canonical = text(record && record.canonicalDocument) || text(document && document.document);
@@ -411,5 +466,5 @@
     });
   }
 
-  return Object.freeze({ SITUATIONS, LABELS, ATTENTION, text, norm, revisionValue, rank, buildRevisionIndex, bestRecord, history, historyForRows, documentStructure, comparableDocument, scanDocument, analyze, analyzeAsync, filterRows });
+  return Object.freeze({ SITUATIONS, LABELS, ATTENTION, text, norm, revisionValue, rank, buildRevisionIndex, bestRecord, history, historyForRows, statusTone, revisionMatrix, documentStructure, comparableDocument, scanDocument, analyze, analyzeAsync, filterRows });
 });

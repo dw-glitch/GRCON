@@ -1580,3 +1580,8 @@
 #sigem-pw-dashboard-module .spw-sigem-stat strong{font-size:2.2rem;line-height:1.1;font-weight:700;color:var(--viz-ink)}
 #sigem-pw-dashboard-module .spw-sigem-stat small{font-size:.74rem;color:var(--viz-ink-2)}
 #sigem-pw-dashboard-module .spw-chart-empty{margin:0;font-size:.8rem;color:var(--viz-ink-2)}
+/* Itens de grid sem min-width:0 cresciam até a largura da tabela mais larga e empurravam
+   botões (Exportar, alternância Lista/Matriz) para fora da tela. As tabelas têm rolagem própria. */
+#sigem-pw-dashboard-module .spw-advanced-area,
+#sigem-pw-dashboard-module .spw-sources-disclosure,
+#sigem-pw-dashboard-module .spw-legacy-disclosure{min-width:0;max-width:100%}

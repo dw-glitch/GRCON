@@ -6,6 +6,7 @@ import {
   type RevisionDocumentClass,
   type RevisionFilters,
   type RevisionHistoryItem,
+  type RevisionMatrix,
   type RevisionOptionSets,
   type RevisionPageData,
   type RevisionRow,
@@ -180,6 +181,11 @@ function histories(row: RevisionRow): { sigem: RevisionHistoryItem[]; pw: Revisi
     sigem: Core().historyForRows(row.sigemRows, "sigem"),
     pw: Core().historyForRows(row.pwRows, "pw"),
   };
+}
+
+function matrix(row: RevisionRow): RevisionMatrix {
+  const history = histories(row);
+  return Core().revisionMatrix(history.sigem, history.pw);
 }
 
 function situationLabel(value: string): string {
@@ -391,6 +397,7 @@ export const sigemPwRevisionAdapter = {
   pageData,
   optionSets,
   histories,
+  matrix,
   situationLabel,
   situationClass,
   setPage,

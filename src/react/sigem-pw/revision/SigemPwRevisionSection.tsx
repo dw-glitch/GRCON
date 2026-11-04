@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { UiMetaPill } from "../../core/ui/UiPrimitives";
 import { SigemPwRevisionCards } from "./components/SigemPwRevisionCards";
 import { SigemPwRevisionFilters } from "./components/SigemPwRevisionFilters";
 import { SigemPwRevisionPager } from "./components/SigemPwRevisionPager";
 import { SigemPwRevisionTable } from "./components/SigemPwRevisionTable";
+import { SigemPwRevisionMatrixView } from "./components/SigemPwRevisionMatrix";
 import { useSigemPwRevision } from "./hooks/useSigemPwRevision";
 
 function fmt(value: number): string {
@@ -20,6 +22,7 @@ function ExportIcon() {
 export function SigemPwRevisionSection() {
   const { state, rows, pageData, options, adapter } = useSigemPwRevision();
   const analysis = state.analysis;
+  const [view, setView] = useState<"list" | "matrix">("list");
   const progressPercent = state.progress.total > 0
     ? Math.min(100, Math.max(0, (state.progress.done / state.progress.total) * 100))
     : null;
@@ -86,6 +89,10 @@ export function SigemPwRevisionSection() {
               </span>
             </div>
             <div className="spw-rev-summary-actions">
+              <div className="spw-rev-view-toggle" role="group" aria-label="Modo de exibição">
+                <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}>Lista</button>
+                <button type="button" aria-pressed={view === "matrix"} onClick={() => setView("matrix")} title="Mostra todas as revisões de cada documento nos dois sistemas">Matriz de revisões</button>
+              </div>
               <span
                 className={"spw-rev-export-feedback " + state.exportMessageKind}
                 role="status"
@@ -151,14 +158,23 @@ export function SigemPwRevisionSection() {
               </div>
             </div>
           ) : (
+            view === "matrix" ? (
+              <SigemPwRevisionMatrixView
+                rows={pageData.visible}
+                matrix={(row) => adapter.matrix(row)}
+                situationLabel={(value) => adapter.situationLabel(value)}
+                situationClass={(value) => adapter.situationClass(value)}
+              />
+            ) : (
             <SigemPwRevisionTable
-              rows={pageData.visible}
-              expandedKey={state.expandedKey}
-              onToggle={(key) => adapter.toggleExpanded(key)}
-              histories={(row) => adapter.histories(row)}
-              situationLabel={(value) => adapter.situationLabel(value)}
-              situationClass={(value) => adapter.situationClass(value)}
-            />
+                rows={pageData.visible}
+                expandedKey={state.expandedKey}
+                onToggle={(key) => adapter.toggleExpanded(key)}
+                histories={(row) => adapter.histories(row)}
+                situationLabel={(value) => adapter.situationLabel(value)}
+                situationClass={(value) => adapter.situationClass(value)}
+              />
+            )
           )}
         </div>
 

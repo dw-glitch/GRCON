@@ -17,6 +17,29 @@ export type RevisionSituationFilter =
 export type RevisionDocumentClass = "" | "ET" | "N-1710";
 export type RevisionExportMessageKind = "info" | "success" | "error";
 
+export type RevisionTone = "done" | "progress" | "bad" | "planned" | "registered" | "other" | "none";
+
+export interface RevisionMatrixCell {
+  status: string;
+  emitted: boolean | null;
+  tone: RevisionTone;
+}
+
+export interface RevisionMatrixColumn {
+  revision: string;
+  rank: number;
+  sigem: RevisionMatrixCell | null;
+  pw: RevisionMatrixCell | null;
+  sigemSkipped: boolean;
+  pwSkipped: boolean;
+}
+
+export interface RevisionMatrix {
+  columns: RevisionMatrixColumn[];
+  skipped: { sigem: string[]; pw: string[] };
+  hasSkipped: boolean;
+}
+
 export interface RevisionHistoryItem {
   revision: string;
   status: string;
