@@ -27,6 +27,8 @@ A unidade dos cinco indicadores é **par documento + revisão único**. O univer
 
 Ausência na consulta não comprova ausência de postagem. Por isso a linha usa **Não consta na Consulta Geral**. Quando existe presença com revisão desconhecida, a ausência de outra revisão fica inconclusiva e não cria pendência presumida.
 
+A coluna `Última emissão` usa as regras existentes do core: `Sim` comprova emissão atual, `Não` comprova emissão histórica e `Previsto` representa cadastro sem emissão. Emissões históricas da própria revisão também ficam como `Concluído`, sem X ou tarefa de emissão. Havendo duplicados, a evidência atual tem prioridade, seguida da histórica e do cadastro previsto.
+
 `Previsto` é cadastro. Uma linha PW sem revisão comprova cadastro do código e permite a ação imediata de emissão da revisão requerida; ela não comprova emissão de uma revisão presumida. Cadastro de outra revisão explícita não resolve o cadastro da revisão requerida.
 
 CV, cancelados e referências inconsistentes ficam separados das pendências. A conformidade fiscal continua sendo apurada pelo código existente; `Concluído` significa somente emissão no PW.
@@ -46,7 +48,7 @@ O Excel contém Resumo com três blocos, relação consolidada, abas por classe 
 ## Validação executada
 
 - `npm test`: suíte geral aprovada, incluindo o novo teste operacional.
-- `node tests/sigem_pw_operations.cjs`: 14 cenários solicitados, pares independentes 0/A/B, Previsto sem revisão, revisão desconhecida, empresas, duplicados, fontes múltiplas, reimportação, fontes ausentes e falha de análise.
+- `node tests/sigem_pw_operations.cjs`: 14 cenários solicitados e regressão da revisão PR #403 (revisões 0/A com Não/Sim concluídas, sem X), pares independentes 0/A/B, Previsto sem revisão, revisão desconhecida, empresas, duplicados, fontes múltiplas, reimportação, fontes ausentes e falha de análise.
 - Arquivos XLSX gerados e reabertos com a biblioteca usada pelo GRCON: totais dos cinco indicadores, soma das classes, filtros, fórmulas, valores, texto literal e posição dos X verificados.
 - Interação do componente React em jsdom: seleção de indicador, filtros enviados à exportação e valores indisponíveis durante conciliação incompleta.
 - Homologação sintética: 6.041 documentos de referência e 29.421 linhas PW, com fórmulas ligadas à ocorrência correta de código, revisão e empresa; cancelados excluídos.

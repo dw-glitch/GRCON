@@ -20,7 +20,7 @@ const { coordinatorPlan, buildCoordinatorWorkbook, MAIN_SHEET } = importTs("src/
 const doc = n => `CR-5290.00-22313-911-C1O-${String(n).padStart(3, "0")}`;
 const ref = (n, rev = "0", extra = {}) => ({ document: doc(n), revision: rev, status: "EMITIDO", documentClass: "N-1710", title: `Documento ${n}`, referenceSources: ["LD1.xlsx"], ...extra });
 const sig = (n, rev = "0", extra = {}) => ({ document: doc(n), revision: rev, status: "Em análise", ...extra });
-const pw = (n, rev = "0", emitted = "Não", company = "CSG") => ({ document: doc(n), revision: rev, lastEmission: emitted, state: emitted === "Sim" ? "Liberado" : "Previsto", company });
+const pw = (n, rev = "0", emitted = "Previsto", company = "CSG") => ({ document: doc(n), revision: rev, lastEmission: emitted, state: emitted === "Previsto" ? "Previsto" : "Liberado", company });
 function state(refs, sigem, pwRows) {
   const headers = Array.from({ length: 70 }, (_, i) => `Coluna ${i + 1}`);
   [headers[0], headers[1], headers[2], headers[3], headers[4]] = ["NumeroDocumentoCliente", "o_statename", "SiglaEmpresa", "RevisaoCompleta", "Última emissão"];
@@ -50,6 +50,17 @@ assert.equal(outside.outside.length,1);
 const revisions = state([ref(1,"B")], [sig(1,"0"),sig(1,"A"),sig(1,"B")], [pw(1,"0","Sim"),pw(1,"A")]);
 count(revisions,t(3,1,0,1,1));
 assert.deepEqual(run(revisions).rows.map(row => [row.revision,row.action]), [["0","Concluído"],["A","Emitir no PW"],["B","Cadastrar no PW"]]);
+// PR #403: Não = historical emission. Both 0/A are issued; neither needs an X.
+const historical = state([ref(1,"A")], [sig(1,"0"),sig(1,"A")], [pw(1,"0","Não"),pw(1,"A","Sim")]);
+count(historical,t(2,0,0,0,2));
+assert.ok(run(historical).rows.every(row=>row.action==="Concluído"));
+for (const flag of ["Não","Nao","NAO"," não "]) count(state([ref(1)],[sig(1)],[pw(1,"0",flag)]),t(1,0,0,0,1));
+const historicalChoice=state([ref(1)],[sig(1)],[pw(1),pw(1,"0","Não")]);
+assert.equal(run(historicalChoice).rows[0].pwEvidence.lastEmission,"Não","historical evidence must be selected over a planned duplicate");
+const currentChoice=state([ref(1)],[sig(1)],[pw(1,"0","Não"),pw(1,"0","Sim")]);
+assert.equal(run(currentChoice).rows[0].pwEvidence.lastEmission,"Sim","current evidence wins when both issued flags exist");
+for (const flag of ["","Desconhecido"]) count(state([ref(1)],[sig(1)],[pw(1,"0",flag)]),t(1,0,0,1));
+count(state([ref(1)],[sig(1)],[pw(1,"","Não")]),t(1,0,0,1));
 // 8/9: duplicate LD and query entries never duplicate a pending pair.
 const duplicates = state([ref(1),ref(1,"0",{referenceSources:["LD2.xlsx"]})], [sig(1),sig(1)], [pw(1),pw(1)]);
 count(duplicates,t(1,0,0,1));
@@ -57,7 +68,7 @@ assert.deepEqual(run(duplicates).rows[0].sources,["LD1.xlsx","LD2.xlsx"]);
 assert.equal(run(duplicates).reconciliation.duplicates,1);
 assert.ok(run(duplicates).diagnostics.some(row=>row.source==="PW"));
 // 11: only column C companies CSG/QTM prove registration.
-count(state([ref(1),ref(2),ref(3),ref(4)],[],[pw(1,"0","Não","QTM"),pw(2,"0","Sim","CSG"),pw(3,"0","Sim","ABC"),pw(4,"0","Sim","")]),t(0,0,2,1,1));
+count(state([ref(1),ref(2),ref(3),ref(4)],[],[pw(1,"0","Previsto","QTM"),pw(2,"0","Sim","CSG"),pw(3,"0","Sim","ABC"),pw(4,"0","Sim","")]),t(0,0,2,1,1));
 // Typographic variants use the existing central identity function.
 const variants=state([ref(1)], [sig(1,"REV. 0",{document:doc(1).replaceAll("-","‑")})], [pw(1)]);
 count(variants,t(1,0,0,1));
@@ -86,6 +97,17 @@ const after={...before,pw:state([ref(1)],[sig(1)],[pw(1,"0","Sim")]).pw,model:{.
 count(after,t(1,0,0,0,1)); assert.equal(prior.rows[0].action,"Cadastrar no PW");
 // 10: indicators, class totals, XLSX and filtered exports must agree exactly.
 (async()=>{
+  const historicalBook=buildCoordinatorWorkbook(historical,ExcelJS);
+  const reopenedHistorical=new ExcelJS.Workbook(); await reopenedHistorical.xlsx.load(await historicalBook.workbook.xlsx.writeBuffer());
+  const historicalMain=reopenedHistorical.getWorksheet(MAIN_SHEET);
+  for (const number of [4,5]) {
+    assert.equal(historicalMain.getCell(`I${number}`).value,"Concluído");
+    assert.ok(!historicalMain.getRow(number).values.includes("X"),"issued historical revisions must not create X markers");
+  }
+  assert.equal(historicalMain.getCell("H4").result,"Não");
+  const historicalSummary=new Map(historicalBook.plan.sheets.Resumo.map(row=>[row[0],row[1]]));
+  assert.equal(historicalSummary.get("Emitir no PW"),0);
+  assert.equal(historicalSummary.get("Emitidos no PW"),2);
   const mixed=state([ref(1,"B"),ref(2),ref(3,"I",{documentClass:"ET",sheetName:"ET"}),ref(4,"AA")],[sig(1,"0"),sig(1,"A"),sig(1,"B"),sig(3,"I"),sig(99)],[pw(1,"0","Sim"),pw(1,"A"),pw(3,"I")]);
   const original=run(mixed);
   for(const filters of [{},{revisionScope:"revision0"},{documentClass:"ET"},{indicator:"registerAbsent"},{action:"Emitir no PW"},{query:"001"},{sigem:"No SIGEM"}]) {

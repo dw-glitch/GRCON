@@ -43,6 +43,11 @@ export function operationRevision(value: unknown): string {
 }
 const revisionOf = (row: SigemPwRecord) => operationRevision(row.revisionComplete || row.revision);
 const codeOf = (row: SigemPwRecord) => text(row.canonicalDocument || row.document || row.documentKey);
+function emittedEvidence(row: SigemPwRecord): boolean {
+  // Última emissão describes current versus historical issuance, not a yes/no issued flag.
+  const flags = core()?.EMISSION_FLAGS || { CURRENT: "SIM", HISTORICAL: "NAO" };
+  return [flags.CURRENT, flags.HISTORICAL].includes(norm(row.lastEmission));
+}
 const pair = (key: string, rev: string) => JSON.stringify([key, rev]);
 const totals = (): PwTotals => ({ sigem: 0, registerSigem: 0, registerAbsent: 0, issue: 0, issued: 0 });
 export const PW_INDICATORS: Array<{ key: Exclude<PwIndicator, "all">; label: string }> = [
@@ -178,9 +183,10 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
       const same = (pw.get(key) || []).filter(row => revisionOf(row) === rev);
       const unspecified = (pw.get(key) || []).filter(row => !revisionOf(row));
       // Previsto sem revisão comprova cadastro do código, nunca emissão de uma revisão presumida.
-      const evidence = same.find(row => norm(row.lastEmission) === "SIM") || same[0] || unspecified[0];
+      const evidence = same.find(row => norm(row.lastEmission) === (core()?.EMISSION_FLAGS.CURRENT || "SIM"))
+        || same.find(emittedEvidence) || same[0] || unspecified[0];
       const registered = Boolean(evidence);
-      const emitted = same.some(row => norm(row.lastEmission) === "SIM");
+      const emitted = same.some(emittedEvidence);
       const inSigem = entries.length > 0;
       report.rows.push({ key: pair(key, rev), documentKey: key, code: codeOf(reference), title: text(reference.title), revision: rev,
         documentClass, referenceStatus: text(reference.status), sources, action: !registered ? "Cadastrar no PW" : emitted ? "Concluído" : "Emitir no PW",
