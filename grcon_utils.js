@@ -564,21 +564,30 @@
    * Cria uma visão do índice restrita ao EAP pesquisado para funções internas
    * do core que ainda executam o fallback por tipo+TAG dentro de triageOne.
    */
+  // A visão depende apenas do EAP pesquisado. Antes ela era reconstruída a cada
+  // documento (O(N) por item, O(N²) na triagem); agora é memorizada por EAP e
+  // reaproveita as identidades já calculadas por augmentDocumentIndex.
+  const identityViewCache = new WeakMap();
+
   function indexForIdentity(index, inputValue) {
     const input = parseDocumentIdentity(inputValue);
     if (!index || !input.eapApplicable || !input.eapValid) return index;
 
-    const view = { ...index };
-    const compatibleDocuments = (index.documents || []).filter((entry) => {
-      const identity = candidateIdentity(entry);
-      return !identity.eapApplicable || (identity.eapValid && identity.eap === input.eap);
-    });
-    view.documents = compatibleDocuments;
+    let views = identityViewCache.get(index);
+    if (!views) { views = new Map(); identityViewCache.set(index, views); }
+    const cached = views.get(input.eap);
+    if (cached) return cached;
 
+    const known = index.identityByDocument;
+    const identityOf = (entry) => (known && known.get(entry.documentKey)) || candidateIdentity(entry);
+    const view = { ...index };
+    const compatibleDocuments = [];
     const exact = new Map();
     const confusable = new Map();
-    compatibleDocuments.forEach((entry) => {
-      const identity = candidateIdentity(entry);
+    (index.documents || []).forEach((entry) => {
+      const identity = identityOf(entry);
+      if (identity.eapApplicable && !(identity.eapValid && identity.eap === input.eap)) return;
+      compatibleDocuments.push(entry);
       if (!identity.eapApplicable || !identity.eapValid || identity.eap !== input.eap) return;
       const exactKey = typeTagKey(identity, false);
       const confusableKey = typeTagKey(identity, true);
@@ -591,8 +600,10 @@
         confusable.get(confusableKey).push(entry);
       }
     });
+    view.documents = compatibleDocuments;
     view.byEtReportTag = exact;
     view.byEtReportTagConfusable = confusable;
+    views.set(input.eap, view);
     return view;
   }
 

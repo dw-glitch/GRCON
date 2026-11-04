@@ -3190,19 +3190,33 @@
     return value === C.READY ? "ready" : value === C.DISCARD ? "discard" : "review";
   }
 
+  // Durante um renderAll o mesmo grupo é pedido várias vezes por linha (totais,
+  // painel de apoio, tabela, filtros). Ele só depende do estado da linha, que
+  // não muda no meio da renderização; por isso é memorizado (decisionGroupKey.memo)
+  // apenas enquanto renderAll executa.
   function decisionGroupKey(row) {
-    // A recusa de alocação tem prioridade sobre ausência de status ou cadastro.
-    // Conflito, por outro lado, não é uma recusa confirmada.
-    if (row && TriageQuery.allocationAlert(row) === "not_allocated") return "bloqueado";
-    if (row && TriageQuery.allocationAlert(row) === "conflict") return "revisar";
-    if (row && TriageQuery.unresolvedStatus(row)) return 'nao_localizado';
-    if (row && row.blockingRevision) return "bloqueado";
-    if (row && rowStatusPolicy(row).kind === "analysis") return "descartar";
-    if (row && row.hardBlock) return "bloqueado";
-    if (row && rowStatusPolicy(row).manualOnly) return "revisar";
-    if (row && row.decision === C.READY) return "pronto";
-    if (row && row.decision === C.DISCARD) return "bloqueado";
-    return "revisar";
+    const memo = decisionGroupKey.memo;
+    if (row && memo) {
+      const cached = memo.get(row);
+      if (cached !== undefined) return cached;
+    }
+    const key = (() => {
+      // A recusa de alocação tem prioridade sobre ausência de status ou cadastro.
+      // Conflito, por outro lado, não é uma recusa confirmada.
+      if (row && TriageQuery.allocationAlert(row) === "not_allocated") return "bloqueado";
+      if (row && TriageQuery.allocationAlert(row) === "conflict") return "revisar";
+      if (row && TriageQuery.unresolvedStatus(row)) return 'nao_localizado';
+      if (row && row.blockingRevision) return "bloqueado";
+      const policy = row ? rowStatusPolicy(row) : null;
+      if (row && policy.kind === "analysis") return "descartar";
+      if (row && row.hardBlock) return "bloqueado";
+      if (row && policy.manualOnly) return "revisar";
+      if (row && row.decision === C.READY) return "pronto";
+      if (row && row.decision === C.DISCARD) return "bloqueado";
+      return "revisar";
+    })();
+    if (row && memo) memo.set(row, key);
+    return key;
   }
 
   function decisionGroupLabel(row) {
@@ -4383,7 +4397,14 @@
     }
   }
 
+  let selectedBatchCountTimer = 0;
   function renderAll() {
+    decisionGroupKey.memo = new WeakMap();
+    try { renderAllNow(); }
+    finally { decisionGroupKey.memo = null; }
+  }
+
+  function renderAllNow() {
     reconcileSelectedRows();
     if (PostingFlow) PostingFlow.render(state.results, state.selected);
     renderSummary();
@@ -4455,12 +4476,24 @@
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
     const selectedItemCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + amount, 0);
-    const selectedBatchCount = PostingFlow ? splitPostingPlan(E.createPlan(state.results, guardedSelectedIndices(), { manualForceIndices: state.manualForceInclude }), currentEgrdtBatchLimit(), currentEgrdtBatchMode()).length : currentEgrdtBatchMode() === "limit-only"
+    const estimatedBatchCount = currentEgrdtBatchMode() === "limit-only"
       ? Math.ceil(selectedItemCount / currentEgrdtBatchLimit())
       : [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
     const selectedDisciplineCount = selectedItemsByDiscipline.size;
     const manualRevisionSelectedCount = manuallyAlteredRevisionCount(state.selected);
-    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}${currentEgrdtBatchMode() === "limit-only" ? " · somente por limite" : " · por disciplina"}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}${manualRevisionSelectedCount ? ` · ${manualRevisionSelectedCount.toLocaleString("pt-BR")} revisão${manualRevisionSelectedCount === 1 ? "" : "ões"} alterada${manualRevisionSelectedCount === 1 ? "" : "s"} manualmente` : ""}`;
+    const paintSelectedCount = (selectedBatchCount) => {
+      els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}${currentEgrdtBatchMode() === "limit-only" ? " · somente por limite" : " · por disciplina"}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}${manualRevisionSelectedCount ? ` · ${manualRevisionSelectedCount.toLocaleString("pt-BR")} revisão${manualRevisionSelectedCount === 1 ? "" : "ões"} alterada${manualRevisionSelectedCount === 1 ? "" : "s"} manualmente` : ""}`;
+    };
+    // A contagem exata de eGRDTs exige montar o plano completo (centenas de ms
+    // com milhares de documentos). Com seleção grande, o rótulo aparece na hora
+    // com a estimativa e é corrigido logo depois, sem travar o clique.
+    if (!PostingFlow) paintSelectedCount(estimatedBatchCount);
+    else if (state.selected.size <= 300) paintSelectedCount(splitPostingPlan(E.createPlan(state.results, guardedSelectedIndices(), { manualForceIndices: state.manualForceInclude }), currentEgrdtBatchLimit(), currentEgrdtBatchMode()).length);
+    else {
+      paintSelectedCount(estimatedBatchCount);
+      clearTimeout(selectedBatchCountTimer);
+      selectedBatchCountTimer = setTimeout(() => { try { paintSelectedCount(splitPostingPlan(E.createPlan(state.results, guardedSelectedIndices(), { manualForceIndices: state.manualForceInclude }), currentEgrdtBatchLimit(), currentEgrdtBatchMode()).length); } catch (error) { console.debug("[App] contagem de lotes:", error); } }, 160);
+    }
     window.dispatchEvent(new CustomEvent("grcon:ui-update"));
   }
 
@@ -5328,7 +5361,7 @@
       handleWorkerTaskError(error, "Não foi possível gerar a GRDT final.");
     } finally {
       if (Workspace) Workspace.finish("grdt-export");
-      els.exportEgrdt.textContent = "Baixar eGRDT final";
+      els.exportEgrdt.textContent = "Baixar somente eGRDT";
       setBusy(false);
       renderAll();
     }

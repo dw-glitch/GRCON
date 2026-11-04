@@ -24,7 +24,7 @@
 }
 #results-section .triage-operational-filter button:focus-visible,
 #results-section .grdt-history-open:focus-visible { outline: 2px solid #1864ad; outline-offset: 2px; }
-#results-section #triage-sort { max-width: 145px; min-height: 32px; }
+#results-section #triage-sort { max-width: 170px; min-width: 150px; height: 34px; min-height: 34px; padding-block: 0; line-height: 1.2; font-size: 12px; }
 #results-section .grdt-history-inline { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 180px; }
 #results-section .grdt-history-open {
   display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 3px;

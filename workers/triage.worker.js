@@ -33,10 +33,11 @@ self.onmessage = async (event) => {
     if (!activeIndex) throw new Error("O Worker de triagem não recebeu o índice da LD.");
     if (action === "triage") {
       const source = payload.inputs || []; let buffer = [];
+      const triageSettings = { ...baseSettings, ...(payload.settings||{}) };
       for (let start=0; start<source.length; start+=CHUNK) {
         ensure(taskId); const end=Math.min(source.length,start+CHUNK);
         for (let i=start;i<end;i++) {
-          const result=self.TriagemCore.triageOne(source[i], activeIndex, { ...baseSettings, ...(payload.settings||{}) });
+          const result=self.TriagemCore.triageOne(source[i], activeIndex, triageSettings);
           if (result.egrdt && !result.egrdt.format) result.egrdt.format="A4";
           buffer.push(result);
           if (buffer.length>=RESULT_CHUNK) { self.postMessage({ taskId, type:"chunk", chunk:buffer }); buffer=[]; }
