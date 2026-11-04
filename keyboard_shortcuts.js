@@ -223,5 +223,5 @@
     showFeedback: showShortcutFeedback,
   });
 
-  console.info("⌨️ Atalhos de teclado habilitados:", getShortcuts().map(s => `${s.formatted} → ${s.description}`).join(", "));
+  console.debug("⌨️ Atalhos de teclado habilitados:", getShortcuts().map(s => `${s.formatted} → ${s.description}`).join(", "));
 })();

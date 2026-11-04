@@ -17,6 +17,8 @@
     syncing: false,
     syncQueued: false,
     syncTimer: 0,
+    syncFailures: 0,
+    syncBlockedUntil: 0,
     realtime: null,
     realtimeTopic: "",
     realtimeFailures: 0,
@@ -1918,8 +1920,20 @@
     }
   }
 
-  async function runSyncCycle() {
+  // Servidor indisponível (500/503/rede): o próximo ciclo espera 5 s, 10 s, 20 s… até 5 min, em vez de
+  // repetir a mesma consulta pesada em sequência. Uma ação do usuário (`pull`) ignora a espera.
+  const SYNC_BACKOFF_BASE_MS = 5_000;
+  const SYNC_BACKOFF_MAX_MS = 300_000;
+
+  async function runSyncCycle(options) {
     if (!state.online || !state.membership?.workspace_id || !History) return;
+    const force = Boolean(options && options.force === true);
+    const waitMs = state.syncBlockedUntil - Date.now();
+    if (!force && waitMs > 0) {
+      window.clearTimeout(state.syncTimer);
+      state.syncTimer = window.setTimeout(runSyncCycle, waitMs + 50);
+      return;
+    }
     if (state.clearingHistory) { state.syncQueued = true; return; }
     if (state.syncing) {
       state.syncQueued = true;
@@ -1934,11 +1948,19 @@
       await pullCloudHistory();
       const pushed = await pushLocalHistory(History.read());
       if (pushed.pushed || pushed.conflicts) await pullCloudHistory();
+      state.syncFailures = 0;
+      state.syncBlockedUntil = 0;
       setSyncLabel("Histórico sincronizado", "success");
       updateAccountMenu();
     } catch (error) {
-      console.warn("GRCON Cloud: ciclo de sincronização pendente", error);
-      setSyncLabel("Sincronização pendente · tente novamente", "warn");
+      state.syncFailures += 1;
+      const delay = Math.min(SYNC_BACKOFF_MAX_MS, SYNC_BACKOFF_BASE_MS * 2 ** (state.syncFailures - 1));
+      state.syncBlockedUntil = Date.now() + delay;
+      // Uma única linha por falha (o detalhe do erro já foi registrado por quem o lançou).
+      console.warn(`GRCON Cloud: sincronização do histórico indisponível (tentativa ${state.syncFailures}); nova tentativa em ${Math.round(delay / 1000)} s.`, error && (error.message || error.code) || error);
+      setSyncLabel("Servidor indisponível · tentando de novo em " + (delay >= 60_000 ? Math.round(delay / 60_000) + " min" : Math.round(delay / 1000) + " s"), "warn");
+      window.clearTimeout(state.syncTimer);
+      state.syncTimer = window.setTimeout(runSyncCycle, delay + 50);
     } finally {
       state.syncing = false;
       updateHistoryClearControl();
@@ -2476,7 +2498,7 @@
     state,
     init,
     getCurrentUserIdentity,
-    pull: runSyncCycle,
+    pull: () => runSyncCycle({ force: true }),
     sync: scheduleSync,
     canWriteHistory,
     canManageHistory,

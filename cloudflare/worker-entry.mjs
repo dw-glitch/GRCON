@@ -874,8 +874,13 @@ async function routeVault(request, env) {
 export default {
   async scheduled(controller, env, ctx) {
     if (controller.cron === '* * * * *') {
-      ctx.waitUntil(rpc(env, 'grcon_document_task_deadlines', {}).catch(error => console.error('GRCON document deadlines', error.code || 'DEADLINE_CHECK_FAILED')));
       ctx.waitUntil(syncSharepoint(env).catch(error => console.error('GRCON SharePoint sync', error.code || 'SYNC_FAILED')));
+      return;
+    }
+    if (controller.cron === '*/15 * * * *') {
+      // Prazos são por dia e a notificação é idempotente (event_key): a cada 15 minutos basta.
+      // A cada minuto, com a base cheia, a verificação ocupava o banco e atrasava o resto.
+      ctx.waitUntil(rpc(env, 'grcon_document_task_deadlines', {}).catch(error => console.error('GRCON document deadlines', error.code || 'DEADLINE_CHECK_FAILED')));
       return;
     }
     // R2 migration journals and background jobs have independent lifecycles.
