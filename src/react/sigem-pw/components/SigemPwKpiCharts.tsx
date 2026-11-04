@@ -1,15 +1,20 @@
 import { useState } from "react";
-import type { ManagerialSummary } from "../services/sigemPwManagerial";
+import type { PwIndicator, PwOperationsReport, PwTotals } from "../services/sigemPwOperations";
 
-export type ChartKey = "active" | "registered" | "emitted" | "awaiting" | "notEmitted" | "posted" | "compliant" | "pending" | "other";
+export type ChartKey = Exclude<PwIndicator, "all"> | "all";
 
 interface Props {
-  summary: ManagerialSummary;
+  /** Totais do escopo atual (os mesmos dos cinco indicadores, da relação e do Excel). */
+  totals: PwTotals;
+  /** Pares documento + revisão no escopo atual. */
+  pairs: number;
+  /** Conciliação da Consulta Geral integral (antes dos filtros). */
+  reconciliation: PwOperationsReport["reconciliation"];
   selection: string;
   onSelect(key: ChartKey): void;
-  /** false = somente revisão 0 (padrão); true = todas as revisões. */
-  allRevisions: boolean;
-  onAllRevisionsChange(value: boolean): void;
+  /** "revision0" = somente revisão 0; "all" = todas as revisões. */
+  revisionScope: "all" | "revision0";
+  onRevisionScopeChange(value: "all" | "revision0"): void;
 }
 
 type Tone = "ok" | "warn" | "bad" | "muted" | "info";
@@ -108,70 +113,67 @@ function Meter({ label, value, total, tone, hint, keyName, selection, onSelect }
 }
 
 /**
- * Painel gráfico da visão gerencial. Responde, em ordem, às perguntas do controle:
- * quantos documentos são controlados, em que ponto do PW cada um está e como estão no SIGEM.
- * Cada trecho/legenda filtra a relação de documentos logo abaixo.
+ * Painel gráfico da demanda da equipe PW. Unidade: par documento + revisão.
+ * Responde, em ordem: quantos pares estão no escopo, em que ponto do PW cada um
+ * está e como a Consulta Geral se relaciona com as referências. Cada trecho filtra
+ * a relação logo abaixo e usa exatamente os mesmos totais dos indicadores e do Excel.
  */
-export function SigemPwKpiCharts({ summary, selection, onSelect, allRevisions, onAllRevisionsChange }: Props) {
+export function SigemPwKpiCharts({ totals, pairs, reconciliation, selection, onSelect, revisionScope, onRevisionScopeChange }: Props) {
   const [tip, setTip] = useState<Tip | null>(null);
-  const universe = summary.active;
-  if (universe === null) return null;
-  const pwBase = summary.pwApplicable;
-  const emitted = pwBase !== null && summary.awaitingRegistration !== null && summary.registeredNotEmitted !== null
-    ? pwBase - summary.awaitingRegistration - summary.registeredNotEmitted : null;
-  const pwSegments: Segment[] | null = pwBase !== null && emitted !== null ? [
-    { key: "emitted", label: "Emitidos", value: emitted, tone: "ok", hint: "Cadastrados no PW e com evidência de emissão." },
-    { key: "notEmitted", label: "Cadastrados, não emitidos", value: summary.registeredNotEmitted || 0, tone: "warn", hint: "Já constam no PW, mas ainda sem emissão." },
-    { key: "awaiting", label: "Aguardando cadastro", value: summary.awaitingRegistration || 0, tone: "bad", hint: "Não constam em nenhuma linha da consulta PW." },
-  ] : null;
-  const issued = summary.sigemIssued ? (allRevisions ? summary.sigemIssued.all : summary.sigemIssued.rev0) : null;
-  const inLd = summary.sigemInLd ? (allRevisions ? summary.sigemInLd.all : summary.sigemInLd.rev0) : null;
-  const cancelledInLd = summary.sigemCancelledInLd ? (allRevisions ? summary.sigemCancelledInLd.all : summary.sigemCancelledInLd.rev0) : 0;
-  const scope = allRevisions ? "todas as revisões" : "somente a revisão 0";
-  const notInLd = issued !== null && inLd !== null ? Math.max(0, issued - inLd) : 0;
-  const outsideLd = Math.max(0, notInLd - cancelledInLd);
-  const notInLdHint = notInLd === 0 ? "Todos os emitidos no SIGEM constam nas LDs ativas."
-    : `${nf(notInLd)} emitido(s) no SIGEM não constam nas LDs ativas: ${nf(outsideLd)} fora das LDs e ${nf(cancelledInLd)} cancelado(s) nas LDs.`;
+  const scope = revisionScope === "revision0" ? "somente a revisão 0" : "todas as revisões";
+  const pwSegments: Segment[] = [
+    { key: "issued", label: "Emitidos no PW", value: totals.issued, tone: "ok", hint: "Emissão comprovada da própria revisão. Ação: Concluído." },
+    { key: "issue", label: "Emitir no PW", value: totals.issue, tone: "warn", hint: "Cadastro comprovado, emissão da revisão ainda pendente." },
+    { key: "registerSigem", label: "Cadastrar no PW — SIGEM", value: totals.registerSigem, tone: "bad", hint: "A revisão já está na Consulta Geral e não tem cadastro PW aplicável." },
+    { key: "registerAbsent", label: "Cadastrar no PW — Não postados", value: totals.registerAbsent, tone: "info", hint: "Revisão requerida pela referência, ausente da Consulta Geral e sem cadastro PW. Ausência na consulta não prova falta de postagem." },
+  ];
+  // A conferência da Consulta Geral acompanha o filtro de revisões: revisão 0 mostra só os pares da revisão 0.
+  const recon = revisionScope === "revision0" ? reconciliation.revision0 : reconciliation;
+  const inLd = recon.inScopePairs;
+  const outside = recon.outsidePairs;
+  const consulted = recon.pairs;
+  const outsideHint = outside === 0
+    ? "Todos os pares da Consulta Geral constam nas referências ativas."
+    : `${nf(outside)} par(es) da Consulta Geral estão fora das referências ativas.`;
 
   return (
     <div className="spw-charts" id="spw-kpi-charts">
-      <button type="button" className="spw-universe" data-kpi="active" aria-pressed={selection === "active"}
-        aria-label={`Documentos controlados: ${nf(universe)} documentos únicos nas LDs ativas, sem os cancelados. Clique para listar todos.`}
-        onClick={() => onSelect("active")}>
-        <span className="spw-universe-label">Documentos controlados</span>
-        <strong>{nf(universe)}</strong>
-        <small>documentos únicos nas LDs ativas · cancelados não entram</small>
+      <button type="button" className="spw-universe" data-kpi="all"
+        aria-label={`Pares documento mais revisão no escopo: ${nf(pairs)}. Clique para listar todos.`}
+        onClick={() => onSelect("all")}>
+        <span className="spw-universe-label">Pares no escopo</span>
+        <strong>{nf(pairs)}</strong>
+        <small>documento + revisão · {scope}</small>
       </button>
 
       <section className="spw-chart-card" aria-labelledby="spw-chart-pw-title">
         <header>
-          <h4 id="spw-chart-pw-title">1 · Andamento no ProjectWise</h4>
-          <p>{pwBase !== null ? <><b>{nf(pwBase)}</b> documentos precisam estar no PW (CV não precisa). Já cadastrados: <b>{nf(summary.registered || 0)}</b>.</> : "Importe a base PW para ver o andamento."}</p>
+          <h4 id="spw-chart-pw-title">1 · Trabalho da equipe PW</h4>
+          <p>De <b>{nf(pairs)}</b> pares, <b>{nf(totals.issued)}</b> já têm emissão comprovada. O restante é demanda do PW: cadastrar ou emitir.</p>
         </header>
-        {pwSegments && pwBase ? <SegmentedBar title="Andamento no ProjectWise" segments={pwSegments} total={pwBase} selection={selection} onSelect={onSelect} unit="documentos" onTip={setTip} /> : null}
+        <fieldset className="spw-chart-scope">
+          <legend className="spw-sr-only">Revisões consideradas</legend>
+          <label><input type="radio" name="spw-chart-scope" checked={revisionScope === "all"} onChange={() => onRevisionScopeChange("all")} /><span>Todas as revisões</span></label>
+          <label><input type="radio" name="spw-chart-scope" checked={revisionScope === "revision0"} onChange={() => onRevisionScopeChange("revision0")} /><span>Somente revisão 0</span></label>
+        </fieldset>
+        {pairs > 0
+          ? <SegmentedBar title="Trabalho da equipe PW" segments={pwSegments} total={pairs} selection={selection} onSelect={onSelect} unit="pares" onTip={setTip} />
+          : <p className="spw-chart-empty">Nenhum par documento + revisão neste escopo.</p>}
+        <Meter label="Cadastrados no PW" value={totals.registered} total={pairs} tone="info" keyName="registered" selection={selection} onSelect={onSelect}
+          hint="Pares com cadastro comprovado no PW (CSG/QTM): os que aguardam emissão mais os já emitidos." />
       </section>
 
       <section className="spw-chart-card" aria-labelledby="spw-chart-sigem-title">
         <header>
-          <h4 id="spw-chart-sigem-title">2 · Emissão no SIGEM</h4>
-          <p>Documentos emitidos na Consulta Geral ({scope}) e quantos deles constam nas LDs.</p>
+          <h4 id="spw-chart-sigem-title">2 · Presença na Consulta Geral</h4>
+          <p>Pares documento + revisão da Consulta Geral ({scope}) e quantos deles constam nas referências ativas. A conferência usa a Consulta Geral integral, antes dos demais filtros.</p>
         </header>
-        <fieldset className="spw-chart-scope">
-          <legend className="spw-sr-only">Revisões consideradas</legend>
-          <label><input type="radio" name="spw-sigem-scope" checked={!allRevisions} onChange={() => onAllRevisionsChange(false)} /><span>Somente revisão 0</span></label>
-          <label><input type="radio" name="spw-sigem-scope" checked={allRevisions} onChange={() => onAllRevisionsChange(true)} /><span>Todas as revisões</span></label>
-        </fieldset>
-        {issued !== null && inLd !== null ? (
-          <>
-            <div className="spw-sigem-stat">
-              <span>Emitidos no SIGEM</span>
-              <strong>{nf(issued)}</strong>
-              <small>documentos únicos na Consulta Geral · {scope}</small>
-            </div>
-            <Meter label="Constam nas LDs" value={inLd} total={issued} tone="ok" keyName="posted" selection={selection} onSelect={onSelect}
-              hint={notInLdHint} />
-          </>
-        ) : <p className="spw-chart-empty">Importe a Consulta Geral e as LDs para ver a emissão no SIGEM.</p>}
+        <div className="spw-sigem-stat">
+          <span>No SIGEM (escopo atual)</span>
+          <strong>{nf(totals.sigem)}</strong>
+          <small>pares na Consulta Geral e no escopo operacional · {scope}</small>
+        </div>
+        <Meter label="Constam nas referências" value={inLd} total={consulted} tone="ok" keyName="sigem" selection={selection} onSelect={onSelect} hint={outsideHint} />
       </section>
       <Tooltip tip={tip} />
     </div>
