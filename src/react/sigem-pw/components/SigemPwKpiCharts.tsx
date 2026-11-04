@@ -126,7 +126,12 @@ export function SigemPwKpiCharts({ summary, selection, onSelect, allRevisions, o
   ] : null;
   const issued = summary.sigemIssued ? (allRevisions ? summary.sigemIssued.all : summary.sigemIssued.rev0) : null;
   const inLd = summary.sigemInLd ? (allRevisions ? summary.sigemInLd.all : summary.sigemInLd.rev0) : null;
+  const cancelledInLd = summary.sigemCancelledInLd ? (allRevisions ? summary.sigemCancelledInLd.all : summary.sigemCancelledInLd.rev0) : 0;
   const scope = allRevisions ? "todas as revisões" : "somente a revisão 0";
+  const notInLd = issued !== null && inLd !== null ? Math.max(0, issued - inLd) : 0;
+  const outsideLd = Math.max(0, notInLd - cancelledInLd);
+  const notInLdHint = notInLd === 0 ? "Todos os emitidos no SIGEM constam nas LDs ativas."
+    : `${nf(notInLd)} emitido(s) no SIGEM não constam nas LDs ativas: ${nf(outsideLd)} fora das LDs e ${nf(cancelledInLd)} cancelado(s) nas LDs.`;
 
   return (
     <div className="spw-charts" id="spw-kpi-charts">
@@ -164,7 +169,7 @@ export function SigemPwKpiCharts({ summary, selection, onSelect, allRevisions, o
               <small>documentos únicos na Consulta Geral · {scope}</small>
             </div>
             <Meter label="Constam nas LDs" value={inLd} total={issued} tone="ok" keyName="posted" selection={selection} onSelect={onSelect}
-              hint={`${nf(Math.max(0, issued - inLd))} emitido(s) no SIGEM não constam nas LDs ativas.`} />
+              hint={notInLdHint} />
           </>
         ) : <p className="spw-chart-empty">Importe a Consulta Geral e as LDs para ver a emissão no SIGEM.</p>}
       </section>

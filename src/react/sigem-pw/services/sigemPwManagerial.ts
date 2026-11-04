@@ -66,6 +66,8 @@ export interface ManagerialSummary {
   sigemIssued: SigemCounts | null;
   /** Desses, quantos constam nas LDs ativas (cancelados não entram). */
   sigemInLd: SigemCounts | null;
+  /** Emitidos no SIGEM cujo documento está nas LDs, mas cancelado (não entra em "constam nas LDs"). */
+  sigemCancelledInLd: SigemCounts | null;
   /** Documentos vigentes que dependem do PW (exclui CV e cancelados). */
   pwApplicable: number | null;
   /** Dependem do PW e não constam em nenhuma linha da consulta PW (qualquer empresa). */
@@ -204,16 +206,21 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     compliant: ready ? 0 : null,
     pending: ready ? 0 : null,
     sigemIssued: null,
-    sigemInLd: referenceAvailable && sigemAvailable && state.model ? { rev0: 0, all: 0 } : null,
+    sigemInLd: referenceAvailable && sigemAvailable ? { rev0: 0, all: 0 } : null,
+    sigemCancelledInLd: referenceAvailable && sigemAvailable ? { rev0: 0, all: 0 } : null,
     pwApplicable: referenceAvailable && pwAvailable && state.model ? 0 : null,
     awaitingRegistration: referenceAvailable && pwAvailable && state.model ? 0 : null,
     registeredNotEmitted: referenceAvailable && pwAvailable && state.model ? 0 : null,
     cancelled: 0, conflicts: 0,
   };
   const hasRev0 = (records: SigemPwRecord[]) => records.some(record => revisionKey(revision(record)) === "0");
-  if (referenceAvailable && sigemAvailable && state.model) {
-    summary.sigemIssued = { rev0: 0, all: sigemIndex.size };
-    for (const records of sigemIndex.values()) if (hasRev0(records)) summary.sigemIssued.rev0++;
+  // "Emitidos no SIGEM" vem da Consulta Geral INTEIRA (a mesma base da tela Consulta Geral),
+  // não do modelo de conciliação: ele já descarta o que não consta nas LDs e esconderia
+  // justamente os documentos emitidos fora delas.
+  const sigemRawIndex = fromIndex(Array.isArray(state.sigem.records) ? state.sigem.records : []);
+  if (referenceAvailable && sigemAvailable) {
+    summary.sigemIssued = { rev0: 0, all: sigemRawIndex.size };
+    for (const records of sigemRawIndex.values()) if (hasRev0(records)) summary.sigemIssued.rev0++;
   }
   const processed = new Set<string>();
 
@@ -268,14 +275,19 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     else if (sigemReviewOutcome !== "favorable") { situation = "Com pendência"; actionCode = "CONFIRM_SIGEM_STATUS"; }
     else { situation = "Em conformidade"; actionCode = "NONE"; }
 
+    const sigemRaw = sigemRawIndex.get(key) || [];
+    if (cancelled && summary.sigemCancelledInLd && sigemRaw.length) {
+      summary.sigemCancelledInLd.all++;
+      if (hasRev0(sigemRaw)) summary.sigemCancelledInLd.rev0++;
+    }
     if (!cancelled) {
       if (summary.active !== null) summary.active++;
       if (summary.registered !== null && registered) summary.registered++;
       if (summary.emitted !== null && emitted) summary.emitted++;
       if (summary.posted !== null && posted) summary.posted++;
-      if (summary.sigemInLd && posted) {
+      if (summary.sigemInLd && sigemRaw.length) {
         summary.sigemInLd.all++;
-        if (hasRev0(sigem)) summary.sigemInLd.rev0++;
+        if (hasRev0(sigemRaw)) summary.sigemInLd.rev0++;
       }
       if (summary.pwApplicable !== null && !pwNotApplicable) {
         summary.pwApplicable++;
