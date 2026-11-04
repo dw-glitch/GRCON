@@ -1624,3 +1624,27 @@
 @media(max-width:1020px){#sigem-pw-dashboard-module .spw-breakdown-grid{grid-template-columns:1fr}}
 @media (forced-colors:active){#sigem-pw-dashboard-module .spw-breakdown-stack i,#sigem-pw-dashboard-module .spw-breakdown-track i{border:1px solid CanvasText}}
 #sigem-pw-dashboard-module .spw-managerial-code button{white-space:normal;overflow-wrap:anywhere;max-width:100%;display:inline-block}
+
+/* Demanda PW: cinco indicadores e três ações, com a mesma projeção do Excel. */
+.spw-operation-unit { color: #536a7e; font-size: .86rem; margin: 0 0 16px; line-height: 1.5; }
+.spw-operation-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+.spw-operation-kpi { display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: #fff; border: 1px solid #dce5ed; border-top: 3px solid #617c91; border-radius: 10px; padding: 17px 15px; min-height: 145px; cursor: pointer; color: #153a5c; }
+.spw-operation-kpi span { font-size: .84rem; font-weight: 650; min-height: 2.5em; }
+.spw-operation-kpi strong { font-size: 2rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.spw-operation-kpi small { font-size: .73rem; color: #657c90; }
+.spw-operation-kpi[data-indicator^="register"] { border-top-color: #c68a25; }
+.spw-operation-kpi[data-indicator="issue"] { border-top-color: #3676b7; }
+.spw-operation-kpi[data-indicator="issued"] { border-top-color: #248460; }
+.spw-operation-kpi[aria-pressed="true"] { background: #eef5fb; outline: 2px solid #3275ad; outline-offset: 1px; }
+.spw-operation-kpi:disabled { opacity: .65; cursor: default; }
+.spw-operation-kpi:focus-visible { outline: 3px solid #3275ad; outline-offset: 3px; }
+.spw-operation-action { display: inline-block; border-radius: 5px; padding: 5px 8px; white-space: nowrap; font-size: .8rem; background: #fff4df; color: #77531a; }
+.spw-operation-action[data-action="Emitir no PW"] { background: #e8f2ff; color: #255e95; }
+.spw-operation-action[data-action="Concluído"] { background: #e6f6ee; color: #246346; }
+.spw-operation-reconciliation { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.spw-operation-reconciliation div { padding: 10px; background: #f2f6f9; border-radius: 6px; }
+.spw-operation-reconciliation dt { font-size: .8rem; color: #536a7e; }
+.spw-operation-reconciliation dd { margin: 4px 0 0; font-size: 1.2rem; font-weight: 650; }
+.spw-pw-operations .spw-managerial-list-heading { margin-top: 20px; }
+@media (max-width: 1000px) { .spw-operation-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .spw-operation-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .spw-operation-kpi { padding: 12px; } }

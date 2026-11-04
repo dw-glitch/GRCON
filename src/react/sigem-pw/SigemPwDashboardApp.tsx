@@ -98,11 +98,11 @@ export function SigemPwDashboardApp() {
         <div className="spw-section-heading">
           <div>
             <span className="spw-kicker">VISÃO GERENCIAL</span>
-            <h3 id="spw-overview-title">Visão consolidada da conciliação</h3>
+            <h3 id="spw-overview-title">Cadastro e emissão no PW</h3>
             <p>Somente registros PW com sigla CSG ou QTM na coluna C são considerados. Demais empresas ficam separadas para auditoria.</p>
           </div>
         </div>
-        <SigemPwManagerialOverview state={state} />
+        <SigemPwManagerialOverview state={state} onExport={(filters) => { void adapter.exportCoordinatorWorkbook(filters); }} />
         <details className="spw-advanced-area">
           <summary>Conferências técnicas por revisão e indicadores operacionais</summary>
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> ocorrências classificadas por revisão</UiMetaPill> : null}

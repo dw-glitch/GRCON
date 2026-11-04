@@ -46,6 +46,7 @@ interface PostingConferenceApi {
 }
 interface SigemPwDashboardCoreApi {
   EMISSION_RULE: string;
+  EMISSION_FLAGS: { CURRENT: string; HISTORICAL: string; PLANNED: string };
   SIGEM_BASE_KEY: string; PW_BASE_KEY: string; LD_BASE_KEY: string; HISTORY_KEY: string; LEGACY_SIGEM_BASE_KEY: string; LEGACY_PW_BASE_KEY: string; HISTORY_VERSION: number; PW_SCOPE_VERSION: number;
   normalizeHeader(value: unknown): string; norm(value: unknown): string; parseDateMs(value: unknown): number;
   isC1OCode(value: unknown): boolean;

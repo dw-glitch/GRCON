@@ -1,3 +1,4 @@
+import type { PwFilters } from "./sigemPwOperations";
 import type {
   SigemPwBase,
   SigemPwBaseMeta,
@@ -1198,7 +1199,7 @@ function installExternalListeners(): () => void {
   };
 }
 
-async function exportCoordinatorWorkbook(): Promise<void> {
+async function exportCoordinatorWorkbook(filters: PwFilters = {}): Promise<void> {
   if (state.busy) return;
   setBusy(true, "Gerando relatório gerencial do GRCON…");
   try {
@@ -1207,8 +1208,8 @@ async function exportCoordinatorWorkbook(): Promise<void> {
     const runtime = window as unknown as Record<string, import("./sigemPwCoordinatorWorkbook").CoordinatorExcelApi>;
     const excel = runtime[["Excel", "JS"].join("")];
     if (!excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
-    await downloadCoordinatorWorkbook(state, excel);
-    notify("Relatório GRCON exportado: Resumo, Conferência Documental e relação PW completa.", "success");
+    await downloadCoordinatorWorkbook(state, excel, filters);
+    notify("Relatório PW exportado com os mesmos indicadores do escopo selecionado, abas por classe e conciliação.", "success");
   } catch (error) {
     console.error("[SIGEM×PW] Exportação do coordenador:", error);
     notify(messageOf(error, "Não foi possível exportar o relatório gerencial."), "error");

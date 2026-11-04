@@ -26,8 +26,8 @@ const code = "CR-5290.00-22313-911-C1O-001";
 const planned = "PR-5290.00-22313-955-C1O-002";
 const outside = "PR-5290.00-22313-955-C1O-099";
 const refs = [
-  { document: code, documentKey: code, canonicalDocument: code, revision: "A", title: "Cronograma", status: "EMITIDO" },
-  { document: planned, documentKey: planned, canonicalDocument: planned, revision: "0", title: "Plano", status: "EM EMISSÃO" },
+  { document: code, documentKey: code, canonicalDocument: code, revision: "A", title: "Cronograma", documentClass: "N-1710", status: "EMITIDO" },
+  { document: planned, documentKey: planned, canonicalDocument: planned, revision: "0", title: "Plano", documentClass: "N-1710", status: "EM EMISSÃO" },
 ];
 const headers = Array.from({length:70},(_,i) => "Atributo " + i);
 headers[0] = "NumeroDocumentoCliente";
@@ -67,7 +67,7 @@ const state = {
   model,result:{lists:{sigemN1710OutsideLd:[],pwN1710OutsideLd:[]}},
 };
 const plan = coordinatorPlan(state);
-assert.deepEqual(Object.keys(coordinatorSheets(state)),["Resumo","Conferência Documental","REL. PW"]);
+assert.deepEqual(Object.keys(coordinatorSheets(state)),["Resumo","Conferência Documental","N-1710","REL. PW","Conciliação"]);
 assert.equal(plan.sheets["Conferência Documental"].length,5);
 assert.equal(plan.sheets["Conferência Documental"][2].length,32);
 assert.equal(plan.sheets["Conferência Documental"][3].length,32);
@@ -75,7 +75,7 @@ assert.equal(plan.sheets["REL. PW"][0].length,70);
 assert.equal(plan.sheets["REL. PW"].length,6,"linha inválida também deve estar na aba fonte");
 assert.deepEqual(plan.sheets["REL. PW"][2],rawRows[1]);
 assert.ok(plan.sheets.Resumo.length >= 16, "resumo gerencial deve explicar indicadores e fontes");
-assert.equal(plan.sheets["Conferência Documental"][3][8],"Sem ação necessária");
+assert.equal(plan.sheets["Conferência Documental"][3][8],"Concluído");
 assert.equal(plan.sheets["Conferência Documental"][4][9],"Cadastrado");
 assert.equal(plan.sheets["Conferência Documental"][0][2],plan.summary.active);
 assert.equal(plan.sheets["Conferência Documental"][0][4],plan.summary.registered);
@@ -86,7 +86,7 @@ assert.equal(plan.summary.active,2);
 assert.equal(plan.summary.registered,2);
 assert.equal(plan.summary.emitted,1);
 assert.equal(plan.summary.posted,2);
-assert.equal(plan.summary.compliant,1);
+assert.equal(plan.report.totals.issued,1);
 assert.equal(plan.summary.pending,1);
 assert.ok(plan.formulas[0].f.includes("'REL. PW'!$D$3"),"matching revision should reference A's original row");
 assert.ok(plan.formulas[0].g.includes("'REL. PW'!$B$3"), "STATE vem da linha PW de origem");
@@ -104,7 +104,7 @@ const { workbook } = buildCoordinatorWorkbook(state, ExcelJS);
   const bytes = await workbook.xlsx.writeBuffer();
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
-  assert.deepEqual(reopened.worksheets.map(s=>s.name), ["Resumo","Conferência Documental","REL. PW"]);
+  assert.deepEqual(reopened.worksheets.map(s=>s.name), ["Resumo","Conferência Documental","N-1710","REL. PW","Conciliação"]);
   const control = reopened.getWorksheet("Conferência Documental");
   assert.equal(control.getCell("A3").value,"DOCUMENTO");
   assert.equal(control.getCell("AF3").value,"Rev. U");
@@ -112,9 +112,9 @@ const { workbook } = buildCoordinatorWorkbook(state, ExcelJS);
   assert.equal(control.getCell("F4").formula,plan.formulas[0].f);
   assert.equal(control.getCell("G4").formula,plan.formulas[0].g);
   assert.equal(control.getCell("H4").formula,plan.formulas[0].h);
-  assert.equal(control.getCell("I4").value,"Sem ação necessária");
+  assert.equal(control.getCell("I4").value,"Concluído");
   assert.equal(control.getCell("J5").value,"Cadastrado");
-  assert.equal(control.getCell("A1").value,"CONTROLE DOCUMENTAL • GRCON");
+  assert.equal(control.getCell("A1").value,"CONTROLE PW • GRCON");
   assert.ok(control.getCell("A3").font.bold);
   assert.equal(control.views[0].ySplit,3);
   assert.equal(control.autoFilter,"A3:AF5");
@@ -126,7 +126,7 @@ const { workbook } = buildCoordinatorWorkbook(state, ExcelJS);
   assert.equal(source.getCell("A1").value,"NumeroDocumentoCliente");
   assert.equal(source.views[0].ySplit,1);
   assert.equal(reopened.getWorksheet("Resumo").getCell("A1").value,"GRCON | SIGEM × PW");
-  assert.equal(reopened.worksheets.length,3);
+  assert.equal(reopened.worksheets.length,5);
   const legacy = structuredClone(state);
   legacy.pw.meta.pwRawHeaders = undefined;
   assert.throws(()=>coordinatorPlan(legacy),/Reimporte o CSV/);
@@ -135,5 +135,5 @@ const { workbook } = buildCoordinatorWorkbook(state, ExcelJS);
   widthMismatch.pw.meta.pwRawHeaders = widthMismatch.pw.meta.pwRawHeaders.slice(0,69);
   widthMismatch.pw.sourceRecords.forEach(row=>row.pwRawCells.pop());
   assert.throws(()=>coordinatorPlan(widthMismatch),/70 colunas/);
-  console.log("SIGEM × PW Fase 5: 3 abas, A–AF/A–BR, fórmulas F:H, dados PW, texto literal e estilo GRCON OK");
+  console.log("SIGEM × PW: abas por classe, conciliação, A–AF/A–BR, fórmulas F:H, dados PW e texto literal OK");
 })().catch(error=>{console.error(error);process.exitCode=1;});
