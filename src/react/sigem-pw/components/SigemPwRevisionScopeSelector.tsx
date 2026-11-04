@@ -14,7 +14,7 @@ export function SigemPwRevisionScopeSelector({
 }) {
   const description = value === "revision0"
     ? "Exibe ocorrências em revisão 0 e cadastros sem revisão informada. A existência do documento é sempre consultada na base PW completa."
-    : "Inclui todas as ocorrências Documento + Revisão. Status, emissão ou classe documental não excluem cadastros PW.";
+    : "Inclui todas as revisões de documentos. Status, emissão ou classe documental não excluem cadastros PW.";
 
   return (
     <div className="spw-revision-scope-block">

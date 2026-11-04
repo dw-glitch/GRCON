@@ -38,13 +38,13 @@ export function SigemPwSituationCards({ state, activeList, onSelect }: {
 }) {
   const s = state.result?.summary;
   const both = Boolean(state.sigem.meta && state.pw.meta);
-  const unit = state.revisionScope === "revision0" ? "revisão 0 ou cadastro sem revisão no PW" : "Documento + Revisão";
+  const unit = state.revisionScope === "revision0" ? "revisão 0 ou cadastro sem revisão no PW" : "revisões de documentos";
 
   return (
     <>
       <section className="spw-actions-grid" id="spw-actions-grid" aria-label="Situações exclusivas entre as bases">
         <Card label="CV — Currículos (PW não aplicável)" value={s?.cvNotApplicable || 0} css="" note="Currículos presentes na Consulta Geral; emissão pelo PW não exigida atualmente. Não são pendências." available={Boolean(state.sigem.meta)} listKey="cvNotApplicable" active={activeList === "cvNotApplicable"} onSelect={onSelect} />
-        <Card label="SIGEM: falta cadastrar no PW" value={s?.sigemOnly || 0} css="" note={`Postado no SIGEM; ${unit} ainda não cadastrado no PW.`} available={both} listKey="sigemOnly" active={activeList === "sigemOnly"} onSelect={onSelect} />
+        <Card label="SIGEM: falta cadastrar no PW" value={s?.sigemOnly || 0} css="" note={`Postado no SIGEM; revisão ainda não cadastrada no PW (${unit}).`} available={both} listKey="sigemOnly" active={activeList === "sigemOnly"} onSelect={onSelect} />
         <Card label="Cadastrado: conferir revisão" value={s?.bothOtherRevision || 0} css="warn" note="Código presente na base PW completa; a mesma revisão SIGEM não foi confirmada neste recorte." available={both} listKey="bothOtherRevision" active={activeList === "bothOtherRevision"} onSelect={onSelect} />
         <Card label="SIGEM + PW: ainda não emitido" value={s?.bothNotEmitted || 0} css="warn" note={`Postado no SIGEM e cadastrado no PW no universo ${unit}. Falta evidência de emissão no PW.`} available={both} listKey="bothNotEmitted" active={activeList === "bothNotEmitted"} onSelect={onSelect} />
         <Card label="SIGEM + PW: emitido" value={s?.bothEmitted || 0} css="ok" note={`Postado no SIGEM e emitido no PW no universo ${unit}.`} available={both} listKey="bothEmitted" active={activeList === "bothEmitted"} onSelect={onSelect} />

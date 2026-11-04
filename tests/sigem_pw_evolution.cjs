@@ -132,7 +132,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const scope=fs.readFileSync(path.join(rootDir,'sigem_pw_scope_fix.js'),'utf8');
   const historyApp=fs.readFileSync(path.join(rootDir,'sigem_pw_history_app.js'),'utf8');
   assert.equal(fs.existsSync(path.join(rootDir,'sigem_pw_evolution_app.js')),false,'UI legada da evolução deve ser removida');
-  assert.match(app,/Entraram no SIGEM/); assert.match(app,/Entraram no PW/); assert.match(app,/Emitidos no PW/); assert.match(app,/SIGEM novo sem PW/);
+  assert.match(app,/Entraram no SIGEM/); assert.match(app,/Entraram no PW/); assert.match(app,/Emitidas no PW/); assert.match(app,/SIGEM novo sem PW/);
   assert.match(domain,/Cadastrados no SIGEM/); assert.match(domain,/Encontrados no ProjectWise/);
   assert.match(adapter,/bookType:\s*"xlsx"/); assert.match(adapter,/importedAt:\s*sourceSnapshot\.importedAt\s*\|\|\s*text\(payload\.meta\?\.importedAt\)/, 'a data operacional editada deve prevalecer na evolução');
   assert.match(adapter,/window\.GrconSigemPwDashboardUi\?\.state\?\.ld/, 'a evolução deve usar a LD persistida no dashboard');

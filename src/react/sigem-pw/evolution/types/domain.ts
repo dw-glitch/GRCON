@@ -284,20 +284,20 @@ export const EMPTY_EVOLUTION_FILTERS = (): EvolutionFilters => ({
 });
 
 export const EVOLUTION_LIST_LABELS: Readonly<Record<EvolutionListMode, readonly [string, string]>> = Object.freeze({
-  "sigem-new": ["Cadastrados no SIGEM", "Ocorrências técnicas novas entre os dois snapshots SIGEM; a auditoria mostra também documento + revisão."],
+  "sigem-new": ["Cadastrados no SIGEM", "Ocorrências técnicas novas entre os dois snapshots SIGEM; a auditoria mostra também as revisões de documentos."],
   "pw-new": ["Encontrados no ProjectWise", "Ocorrências técnicas novas entre os dois snapshots PW; presença no PW significa cadastro, não emissão."],
   "pw-emitted": ["Emissões identificadas entre bases PW", "Entradas já emitidas e transições de PREVISTO para emitido. Fotografias da base não representam todas as operações realizadas no intervalo."],
   both: ["Chegaram nas duas bases", "Novas ocorrências equivalentes no SIGEM e no PW no período selecionado."],
   "missing-pw": ["Novos SIGEM ainda não identificados no PW", "Novas ocorrências SIGEM sem correspondência na base PW atual."],
   "removed-sigem": ["Não encontrados nesta base SIGEM", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
   "removed-pw": ["Não encontrados nesta base PW", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
-  "pw-current": ["Cadastrados no PW atual", "Todos os registros válidos da base PW atual; documento + revisão é exibido em paralelo à ocorrência técnica."],
-  "pw-current-emitted": ["Emitidos no PW atual", "Registros PW atuais com evidência de emissão reconhecida pela regra vigente."],
-  "pw-current-not-emitted": ["Não emitidos no PW atual", "Registros PW atuais com PREVISTO, isto é, não emissão determinável pela regra vigente."],
+  "pw-current": ["Cadastradas no PW atual", "Todos os registros válidos da base PW atual; a revisão de documento é exibida em paralelo à ocorrência técnica."],
+  "pw-current-emitted": ["Emitidas no PW atual", "Registros PW atuais com evidência de emissão reconhecida pela regra vigente."],
+  "pw-current-not-emitted": ["Não emitidas no PW atual", "Registros PW atuais com PREVISTO, isto é, não emissão determinável pela regra vigente."],
   "pw-current-indeterminate": ["Emissão indeterminada no PW", "Registros PW com Última emissão ausente ou com valor não reconhecido; não entram como emitidos nem como não emitidos determináveis."],
-  "only-sigem": ["Somente SIGEM", "Documento + revisão presente no SIGEM atual e ausente no PW atual."],
-  "only-pw": ["Somente PW", "Documento + revisão presente no PW atual e ausente no SIGEM atual."],
-  "current-both": ["SIGEM + PW", "Documento + revisão presente nas duas bases atuais."],
+  "only-sigem": ["Somente SIGEM", "Revisão de documento presente no SIGEM atual e ausente no PW atual."],
+  "only-pw": ["Somente PW", "Revisão de documento presente no PW atual e ausente no SIGEM atual."],
+  "current-both": ["SIGEM + PW", "Revisão de documento presente nas duas bases atuais."],
   "excluded-sigem": ["Excluídos da análise SIGEM", "Linhas SIGEM rejeitadas pela regra de escopo/validação, com motivo preservado."],
   "excluded-pw": ["Excluídos da análise PW", "Linhas PW rejeitadas pela regra de escopo/validação, com motivo preservado."],
 });

@@ -41,4 +41,14 @@ assert.match(overview, /2 revisões de documentos/);
 for (const label of ["Constam no SIGEM", "A cadastrar no PW — já constam no SIGEM", "A cadastrar no PW — não constam no SIGEM", "Cadastradas no PW", "A emitir no PW", "Emitidas no PW"]) {
   assert.ok(ops.includes(label), `rótulo claro: ${label}`);
 }
+
+// Evolução e demais telas do SIGEM × PW usam o mesmo vocabulário: "revisão de documento", sem "doc+rev".
+{
+  const walk = (dir) => fs.readdirSync(path.join(__dirname, "..", dir), { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? walk(path.join(dir, entry.name)) : /\.(ts|tsx)$/.test(entry.name) ? [path.join(dir, entry.name)] : []);
+  const offenders = walk("src/react/sigem-pw").filter((file) => /doc\+rev|doc\. \+ revis|[Dd]ocumento \+ [Rr]evis/.test(read(file)));
+  assert.deepEqual(offenders, [], "nenhuma tela do SIGEM × PW volta a usar 'documento + revisão' ou 'doc+rev'");
+  const evolution = read("src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx");
+  for (const label of ["Emitidas no PW", "Cadastradas no PW atual", "Não emitidas no PW atual", "Revisões de documentos novas"]) assert.ok(evolution.includes(label), `Evolução: ${label}`);
+}
 console.log("sigem_pw_kpi_charts: OK");

@@ -440,7 +440,7 @@ async function importSigem(file: File): Promise<void> {
     const conference = await ensureConferenceRuntime();
     let prepared: PreparedConferenceImport;
     current = "leitura dos registros";
-    stage(2, TOTAL, "Lendo e indexando os registros por documento + revisão…");
+    stage(2, TOTAL, "Lendo e indexando os registros por revisão de documento…");
     if (window.GrconSharedSigemQuery) {
       const base = await window.GrconSharedSigemQuery.parseFile(file);
       prepared = await conference.prepareParsedImport({ ok: true, ...base }, window.GrconHistory?.read?.() || [], { reason: "sigem-pw-dashboard" }) as PreparedConferenceImport;
