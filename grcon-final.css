@@ -1991,3 +1991,25 @@ html[data-app="GRCON"][data-theme="dark"] .settings-group[open] > summary {
 .grcon-app-shortcuts-panel .app-shortcut-link { justify-content:flex-start; }
 .grcon-app-shortcuts > summary:focus-visible { outline:2px solid var(--brand-500); outline-offset:3px; }
 @media (max-width:928px) { .grcon-app-shortcuts-panel { right:auto; left:0; } }
+
+/* Menu lateral uniforme: um título por linha, mesma altura em todos os itens.
+   A descrição continua disponível como dica (title) e para leitores de tela. */
+html[data-app="GRCON"][data-ui-generation="3"] .ops-sidebar .ops-nav-button {
+  min-height: 44px;
+  align-items: center;
+}
+html[data-app="GRCON"][data-ui-generation="3"] .ops-sidebar .ops-nav-button strong {
+  font-weight: 700;
+  line-height: 1.25;
+}
+html[data-app="GRCON"][data-ui-generation="3"] .ops-sidebar .ops-nav-button small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
