@@ -1,3 +1,10 @@
+## Em desenvolvimento — Uma revisão por documento, em sequência (correção grave, eGRDT 2043)
+
+- **Defeito**: a eGRDT 2043 levou 16 arquivos de documentos com várias revisões ao mesmo tempo (047: O, P, Q e R; 060: B e C) e a mais nova foi postada, pulando as anteriores. Só uma revisão anterior *Em Análise* barrava a seguinte; uma anterior *Não Postado* (que nem aparece na Consulta Geral) não barrava nada, e a marcação manual liberava qualquer linha.
+- **Regra inviolável**: uma eGRDT nunca leva uma revisão de um documento enquanto uma revisão **anterior** do mesmo documento não foi concluída no SIGEM (Não Postado ou Em Análise). Entra só a mais antiga pendente; as demais esperam, uma de cada vez. As anteriores são procuradas nos arquivos da análise, na LD e na Consulta Geral. Nem a inclusão manual libera.
+- **Quatro camadas**: (1) a linha vira "Não incluir", sai da seleção automática e a caixa fica desabilitada, com o motivo; (2) a política de seleção ignora a autorização manual; (3) `createPlan` reavalia sobre todas as linhas, mesmo com tela desatualizada; (4) a conferência final do plano (`consistencyErrors`, também usada ao baixar) e a repostagem recusam revisões diferentes do mesmo documento na mesma GRDT.
+- Teste de regressão `tests/grdt_revision_sequence.cjs` reproduz o conjunto exato da 2043: o código anterior montava o plano com 0 erros e todas as revisões; agora só 047-O, 060-B, 057-C e 059-B entram.
+
 ## Em desenvolvimento — Painel da operação
 
 - A “Central de Apoio” passa a se chamar **Painel da operação** e ocupa o espaço vazio da tela Controle de GRDT com indicadores do Histórico (total, emitidas no mês com variação, documentos no mês, última emissão), últimas emissões e gráfico de emissões por 7 dias ou 4 semanas. Somente leitura; some quando a tabela de resultados é exibida. Pesquisa rápida e retomada de preparação permanecem.

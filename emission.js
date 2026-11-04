@@ -295,6 +295,142 @@
     };
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // REGRA INVIOLÁVEL: uma revisão por documento, em sequência.
+  //
+  // Uma eGRDT nunca pode levar ao SIGEM uma revisão de um documento enquanto
+  // uma revisão ANTERIOR do mesmo documento ainda não foi postada (ou segue em
+  // análise). As revisões seguintes esperam: primeiro a mais antiga ainda
+  // pendente, depois a próxima, uma de cada vez. Nem a marcação manual libera.
+  //
+  // Revisões "Não Postado" não aparecem na Consulta Geral; por isso as
+  // anteriores são procuradas em TRÊS lugares: nos arquivos desta análise, na
+  // LD e na própria Consulta Geral (via options.earlierKnown).
+  // ───────────────────────────────────────────────────────────────────────────
+  const SEQUENCE_UNRESOLVED = new Set(["not_posted", "analysis"]);
+  const SEQUENCE_CANDIDATES = new Set(["not_posted", "unknown"]);
+
+  function sequenceDocumentKey(row) {
+    const raw = text(row && (row.documentKey || row.document || row.record && row.record.document));
+    return raw ? text(C.key ? C.key(raw) : norm(raw)) : "";
+  }
+
+  function sequenceStatus(row) {
+    return text(row && (row.sigemRevisionStatus || row.statusOriginal || row.revisionStatus || row.status));
+  }
+
+  function sequenceRank(revision) {
+    const info = C.revisionInfo ? C.revisionInfo(revision) : null;
+    return info && info.valid && Number.isFinite(info.rank) ? info.rank : null;
+  }
+
+  function sequenceMessage(revision, blocker) {
+    const status = text(blocker.status) || "Não Postado";
+    const where = blocker.source ? ` (${blocker.source})` : "";
+    return `A revisão ${blocker.revision} ainda não foi concluída no SIGEM (${status})${where}. `
+      + `A revisão ${revision} só pode entrar na GRDT depois dela: poste uma revisão por vez, em sequência.`;
+  }
+
+  /**
+   * Devolve Map(índice da linha -> bloqueio) com as linhas que NÃO podem entrar
+   * agora. Linhas sem bloqueio não aparecem no mapa.
+   */
+  function evaluateRevisionSequence(rows, options) {
+    const settings = options || {};
+    const blocks = new Map();
+    const groups = new Map();
+    (rows || []).forEach((row, index) => {
+      const key = sequenceDocumentKey(row);
+      if (!key) return;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ row, index, revision: text(C.normalizeRevision ? C.normalizeRevision(row.revision) : row.revision),
+        rank: sequenceRank(row.revision), kind: C.statusKind ? C.statusKind(sequenceStatus(row)) : "unknown" });
+    });
+    groups.forEach((entries) => {
+      const present = new Set(entries.map((entry) => entry.revision));
+      let extra = null;
+      const earlierKnown = () => {
+        if (extra === null) {
+          try { extra = typeof settings.earlierKnown === "function" ? (settings.earlierKnown(entries[0].row) || []) : []; }
+          catch (_) { extra = []; }
+        }
+        return extra;
+      };
+      entries.forEach((entry) => {
+        // Só revisões ainda a postar passam pela regra; o que já foi postado
+        // (repostagem) segue as demais regras do GRCON.
+        if (!SEQUENCE_CANDIDATES.has(entry.kind)) return;
+        const blockers = [];
+        entries.forEach((other) => {
+          if (other === entry || other.revision === entry.revision) return;
+          if (entry.rank === null || other.rank === null || other.rank >= entry.rank) return;
+          if (!SEQUENCE_UNRESOLVED.has(other.kind)) return;
+          blockers.push({ revision: other.revision, rank: other.rank, status: sequenceStatus(other.row) || "Não Postado", source: "arquivo nesta análise" });
+        });
+        if (entry.rank !== null) {
+          earlierKnown().forEach((known) => {
+            const revision = text(C.normalizeRevision ? C.normalizeRevision(known.revision) : known.revision);
+            const rank = sequenceRank(revision);
+            if (!revision || present.has(revision) || rank === null || rank >= entry.rank) return;
+            if (!SEQUENCE_UNRESOLVED.has(C.statusKind ? C.statusKind(known.status) : "unknown")) return;
+            blockers.push({ revision, rank, status: text(known.status) || "Não Postado", source: text(known.source) || "LD / Consulta Geral" });
+          });
+        }
+        // Várias revisões do mesmo documento e uma delas sem ordem verificável:
+        // sem provar a sequência, nada entra.
+        if (entry.rank === null && entries.length > 1) {
+          blockers.push({ revision: "?", rank: -1, status: "ordem não verificável", source: "revisão fora do padrão" });
+        }
+        if (!blockers.length) return;
+        blockers.sort((a, b) => a.rank - b.rank);
+        const blocker = blockers[0];
+        blocks.set(entry.index, {
+          revision: blocker.revision, status: blocker.status, source: blocker.source,
+          message: entry.rank === null
+            ? `A revisão ${entry.revision || "informada"} não pôde ser ordenada junto às outras revisões deste documento. Corrija a revisão antes de incluir.`
+            : sequenceMessage(entry.revision, blocker),
+        });
+      });
+    });
+    return blocks;
+  }
+
+  /** Grava (ou limpa) row.revisionSequenceBlock em todas as linhas. */
+  function applyRevisionSequence(rows, options) {
+    const blocks = evaluateRevisionSequence(rows, options);
+    (rows || []).forEach((row, index) => {
+      if (!row) return;
+      const block = blocks.get(index);
+      if (block) {
+        if (!row.revisionSequenceBlock) row.reasonBeforeSequence = text(row.reason);
+        row.revisionSequenceBlock = block;
+        row.reason = block.message;
+      } else if (row.revisionSequenceBlock) {
+        row.reason = text(row.reasonBeforeSequence);
+        row.revisionSequenceBlock = null;
+        delete row.reasonBeforeSequence;
+      }
+    });
+    return blocks;
+  }
+
+  /** Documentos com mais de uma revisão dentro do MESMO plano de GRDT. */
+  function revisionConflicts(entries) {
+    const byDocument = new Map();
+    (entries || []).forEach((entry) => {
+      const key = sequenceDocumentKey(entry);
+      const revision = text(C.normalizeRevision ? C.normalizeRevision(entry.revision) : entry.revision);
+      if (!key) return;
+      if (!byDocument.has(key)) byDocument.set(key, { document: text(entry.document), revisions: new Set() });
+      byDocument.get(key).revisions.add(revision || "(sem revisão)");
+    });
+    return [...byDocument.values()].filter((item) => item.revisions.size > 1).map((item) => ({
+      document: item.document, revisions: [...item.revisions],
+      message: `${item.document}: uma GRDT não pode conter revisões diferentes do mesmo documento (${[...item.revisions].join(", ")}). `
+        + "Envie uma revisão por vez, em sequência, conforme a Consulta Geral.",
+    }));
+  }
+
   function createPlan(results, selectedIndices, options) {
     const selected = selectedIndices instanceof Set ? selectedIndices : new Set(selectedIndices || []);
     const settings = options || {};
@@ -307,8 +443,18 @@
     const warnings = [];
     const names = new Set();
 
+    // Sequência de revisões: avaliada de novo AQUI, sobre todas as linhas da análise,
+    // para valer mesmo que a tela esteja desatualizada ou a seleção venha de outro caminho.
+    const sequenceBlocks = evaluateRevisionSequence(results || [], options && options.sequenceOptions);
+
     (results || []).forEach((row, rowIndex) => {
       if (!selected.has(rowIndex)) return;
+      const sequenceBlock = (row && row.revisionSequenceBlock) || sequenceBlocks.get(rowIndex);
+      if (sequenceBlock) {
+        // Inviolável: nem inclusão manual libera uma revisão fora da sequência.
+        errors.push(`${row.document || row.name} (revisão ${row.revision}): ${sequenceBlock.message}`);
+        return;
+      }
       const allocation = C && C.allocationState
         ? C.allocationState(row && (row.allocationStatus || row.record && row.record.allocationStatus))
         : { kind: "" };
@@ -513,6 +659,7 @@
       // nome canônico. ET/CV mantêm a validação rígida anterior.
       if (!n1710 && !check.valid) errors.push(`${entry.document}: ${check.errors.join(" ")}`);
     });
+    revisionConflicts(plan.entries || []).forEach((conflict) => errors.push(conflict.message));
     return [...new Set(errors)];
   }
 
@@ -642,5 +789,5 @@
     }));
   }
 
-  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, normalizeBatchMode, postingGroup, splitPlan, manifestRows };
+  return { createPlan, evaluateRevisionSequence, applyRevisionSequence, revisionConflicts, validateN1710Pair, validateEtPlanningPair, consistencyErrors, normalizeBatchMode, postingGroup, splitPlan, manifestRows };
 });
