@@ -606,6 +606,11 @@
             syncGrconSidebar();
             installRenamerUx();
             enrichNavigationNames();
+            // Módulos carregados depois (Dashboard, SIGEM × PW, Conferência) inserem
+            // os próprios botões no menu: a dica com a descrição precisa chegar a eles.
+            const sidebar = $(".ops-sidebar");
+            if (sidebar && typeof MutationObserver === "function")
+                new MutationObserver(() => enrichNavigationNames()).observe(sidebar, { childList: true });
             document.documentElement.dataset.opsUi = "enabled";
             document.documentElement.dataset.p2Design = "semantic-layered-v1";
             document.documentElement.dataset.uiArchitecture = "semantic-layered-v1";

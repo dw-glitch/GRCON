@@ -29,6 +29,48 @@
     });
   }
 
+  /* ---------- 1b. Filtros numa faixa, ações de lote em outra ----------
+     Busca, aba e contagem passam para a faixa de filtros (junto dos filtros
+     rápidos, da ordenação e de "Mais filtros"), que agora vem primeiro. A faixa
+     de ações fica com seleção, revisão em lote, exibição e downloads. Os
+     elementos são movidos, não recriados: ids, eventos e estado permanecem. */
+  function installFilterAndActionBars() {
+    const toolbar = $("#results-section .results-toolbar");
+    const filters = $("#triage-operational-filter");
+    if (!toolbar || !filters || filters.dataset.grconFixBars === "true") return;
+    filters.dataset.grconFixBars = "true";
+    const search = $("#search");
+    const searchBox = search && search.closest(".search-box");
+    const sheet = $("#sheet-filter");
+    const count = $("#p1-shown-count");
+    [count, sheet, searchBox].filter(Boolean).forEach((node) => filters.prepend(node));
+    filters.classList.add("grcon-fix-filters");
+    toolbar.before(filters);
+
+    // Exibição: três controles de leitura da tabela num só menu.
+    const toggle = $("#p1-columns-toggle");
+    const density = toolbar.querySelector(".triage-density-control");
+    const group = $("#triage-group-toggle");
+    if (toggle && density && group && !toolbar.querySelector(".grdt-view-options")) {
+      const details = document.createElement("details");
+      details.className = "grdt-view-options";
+      const summary = document.createElement("summary");
+      summary.textContent = "Exibição";
+      const panel = document.createElement("div");
+      panel.className = "grdt-view-options-panel";
+      details.append(summary, panel);
+      toggle.before(details);
+      panel.append(toggle, density, group);
+      document.addEventListener("click", (event) => {
+        if (details.open && !details.contains(event.target)) details.open = false;
+      });
+      details.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && details.open) { details.open = false; summary.focus(); }
+      });
+    }
+    toolbar.classList.add("grcon-fix-actions");
+  }
+
   /* ---------- 2. Barra única de filtros ativos ---------- */
   function installFilterBar() {
     const toolbar = $("#results-section .results-toolbar");
@@ -341,6 +383,7 @@
 
   function init() {
     installToolbarBreaks();
+    installFilterAndActionBars();
     installFilterBar();
     installPopoverBehaviour();
     installShortcutFixes();

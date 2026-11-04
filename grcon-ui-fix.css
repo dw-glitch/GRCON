@@ -237,3 +237,44 @@ html[data-app="GRCON"] .grdt-stage.is-complete .grdt-stage-number {
   html[data-app="GRCON"] .grdt-stages-list { grid-template-columns: 1fr; }
   html[data-app="GRCON"] .grdt-stage { padding: .38rem .55rem; }
 }
+
+/* ---------- 1b. Faixa de filtros (primeiro) e faixa de ações de lote ---------- */
+html[data-app="GRCON"] #results-section .grcon-fix-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .6rem;
+  padding: .7rem .75rem;
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border-1, #dce4ea);
+  border-radius: var(--radius-md, 12px);
+}
+html[data-app="GRCON"] #results-section .grcon-fix-filters > .search-box { flex: 1 1 20rem; min-width: 14rem; }
+html[data-app="GRCON"] #results-section .grcon-fix-filters > #sheet-filter { flex: 0 1 13rem; }
+html[data-app="GRCON"] #results-section .grcon-fix-filters > .p1-shown-count { order: 99; margin-left: auto; white-space: nowrap; }
+html[data-app="GRCON"] #results-section .grcon-fix-filters > #triage-filter-result-count { order: 100; flex: 1 0 100%; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions { flex-wrap: wrap; align-items: center; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .grcon-fix-break { display: none; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .analysis-stamp { order: 0; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .selected-count { order: 1; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > #batch-egrdt { order: 2; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .toolbar-spacer { order: 3; flex: 1 1 auto; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .grdt-view-options { order: 4; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .triage-column-manager { order: 5; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .secondary-downloads { order: 6; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > .grdt-main-download { order: 7; }
+html[data-app="GRCON"] #results-section .grcon-fix-actions > #results-clear-column-filters { order: 8; }
+.grdt-view-options { position: relative; }
+.grdt-view-options > summary {
+  min-height: 2.75rem; display: inline-flex; align-items: center; padding: .62rem .8rem;
+  border: 1px solid var(--border-1, #dce4ea); border-radius: var(--radius-sm, 8px); font-weight: 670; list-style: none; cursor: pointer;
+}
+.grdt-view-options > summary::-webkit-details-marker { display: none; }
+.grdt-view-options > summary::after { content: "▾"; margin-left: .5rem; }
+.grdt-view-options[open] > summary::after { content: "▴"; }
+.grdt-view-options-panel {
+  position: absolute; z-index: 30; right: 0; top: calc(100% + .4rem); width: max-content; min-width: 15rem;
+  display: grid; gap: .5rem; padding: .6rem; background: var(--surface-1, #fff);
+  border: 1px solid var(--border-1, #dce4ea); border-radius: var(--radius-md, 12px); box-shadow: var(--shadow-2, 0 10px 30px rgba(20, 50, 80, .18));
+}
+.grdt-view-options-panel > button, .grdt-view-options-panel > label { width: 100%; justify-content: flex-start; }

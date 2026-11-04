@@ -75,4 +75,20 @@ assert.match(app, /key==="allocation"/);
 assert.match(app, /allItems:complete\.items/);
 assert.match(migration, /fiscal2ReturnedAt/);
 assert.match(migration, /fiscal2Comment/);
+// Aparência: segmentos de fiscal, filtros recolhíveis, percentuais, distribuição
+// sem sobreposição e tabela ordenável. Nenhum filtro/ação existente some.
+assert.match(app, /id="ad-segments"/);
+assert.match(app, /data-ad-stage="fiscal1"/);
+assert.match(app, /<details id="ad-more"/);
+for (const id of ["ad-allocation", "ad-search", "ad-status", "ad-stage", "ad-sheet", "ad-action", "ad-from", "ad-to", "ad-clear", "ad-sync", "ad-export"]) {
+  assert.ok(app.includes(`id="${id}"`), `${id} continua disponível`);
+}
+assert.match(app, /% das alocações/);
+assert.match(app, /id="ad-distribution"/);
+assert.match(app, /data-sort-key="pending"/);
+assert.match(app, /allocation-dashboard-pill/);
+// A distribuição por situação parte cada alocação em exatamente uma categoria.
+const situations = new Map();
+dashboard.groups.forEach((group) => situations.set(group.situation, (situations.get(group.situation) || 0) + 1));
+assert.equal([...situations.values()].reduce((a, b) => a + b, 0), dashboard.groups.length, "situações somam o total de alocações");
 console.log("allocation_dashboard: parser, fiscais, agrupamento, duplicidades, filtros, Excel e rota OK");
