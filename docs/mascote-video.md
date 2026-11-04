@@ -150,3 +150,13 @@ A validação automática exige:
 ### Resultado da revisão de 08/10/2026
 
 Os pilotos `searching-files` e `checking-document` foram revisados pelo plugin Higgsfield com comparação de frames ao sprite oficial. O “G” do peito foi substituído por um símbolo verde nos dois vídeos. Os pilotos foram reprovados por identidade e continuam fora do runtime. A revisão técnica de alpha registrada anteriormente não equivale a aprovação visual; nenhuma mídia aprovada foi substituída.
+
+## Corrida do SIGEM × PW
+
+O módulo SIGEM × PW usa um clipe próprio da corrida horizontal: `assets/mascot/video/grcon-mascot-sigem-pw-running-alpha.webm` (VP9 com alfa real, 448×448, laço de 27 quadros).
+
+- Quando corre: ao abrir o módulo e durante a carga de bases e consultas (Consulta Geral, ProjectWise, referências/LD, histórico). O evento `grcon:mascot-operation` do módulo leva `context: "sigem-pw"`.
+- A corrida começa na hora e, mesmo em operações rápidas, o controlador a mantém por uma travessia completa (~5 s) antes de encerrar.
+- `GrconMascotRunner` escolhe o clipe pelo contexto (`sigem-pw`) ou pelo módulo visível. Se o clipe falhar, volta para `grcon-mascot-running-alpha.webm`. A área de Controle de GRDT continua com a corrida dos papéis.
+- O clipe veio de um vídeo com fundo rosa. O fundo transparente é gerado offline por `scripts/rebuild_mascot_pink_alpha.py` (alfa pela diferença `min(R,B)-G`, despill nas bordas, recorte quadrado e laço por similaridade de pose). O navegador não faz chroma key.
+- Respeita `prefers-reduced-motion` e o desligamento das animações do mascote.

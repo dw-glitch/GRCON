@@ -47,4 +47,21 @@ assert.match(index, /grcon_mascot_controller\.js[\s\S]*grcon_mascot_runner\.js/,
 assert.match(sw, /grcon-mascot-running-alpha\.webm/);
 assert.match(sw, /mascot-shell-runner1/);
 
+// Corrida do SIGEM × PW: clipe próprio com alfa real, escolhido por contexto, com volta ao original.
+const sigemPwAsset = read("assets/mascot/video/grcon-mascot-sigem-pw-running-alpha.webm", null);
+assert.deepEqual([...sigemPwAsset.subarray(0, 4)], [0x1a, 0x45, 0xdf, 0xa3], "clipe do SIGEM × PW precisa ser WebM/EBML válido");
+assert.ok(sigemPwAsset.length > 60_000 && sigemPwAsset.length < 600_000, "clipe do SIGEM × PW leve e real");
+assert.match(runner, /grcon-mascot-sigem-pw-running-alpha\.webm/);
+assert.match(runner, /config\.context === "sigem-pw"/);
+assert.match(runner, /activeSource === sigemPwSource[\s\S]{0,160}activeSource = source/, "falha do clipe novo volta ao original");
+assert.match(runner, /config\.context === "control" \? papersSource/, "Controle de GRDT mantém a corrida dos papéis");
+assert.match(controller, /SIGEM_PW_MIN_RUN_MS = 5_100/, "a corrida completa uma travessia mesmo em operações rápidas");
+assert.match(controller, /isSigemPwOperation\(detail\)[\s\S]{0,200}legacyOperation\?\.running/, "a corrida do SIGEM × PW começa na hora");
+assert.match(controller, /sigemPwEndTimer/);
+const adapter = read("src/react/sigem-pw/services/sigemPwDashboardAdapter.ts");
+assert.match(adapter, /context: "sigem-pw"/);
+assert.match(adapter, /dispatchMascot\(true, "Abrindo SIGEM × PW"\)/, "abrir o módulo já carregado também faz o mascote correr");
+assert.match(sw, /grcon-mascot-sigem-pw-running-alpha\.webm/);
+assert.match(read("scripts/verify-cloudflare-production.mjs"), /grcon-mascot-sigem-pw-running-alpha\.webm/);
+
 console.log("grcon_mascot_runner: OK — vídeo original atravessa o workspace sem bloquear interação; demais poses permanecem presas ao cabeçalho.");

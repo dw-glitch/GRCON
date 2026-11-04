@@ -45,7 +45,7 @@ assert.equal(health.error,'DOCUMENT_STORAGE_RETIRED');
 const anonymous=await get('/api/document-vault/list');
 assert.equal(anonymous.status,410,'Catálogo aposentado deve permanecer indisponível.');
 const verifiedAssets = ['sigem_pw_dashboard_core.js', 'workers/sigem_pw_dashboard.worker.js', 'react-dist/sigem-pw-dashboard-app.js', 'document-vault.css', 'sw.js', 'sigem_pw_revision_report.js', 'workers/export.worker.js', 'react-dist/sigem-pw-evolution-app.js'];
-verifiedAssets.push('grcon_mascot_controller_v4.js', 'grcon_mascot_runner.js', 'assets/mascot/video/grcon-mascot-papers-running-alpha.webm', 'assets/mascot/grcon-mascot-papers-fallback.png');
+verifiedAssets.push('grcon_mascot_controller_v4.js', 'grcon_mascot_runner.js', 'assets/mascot/video/grcon-mascot-papers-running-alpha.webm', 'assets/mascot/video/grcon-mascot-sigem-pw-running-alpha.webm', 'assets/mascot/grcon-mascot-papers-fallback.png');
 verifiedAssets.push('app.js', 'app-ui.js', 'p1_ux.js', 'document_vault_app.js');
 verifiedAssets.push('grcon_service_worker.js');
 verifiedAssets.push('grcon_file_access.js');

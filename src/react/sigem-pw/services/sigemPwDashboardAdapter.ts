@@ -142,7 +142,7 @@ function notify(message: string, kind = "info"): void {
 }
 function dispatchMascot(active: boolean, label?: string): void {
   window.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
-    detail: { active, state: "sigem-pw-analysis", task: label || "Comparando SIGEM e ProjectWise" },
+    detail: { active, state: "sigem-pw-analysis", context: "sigem-pw", task: label || "Comparando SIGEM e ProjectWise" },
   }));
 }
 function setBusy(busy: boolean, label = ""): void {
@@ -773,7 +773,11 @@ async function activate(): Promise<void> {
     await refresh("ativação");
     setBusy(false);
   } else {
+    // Módulo já carregado: o mascote corre uma travessia ao abrir (o controlador mantém a
+    // corrida até o fim da travessia, mesmo que esta abertura seja instantânea).
+    dispatchMascot(true, "Abrindo SIGEM × PW");
     renderFromModel(false);
+    dispatchMascot(false);
   }
 }
 
