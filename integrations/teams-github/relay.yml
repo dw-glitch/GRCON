@@ -37,7 +37,7 @@ jobs:
           data=json.dumps(payload,ensure_ascii=False).encode()
           result=None
           for attempt in range(3):
-              req=urllib.request.Request(os.environ['GRCON_CALLBACK_URL'],data=data,headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},method='POST')
+              req=urllib.request.Request(os.environ['GRCON_CALLBACK_URL'],data=data,headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'grcon-teams-relay/1.0'},method='POST')
               try:
                   with urllib.request.urlopen(req,timeout=25) as response: result=json.load(response)
                   break
