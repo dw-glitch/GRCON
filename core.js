@@ -1941,6 +1941,51 @@
     return options.find((item) => norm(item) === wanted) || "";
   }
 
+  // Siglas e termos em inglês que as LDs usam para os propósitos oficiais.
+  // Só entram equivalências inequívocas; o que não bater continua sem
+  // tradução automática e aparece como aviso, nunca como valor inventado.
+  const PURPOSE_ALIASES = Object.freeze({
+    "AS BUILT": "Conforme Construído",
+    "ASBUILT": "Conforme Construído",
+    "IFC": "Para Construção",
+    "ISSUED FOR CONSTRUCTION": "Para Construção",
+    "FOR CONSTRUCTION": "Para Construção",
+    "IFP": "Para Compra",
+    "FOR PURCHASE": "Para Compra",
+    "IFI": "Para Informação",
+    "FOR INFORMATION": "Para Informação",
+    "FOR CANCELLATION": "Para Cancelamento",
+    "CANCELLED": "Cancelado",
+    "CERTIFIED": "Certificado",
+  });
+
+  /**
+   * Propósito de emissão descrito na LD, levado para a lista oficial da eGRDT.
+   * Aceita diferenças de acento, caixa, espaços e pontuação, siglas inequívocas
+   * e textos que contenham exatamente um propósito oficial ("Para Construção
+   * - Rev. B"). Retorna também o texto original da LD para conferência.
+   */
+  function resolvePurpose(value) {
+    const original = text(value);
+    if (!original) return { purpose: "", original: "", recognized: false, adapted: false };
+    const wanted = norm(original).replace(/[^A-Z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+    const options = EGRDT_OPTIONS.purposes;
+    let match = options.find((item) => norm(item) === norm(original))
+      || options.find((item) => norm(item) === wanted)
+      || PURPOSE_ALIASES[wanted]
+      || "";
+    if (!match && wanted) {
+      const contained = options.filter((item) => ` ${wanted} `.includes(` ${norm(item)} `));
+      if (contained.length === 1) match = contained[0];
+    }
+    return {
+      purpose: match,
+      original,
+      recognized: Boolean(match),
+      adapted: Boolean(match) && match !== original,
+    };
+  }
+
   function inferDiscipline(document, record) {
     return resolveDiscipline(document, record).discipline;
   }
@@ -1986,7 +2031,7 @@
       disciplineOriginalLd: disciplineResolution.disciplineOriginalLd,
       disciplineResolution,
       documentType,
-      purpose: optionValue(record && record.purpose, EGRDT_OPTIONS.purposes),
+      purpose: resolvePurpose(record && record.purpose).purpose,
       databook: text(record && record.databook),
     });
   }
@@ -3078,7 +3123,12 @@
     const revisionWarnings = revisionInfo(revision).warnings || [];
     if (revisionWarnings.length) reason = `${reason} ${revisionWarnings.join(" ")}`.trim();
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
-    const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
+    // O propósito descrito na LD vale para a revisão que será emitida: quando a
+    // LD tem a linha dessa revisão com propósito, ele prevalece sobre o da
+    // linha técnica mais recente.
+    const purposeRecord = revisionRecord && text(revisionRecord.purpose) ? revisionRecord : best;
+    const ldPurpose = resolvePurpose(purposeRecord && purposeRecord.purpose);
+    const egrdt = buildEgrdtData(document, revision, finalName, { ...best, purpose: purposeRecord && purposeRecord.purpose }, controlledSheet, input.pdfFormat);
     const disciplineResolution = egrdt.disciplineResolution || resolveDiscipline(document, best, { sheetName: controlledSheet });
     const disciplineOriginalDecision = decision;
     let disciplineBlockCode = "";
@@ -3131,6 +3181,7 @@
       postingEvidence,
       postingStatus,
       record: best,
+      purposeOriginalLd: ldPurpose.original,
       disciplineOriginalLd: disciplineResolution.disciplineOriginalLd,
       disciplineResolution,
       disciplineOriginalDecision,
@@ -3322,6 +3373,7 @@
     resolveDiscipline,
     enforceDocumentFormat,
     buildEgrdtData,
+    resolvePurpose,
     isN1710Context,
     validateEgrdtData,
     applyOfficialCodeRename,

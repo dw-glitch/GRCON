@@ -936,6 +936,7 @@
       hardBlock: Boolean(item.hardBlock),
       blockCode: item.blockCode || "",
       disciplineOriginalDecision: item.disciplineOriginalDecision || "",
+      purposeOriginalLd: item.purposeOriginalLd || "",
       disciplineOriginalLd: item.disciplineOriginalLd || item.disciplineResolution && item.disciplineResolution.disciplineOriginalLd || "",
       disciplineResolution: item.disciplineResolution ? {
         disciplineOriginalLd: item.disciplineResolution.disciplineOriginalLd || "",
@@ -4003,6 +4004,7 @@
       <dl>
         <div><dt>Disciplina encontrada na LD</dt><dd>${escapeHtml(disciplineResolution.disciplineOriginalLd || row.record && row.record.discipline || "Não informada")}</dd></div>
         <div><dt>Disciplina oficial da eGRDT</dt><dd>${escapeHtml(disciplineResolution.discipline || row.egrdt && row.egrdt.discipline || "Precisa de confirmação")}</dd></div>
+        <div><dt>Propósito de emissão na LD</dt><dd>${escapeHtml(row.purposeOriginalLd || row.record && row.record.purpose || "Não informado na LD")}${row.egrdt && row.egrdt.purpose && row.egrdt.purpose !== (row.purposeOriginalLd || "") ? ` → ${escapeHtml(row.egrdt.purpose)} na eGRDT` : ""}</dd></div>
         <div><dt>Origem</dt><dd>${escapeHtml(disciplineEvidence.source || row.record && row.record.source || "—")} · aba ${escapeHtml(disciplineEvidence.sheet || row.record && row.record.sheet || row.sheet || "—")} · linha ${escapeHtml(disciplineEvidence.row || row.record && row.record.row || "—")}</dd></div>
         <div><dt>Regra</dt><dd>${escapeHtml(disciplineResolution.method || "não resolvida")}</dd></div>
         ${disciplineResolution.candidates && disciplineResolution.candidates.length ? `<div><dt>Opções oficiais</dt><dd>${escapeHtml(disciplineResolution.candidates.join(" ou "))}</dd></div>` : ""}
