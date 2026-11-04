@@ -19,7 +19,6 @@
   const DASHBOARD_VIEW_PREFERENCE_KEY = "grcon.dashboard.emissionView.v1";
   const DASHBOARD_WEEK_OPTIONS = Object.freeze([4, 8, 12, 16, 26, 52]);
   let dashboardGranularity = "day";
-  let dashboardTab = "emissions";
   let dashboardWeeks = 8;
   let dashboardBuilt = false;
   let exporting = false;
@@ -244,77 +243,6 @@
       }
     });
     return [...days.values()].filter((day) => day.total > 0).sort((left, right) => left.date.localeCompare(right.date));
-  }
-
-  // ── Aba "Qualidade do processo" ───────────────────────────────────────────
-  // Mesma unidade do restante do Dashboard: um documento conta uma vez por eGRDT,
-  // mesmo com vários arquivos (nativo + PDF).
-  const EMISSION_KINDS = Object.freeze(["FIRST_POSTING", "NEW_REVISION", "REPOST"]);
-  const EMISSION_LABELS = Object.freeze({ FIRST_POSTING: "Primeira postagem", NEW_REVISION: "Nova revisão", REPOST: "Repostagem" });
-  const INTERVENTION_LABELS = Object.freeze({
-    revision: "Revisão alterada à mão",
-    status: "Status SIGEM autorizado manualmente",
-    rule: "Regra da triagem forçada",
-    composition: "Composição de arquivos forçada",
-  });
-
-  function fileInterventions(file) {
-    const f = file || {};
-    return {
-      revision: f.manualRevisionOverride === true || f.revisionManual === true,
-      status: Boolean(String(f.manualSigemSelectionAt || "").trim()),
-      rule: f.manualRuleOverride === true,
-      composition: f.manualCompositionOverride === true,
-    };
-  }
-
-  /**
-   * Indicadores de qualidade do processo sobre os registros do período: tipo de
-   * emissão (só onde há classificação), intervenções manuais e documentos por
-   * disciplina. `classifiedShare` informa a cobertura, porque registros antigos
-   * não trazem o tipo de emissão.
-   */
-  function buildProcessQuality(records) {
-    const kinds = { FIRST_POSTING: 0, NEW_REVISION: 0, REPOST: 0 };
-    const interventions = { revision: 0, status: 0, rule: 0, composition: 0 };
-    const disciplines = new Map();
-    let documents = 0;
-    let classified = 0;
-    let withIntervention = 0;
-    (records || []).forEach((record) => {
-      const perDocument = new Map();
-      (record && record.files || []).forEach((file) => {
-        const key = documentKey(file);
-        if (!key) return;
-        if (!perDocument.has(key)) perDocument.set(key, { kind: "", discipline: "", flags: { revision: false, status: false, rule: false, composition: false } });
-        const entry = perDocument.get(key);
-        const kind = String(file && (file.emissionKind || file.historyClassification && file.historyClassification.emissionKind) || "").toUpperCase();
-        if (!entry.kind && EMISSION_KINDS.includes(kind)) entry.kind = kind;
-        if (!entry.discipline) entry.discipline = String(file && file.discipline || "").trim();
-        const flags = fileInterventions(file);
-        Object.keys(flags).forEach((name) => { if (flags[name]) entry.flags[name] = true; });
-      });
-      perDocument.forEach((entry) => {
-        documents += 1;
-        if (entry.kind) { kinds[entry.kind] += 1; classified += 1; }
-        const discipline = entry.discipline || "Não informada";
-        disciplines.set(discipline, (disciplines.get(discipline) || 0) + 1);
-        const any = Object.keys(entry.flags).some((name) => entry.flags[name]);
-        if (any) withIntervention += 1;
-        Object.keys(entry.flags).forEach((name) => { if (entry.flags[name]) interventions[name] += 1; });
-      });
-    });
-    const ranked = [...disciplines.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR"));
-    return {
-      documents,
-      classified,
-      classifiedShare: documents ? classified / documents : 0,
-      kinds,
-      withIntervention,
-      interventionShare: documents ? withIntervention / documents : 0,
-      interventions,
-      disciplines: ranked.map(([name, count]) => ({ name, count })),
-    };
   }
 
   function buildDashboardWeeklyData(daily, startDate, endDate) {
@@ -637,10 +565,6 @@
         <div><span>VISÃO EXECUTIVA</span><h2>Dashboard de emissões documentais</h2><p>Leitura visual do Histórico de eGRDTs. Cada documento conta uma vez por eGRDT, mesmo quando possui PDF + arquivo nativo.</p></div>
         <button class="secondary-button" id="dashboard-present" type="button">Apresentar</button>
       </header>
-      <div class="dashboard-tabs" role="tablist" aria-label="Seções do Dashboard">
-        <button type="button" role="tab" id="dashboard-tab-emissions" data-dashboard-tab="emissions" aria-selected="true" aria-controls="dashboard-module">Emissões</button>
-        <button type="button" role="tab" id="dashboard-tab-quality" data-dashboard-tab="quality" aria-selected="false" aria-controls="dashboard-quality-panel">Qualidade do processo</button>
-      </div>
       <section class="dashboard-controls" aria-label="Período do dashboard">
         <div class="dashboard-period-tools">
           <div class="dashboard-granularity" role="group" aria-label="Agrupar emissões por">
@@ -690,15 +614,7 @@
       <details class="dashboard-table-card">
         <summary><span id="dashboard-table-title">Detalhamento diário</span><strong id="dashboard-day-count">0 dia(s)</strong></summary>
         <div class="dashboard-table-wrap"><table><caption id="dashboard-table-caption">Emissões documentais por dia</caption><thead><tr><th>Data</th><th><span class="document-class-badge" data-document-class="ET">ET</span></th><th><span class="document-class-badge" data-document-class="N-1710">N-1710</span></th><th>CV</th><th>Total</th><th>eGRDTs</th></tr></thead><tbody id="dashboard-table-body"></tbody></table></div>
-      </details>
-      <section class="dashboard-quality-panel" id="dashboard-quality-panel" role="tabpanel" aria-labelledby="dashboard-tab-quality" hidden>
-        <div class="dashboard-quality-grid">
-          <article class="dashboard-share-card"><header><span>TIPO DE EMISSÃO</span><strong>Primeira postagem, nova revisão e repostagem</strong></header><div id="dashboard-quality-kinds"></div></article>
-          <article class="dashboard-share-card"><header><span>QUALIDADE DO PROCESSO</span><strong>Intervenções manuais</strong></header><div id="dashboard-quality-interventions"></div></article>
-          <article class="dashboard-share-card"><header><span>DISTRIBUIÇÃO</span><strong>Documentos por disciplina</strong></header><div id="dashboard-quality-disciplines"></div></article>
-        </div>
-        <p class="dashboard-quality-source">Fonte: Histórico de eGRDTs, no mesmo período escolhido acima. Cada documento conta uma vez por eGRDT.</p>
-      </section>`;
+      </details>`;
   }
 
   function installDashboardStyles() {
@@ -715,7 +631,7 @@
       .dashboard-legend{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.dashboard-legend button{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border,#d7e0e8);border-radius:999px;background:var(--surface-soft,#f8fafc);padding:6px 10px;font:inherit;font-size:.76rem;font-weight:900;cursor:pointer}.dashboard-legend button:before{content:"";width:9px;height:9px;border-radius:3px;background:currentColor}.dashboard-legend button[data-dashboard-family="ET"]{color:var(--document-et-color,#0a4f83);border-color:var(--document-et-border,#74a9d2);background:var(--document-et-background,#e6f1fa)}.dashboard-legend button[data-dashboard-family="N-1710"]{color:var(--document-n1710-color,#542c84);border-color:var(--document-n1710-border,#a889c7);background:var(--document-n1710-background,#f1eaf8)}.dashboard-legend button[data-dashboard-family="CV"]{color:var(--dash-cv)}.dashboard-legend button[aria-pressed="false"]{opacity:.38;filter:saturate(.3)}
       .dashboard-chart-scroll{overflow-x:auto;padding:0 8px 4px;min-height:340px}.dashboard-chart-scroll svg{display:block;height:390px;min-width:100%;width:auto}.dashboard-grid-line{stroke:rgba(93,116,136,.15);stroke-width:1}.dashboard-axis-line{stroke:rgba(93,116,136,.38);stroke-width:1}.dashboard-axis-label{fill:var(--text-muted,#6d7f8f);font-size:11px}.dashboard-bar-et{fill:var(--dash-et);stroke:var(--document-et-border,#74a9d2);stroke-width:.8}.dashboard-bar-n1710{fill:var(--dash-n1710);stroke:var(--document-n1710-border,#a889c7);stroke-width:.8}.dashboard-bar-cv{fill:var(--dash-cv)}.dashboard-segment-value{fill:#fff;font-size:11px;font-weight:900;pointer-events:none}.dashboard-total-value{fill:var(--text-strong,#233d52);font-size:11px;font-weight:900}.dashboard-insight{display:flex;align-items:flex-start;gap:8px;margin:0;padding:10px 14px 13px;border-top:1px solid var(--border,#e6ebef);color:var(--text-muted,#5f7385);font-size:.82rem}.dashboard-insight:before{content:"↗";display:grid;place-items:center;flex:0 0 24px;height:24px;border-radius:50%;background:var(--brand-50,#eaf5fb);color:var(--brand-700,#155c8a);font-weight:900}
       .dashboard-lower-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.dashboard-share-card header,.dashboard-peak-card header{padding:13px 14px 8px}.dashboard-share-card header strong,.dashboard-peak-card header strong{color:var(--text-strong,#183247)}.dashboard-share-list,.dashboard-peak-list{display:grid;gap:9px;padding:4px 14px 14px}.dashboard-share-row{display:grid;grid-template-columns:66px 1fr 64px;gap:10px;align-items:center}.dashboard-share-row>span{font-size:.78rem;font-weight:900}.dashboard-share-row .document-class-badge{justify-self:start}.dashboard-share-track{height:9px;border-radius:999px;background:var(--surface-soft,#eef3f6);overflow:hidden}.dashboard-share-track i{display:block;height:100%;border-radius:999px}.dashboard-share-et i{background:var(--dash-et)}.dashboard-share-n1710 i{background:var(--dash-n1710)}.dashboard-share-cv i{background:var(--dash-cv)}.dashboard-share-row strong{text-align:right;font-size:.78rem;color:var(--text-strong,#294258)}.dashboard-peak-row{display:grid;grid-template-columns:86px 1fr auto;gap:9px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border,#edf1f4)}.dashboard-peak-row:last-child{border-bottom:0}.dashboard-peak-row>span{font-size:.78rem;font-weight:900;color:var(--text-strong,#294258)}.dashboard-peak-row small{color:var(--text-muted,#6b7e8f)}.dashboard-peak-row strong{font-size:1rem;color:var(--brand-700,#155c8a)}
-      .dashboard-tabs{display:flex;gap:4px;margin:0 0 12px;border-bottom:1px solid var(--border,#dce4eb)}.dashboard-tabs button{appearance:none;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--text-muted,#687b8c);font:inherit;font-weight:800;font-size:.86rem;padding:9px 14px;cursor:pointer}.dashboard-tabs button[aria-selected=true]{color:var(--text-strong,#244158);border-bottom-color:var(--dash-et,#0b63a3)}.dashboard-tabs button:focus-visible{outline:2px solid var(--dash-et,#0b63a3);outline-offset:-2px}#dashboard-module[data-dashboard-tab=quality] .dashboard-kpis,#dashboard-module[data-dashboard-tab=quality] .dashboard-chart-card,#dashboard-module[data-dashboard-tab=quality] .dashboard-lower-grid,#dashboard-module[data-dashboard-tab=quality] .dashboard-table-card{display:none}#dashboard-module[data-dashboard-tab=quality] .dashboard-granularity{display:none}.dashboard-quality-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.dashboard-quality-source{margin:10px 2px 0;font-size:.74rem;color:var(--text-muted,#687b8c)}.dashboard-quality-note{margin:10px 14px 14px;font-size:.74rem;line-height:1.45;color:var(--text-muted,#687b8c)}.dashboard-quality-headline{margin:6px 14px 10px;font-size:.84rem;line-height:1.4}.dashboard-quality-headline strong{font-size:1.25rem}.dashboard-quality-grid .dashboard-share-row{grid-template-columns:minmax(0,1.25fr) minmax(40px,1fr) auto;gap:10px;align-items:center}.dashboard-quality-grid .dashboard-share-row>span{min-width:0;overflow-wrap:anywhere;font-size:.78rem;font-weight:700;line-height:1.25}.dashboard-quality-grid .dashboard-share-row>strong{white-space:nowrap;font-size:.76rem}.dashboard-quality-grid .dashboard-share-list{padding:4px 14px 8px}.dashboard-quality-kind .dashboard-share-track i{background:var(--dash-et,#0b63a3)}.dashboard-quality-repost .dashboard-share-track i{background:var(--dash-cv,#b16a16)}.dashboard-quality-intervention .dashboard-share-track i{background:#8a5a9e}.dashboard-quality-discipline .dashboard-share-track i{background:var(--dash-n1710,#6b3fa0)}@media(max-width:1100px){.dashboard-quality-grid{grid-template-columns:1fr}}.dashboard-table-card{margin-top:10px}.dashboard-table-card summary{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;cursor:pointer;font-weight:900;color:var(--text-strong,#203d54);list-style:none}.dashboard-table-card summary::-webkit-details-marker{display:none}.dashboard-table-wrap{max-height:350px;overflow:auto;border-top:1px solid var(--border,#e6ebef)}.dashboard-table-wrap table{width:100%;border-collapse:collapse;font-size:.8rem}.dashboard-table-wrap caption{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.dashboard-table-wrap th,.dashboard-table-wrap td{padding:9px 12px;border-bottom:1px solid var(--border,#edf1f4);text-align:right}.dashboard-table-wrap th:first-child,.dashboard-table-wrap td:first-child{text-align:left}.dashboard-table-wrap thead th{position:sticky;top:0;background:var(--surface-soft,#f6f9fb);font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#637587)}.dashboard-class-cell-et{color:var(--document-et-color,#0a4f83);font-weight:900}.dashboard-class-cell-n1710{color:var(--document-n1710-color,#542c84);font-weight:900}
+      .dashboard-table-card{margin-top:10px}.dashboard-table-card summary{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;cursor:pointer;font-weight:900;color:var(--text-strong,#203d54);list-style:none}.dashboard-table-card summary::-webkit-details-marker{display:none}.dashboard-table-wrap{max-height:350px;overflow:auto;border-top:1px solid var(--border,#e6ebef)}.dashboard-table-wrap table{width:100%;border-collapse:collapse;font-size:.8rem}.dashboard-table-wrap caption{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.dashboard-table-wrap th,.dashboard-table-wrap td{padding:9px 12px;border-bottom:1px solid var(--border,#edf1f4);text-align:right}.dashboard-table-wrap th:first-child,.dashboard-table-wrap td:first-child{text-align:left}.dashboard-table-wrap thead th{position:sticky;top:0;background:var(--surface-soft,#f6f9fb);font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#637587)}.dashboard-class-cell-et{color:var(--document-et-color,#0a4f83);font-weight:900}.dashboard-class-cell-n1710{color:var(--document-n1710-color,#542c84);font-weight:900}
       .dashboard-empty{display:grid;place-items:center;text-align:center;min-height:300px;color:var(--text-muted,#687b8c)}.dashboard-empty strong{display:block;color:var(--text-strong,#244158);font-size:1rem;margin-bottom:4px}
       body.dashboard-presenting{overflow:hidden}body.dashboard-presenting #dashboard-module{position:fixed;inset:0;z-index:5000;overflow:auto;background:var(--page-bg,#f3f6f8);padding:24px 30px}body.dashboard-presenting .dashboard-page-heading{position:sticky;top:-24px;z-index:10;background:var(--page-bg,#f3f6f8);padding-top:24px;padding-bottom:12px}body.dashboard-presenting .dashboard-controls{display:none}body.dashboard-presenting .dashboard-chart-scroll{min-height:440px}body.dashboard-presenting .dashboard-chart-scroll svg{height:470px}
       html[data-theme="dark"] .dashboard-bar{filter:saturate(.9) brightness(1.08)}html[data-theme="dark"] .dashboard-segment-value{fill:#fff}html[data-theme="dark"] .dashboard-total-value{fill:#e9f1f7}
@@ -869,59 +785,6 @@
     }).join("")}</div>`;
   }
 
-  function pct(value) {
-    return (Number(value || 0) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
-  }
-
-  function qualityRow(label, count, share, tone) {
-    return `<div class="dashboard-share-row dashboard-quality-${tone}"><span>${escapeHtml(label)}</span><div class="dashboard-share-track"><i style="width:${Math.min(100, share * 100).toFixed(1)}%"></i></div><strong>${count.toLocaleString("pt-BR")} · ${pct(share)}</strong></div>`;
-  }
-
-  function renderQuality(quality, previousQuality) {
-    const kinds = document.getElementById("dashboard-quality-kinds");
-    const interventions = document.getElementById("dashboard-quality-interventions");
-    const disciplines = document.getElementById("dashboard-quality-disciplines");
-    if (kinds) {
-      if (!quality.classified) {
-        kinds.innerHTML = '<p class="dashboard-quality-note">Nenhum documento deste período traz a classificação do tipo de emissão (registros anteriores a ela não são classificados).</p>';
-      } else {
-        const base = Math.max(1, quality.classified);
-        kinds.innerHTML = `<div class="dashboard-share-list">${EMISSION_KINDS.map((kind) => qualityRow(EMISSION_LABELS[kind], quality.kinds[kind], quality.kinds[kind] / base, kind === "REPOST" ? "repost" : "kind")).join("")}</div>`
-          + `<p class="dashboard-quality-note">Base: ${quality.classified.toLocaleString("pt-BR")} de ${quality.documents.toLocaleString("pt-BR")} documentos (${pct(quality.classifiedShare)}) com tipo de emissão registrado. Repostagem alta indica retrabalho.</p>`;
-      }
-    }
-    if (interventions) {
-      if (!quality.documents) {
-        interventions.innerHTML = '<p class="dashboard-quality-note">Nenhum documento emitido no período.</p>';
-      } else {
-        const trend = previousQuality && previousQuality.documents
-          ? kpiTrend(Math.round(quality.interventionShare * 1000), Math.round(previousQuality.interventionShare * 1000))
-          : null;
-        const rows = Object.keys(INTERVENTION_LABELS).map((name) => qualityRow(INTERVENTION_LABELS[name], quality.interventions[name], quality.interventions[name] / quality.documents, "intervention")).join("");
-        interventions.innerHTML = `<p class="dashboard-quality-headline"><strong>${pct(quality.interventionShare)}</strong> dos documentos tiveram alguma intervenção manual (${quality.withIntervention.toLocaleString("pt-BR")} de ${quality.documents.toLocaleString("pt-BR")})${trend ? ` <em class="dashboard-kpi-trend" data-direction="${trend.direction === "up" ? "down" : trend.direction === "down" ? "up" : "flat"}" title="${escapeHtml(trend.label)}">${trend.text} vs. período anterior</em>` : ""}</p><div class="dashboard-share-list">${rows}</div><p class="dashboard-quality-note">Uma intervenção pode se somar a outra no mesmo documento. Quanto menor, mais o processo seguiu as regras sem exceções.</p>`;
-      }
-    }
-    if (disciplines) {
-      const top = quality.disciplines.slice(0, 8);
-      const rest = quality.disciplines.slice(8).reduce((sum, item) => sum + item.count, 0);
-      const rows = top.concat(rest ? [{ name: "Demais disciplinas", count: rest }] : []);
-      const base = Math.max(1, quality.documents);
-      disciplines.innerHTML = rows.length
-        ? `<div class="dashboard-share-list">${rows.map((item) => qualityRow(item.name, item.count, item.count / base, "discipline")).join("")}</div>`
-        : '<p class="dashboard-quality-note">Nenhum documento emitido no período.</p>';
-    }
-  }
-
-  // Aba ativa: "emissions" (o Dashboard original, intacto) ou "quality".
-  function setDashboardTab(tab) {
-    dashboardTab = tab === "quality" ? "quality" : "emissions";
-    const module = document.getElementById(DASHBOARD_MODULE_ID);
-    if (module) module.dataset.dashboardTab = dashboardTab;
-    const panel = document.getElementById("dashboard-quality-panel");
-    if (panel) panel.hidden = dashboardTab !== "quality";
-    document.querySelectorAll("[data-dashboard-tab]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.dashboardTab === dashboardTab)));
-  }
-
   function renderPeaks(series) {
     const target = document.getElementById("dashboard-peaks");
     if (!target) return;
@@ -968,10 +831,6 @@
 
     renderKpis(totals, previousTotals);
     renderShare(totals);
-    renderQuality(
-      buildProcessQuality(records),
-      previous ? buildProcessQuality(filterRecordsByPeriod(rawHistoryRecords(), previous.start, previous.end)) : null,
-    );
     renderPeaks(series);
     renderDailyTable(series);
 
@@ -1011,9 +870,6 @@
 
   function bindDashboardControls() {
     document.querySelectorAll('[data-grcon-view="dashboard"]').forEach((button) => button.addEventListener("click", activateDashboard));
-    document.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
-      button.addEventListener("click", () => setDashboardTab(button.dataset.dashboardTab));
-    });
     document.querySelectorAll('[data-grcon-view]:not([data-grcon-view="dashboard"])').forEach((button) => button.addEventListener("click", hideDashboard));
 
     document.querySelectorAll("[data-dashboard-granularity]").forEach((button) => {
@@ -1255,7 +1111,7 @@
     activate: activateDashboard,
     render: renderDashboard,
     exportExcel: exportDashboardExcel,
-    _debug: Object.freeze({ buildProcessQuality, buildDashboardDailyData, buildDashboardWeeklyData, filterRecordsByPeriod, emittedDocuments, totalsFromDaily, kpiTrend, previousPeriodOf, daysInPeriod, startOfWeekKey, endOfWeekKey, clampWeekCount, weeklyRangeFor, dashboardPointLabel }),
+    _debug: Object.freeze({ buildDashboardDailyData, buildDashboardWeeklyData, filterRecordsByPeriod, emittedDocuments, totalsFromDaily, kpiTrend, previousPeriodOf, daysInPeriod, startOfWeekKey, endOfWeekKey, clampWeekCount, weeklyRangeFor, dashboardPointLabel }),
   });
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
