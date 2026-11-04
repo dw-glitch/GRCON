@@ -25,4 +25,10 @@ assert.match(cloud, /SYNC_BACKOFF_MAX_MS = 300_000/);
 assert.match(cloud, /SYNC_BACKOFF_BASE_MS \* 2 \*\* \(state\.syncFailures - 1\)/);
 assert.match(cloud, /pull: \(\) => runSyncCycle\(\{ force: true \}\)/, "ação do usuário ignora a espera");
 assert.match(cloud, /state\.syncFailures = 0;\s*state\.syncBlockedUntil = 0;/, "sucesso zera a espera");
+// Políticas de segurança (RLS) sem reavaliar auth.uid() por linha (alerta auth_rls_initplan).
+const rls = read("supabase/migrations/20261104221515_rls_auth_uid_initplan.sql");
+for (const policy of ["grcon_contracts_select", "grcon_notifications_select", "grcon_notification_reads_select", "grcon_notification_reads_insert", "grcon_notification_reads_update", "grcon_notification_reads_delete"]) {
+  assert.ok(rls.includes(`alter policy ${policy} `), `${policy} reescrita`);
+}
+assert.doesNotMatch(rls.split("\n").filter((line) => !line.startsWith("--")).join("\n").replace(/\(select auth\.uid\(\)\)/g, ""), /auth\.uid\(\)/, "toda chamada a auth.uid() está dentro de (select …)");
 console.log("supabase_deadline_health: OK");
