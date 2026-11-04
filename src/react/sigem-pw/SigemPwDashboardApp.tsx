@@ -172,7 +172,7 @@ export function SigemPwDashboardApp() {
             <strong id="spw-list-title">{activeLabel}</strong>
             <small>{state.activeList === "pwDuplicates" ? "Todas as ocorrências dos grupos duplicados na base PW completa, com linha de origem e status original." : state.revisionScope === "revision0"
               ? "Detalhamento auditável somente da revisão 0; os demais filtros permanecem ativos."
-              : "Detalhamento auditável por Documento + Revisão; os demais filtros permanecem ativos."}</small>
+              : "Detalhamento auditável por revisão de documento; os demais filtros permanecem ativos."}</small>
           </div>
           <UiMetaPill><strong>{fmt(pageData.rows.length)}</strong> registro(s)</UiMetaPill>
         </header>

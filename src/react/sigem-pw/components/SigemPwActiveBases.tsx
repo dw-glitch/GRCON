@@ -23,8 +23,8 @@ export function SigemPwActiveBases({ state, onManage }: { state: SigemPwState; o
   const quality = state.result?.quality;
   const ldSources = listedSources(state.ld);
   const items: Item[] = [
-    { id: "sigem", label: "SIGEM · Consulta Geral", base: state.sigem, count: quality?.sigemEntries ?? null, unit: "documento + revisão" },
-    { id: "pw", label: "ProjectWise · PW", base: state.pw, count: quality?.pwEntries ?? null, unit: "documento + revisão (CSG/QTM)" },
+    { id: "sigem", label: "SIGEM · Consulta Geral", base: state.sigem, count: quality?.sigemEntries ?? null, unit: "revisões de documentos" },
+    { id: "pw", label: "ProjectWise · PW", base: state.pw, count: quality?.pwEntries ?? null, unit: "revisões de documentos (CSG/QTM)" },
     {
       id: "ld", label: "Referências · LDs", base: state.ld, count: quality?.ldDocumentCount ?? null, unit: "documentos únicos",
       detail: ldSources.length ? `${ldSources.filter(source => source.active).length} de ${ldSources.length} fonte(s) ativa(s)` : undefined,

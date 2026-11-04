@@ -133,7 +133,7 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
           <span><i className="sigem-removed"></i>Saíram SIGEM</span>
           <span><i className="pw"></i>PW</span>
           <span><i className="pw-removed"></i>Saíram PW</span>
-          <span><i className="emitted"></i>Emitidos PW</span>
+          <span><i className="emitted"></i>Emitidas no PW</span>
         </div>
       </header>
       <div className="spw-evo-days">
@@ -178,7 +178,7 @@ function AuditArticle({
         {fmt(audit.uniqueDocuments)} documentos únicos · {fmt(audit.validRevisionRecords)} registros/revisões válidos · {fmt(audit.technicalDuplicates)} duplicidade(s) técnica(s).
       </p>
       <p className="spw-evo-audit-secondary">
-        {fmt(audit.rawRecords)} linhas brutas → {fmt(audit.acceptedRecords)} aceitas → {fmt(audit.documentRevisionRecords)} documento + revisão
+        {fmt(audit.rawRecords)} linhas brutas → {fmt(audit.acceptedRecords)} aceitas → {fmt(audit.documentRevisionRecords)} revisões de documentos
         {snapshot.system === "pw" ? " · " + fmt(audit.emittedDocumentRevisionRecords) + " emitidos" : ""}.
       </p>
       <small>Regra: {audit.registrationRule || "regra vigente do motor SIGEM × PW"}</small>
@@ -227,10 +227,10 @@ function MetricAuditDrawer({
   const details: Record<string, { title: string; formula: string; rows: Array<[string, unknown]> }> = {
     "sigem-new": {
       title: "Entraram no SIGEM",
-      formula: "Ocorrências técnicas presentes no snapshot SIGEM atual e ausentes no anterior. Em paralelo, documento + revisão distingue documento novo de nova revisão.",
+      formula: "Ocorrências técnicas presentes no snapshot SIGEM atual e ausentes no anterior. Em paralelo, a revisão de documento distingue documento novo de nova revisão.",
       rows: [
         ["Ocorrências técnicas novas", comparison?.sigem?.added.length || 0],
-        ["Documento + revisão novos", comparison?.sigem?.documentRevision?.added.length || 0],
+        ["Revisões de documentos novas", comparison?.sigem?.documentRevision?.added.length || 0],
         ["Documentos novos", comparison?.sigem?.documentRevision?.newDocuments.length || 0],
         ["Novas revisões", comparison?.sigem?.documentRevision?.newRevisions.length || 0],
       ],
@@ -240,7 +240,7 @@ function MetricAuditDrawer({
       formula: "Presença válida na relação ProjectWise significa cadastro, não emissão. A evolução compara o snapshot atual contra o anterior.",
       rows: [
         ["Ocorrências técnicas novas", comparison?.pw?.added.length || 0],
-        ["Documento + revisão novos", comparison?.pw?.documentRevision?.added.length || 0],
+        ["Revisões de documentos novas", comparison?.pw?.documentRevision?.added.length || 0],
         ["Documentos novos", comparison?.pw?.documentRevision?.newDocuments.length || 0],
         ["Novas revisões", comparison?.pw?.documentRevision?.newRevisions.length || 0],
       ],
@@ -249,12 +249,12 @@ function MetricAuditDrawer({
       title: "Emissões identificadas entre bases",
       formula: "Soma entradas que já chegam emitidas com revisões que passaram de PREVISTO para emitidas. Uma entrada já emitida pode ter sido emitida antes do intervalo. Duas bases são fotografias: não mostram todas as operações realizadas entre elas nem emissões repetidas da mesma revisão. Estado anterior desconhecido fica fora desta movimentação.",
       rows: [
-        ["Emissões identificadas · documento + revisão", comparison?.pwEmissions.length || 0],
+        ["Emissões identificadas · revisões de documentos", comparison?.pwEmissions.length || 0],
         ["Entradas já emitidas ao aparecer na base", comparison?.pwEmissions.filter(row => !row.previous).length || 0],
         ["Transições de PREVISTO para emitido", comparison?.pwEmissions.filter(row => row.previous).length || 0],
         ["Movimentos técnicos emitidos · compatibilidade", comparison?.pwEmissionsTechnical.length || 0],
         ["Indeterminado anterior → emitido atual (não atribuído como nova emissão)", comparison?.pwEmissionIndeterminateToEmitted.length || 0],
-        ["PW atual · documento + revisão emitido", pwAudit.emittedDocumentRevisionRecords || 0],
+        ["PW atual · revisões de documentos emitidas", pwAudit.emittedDocumentRevisionRecords || 0],
         ["PW atual · documentos únicos emitidos", pwAudit.emittedUniqueDocuments || 0],
       ],
     },
@@ -267,30 +267,30 @@ function MetricAuditDrawer({
       ],
     },
     "pw-current": {
-      title: "Cadastrados no PW atual",
-      formula: "Todo documento + revisão válido presente na base PW atual conta como cadastrado, independentemente de estar emitido.",
+      title: "Cadastradas no PW atual",
+      formula: "Toda revisão de documento válida presente na base PW atual conta como cadastrada, independentemente de estar emitida.",
       rows: [
         ["Linhas brutas", pwAudit.rawRecords || 0],
         ["Registros técnicos aceitos", pwAudit.acceptedRecords || 0],
-        ["Documento + revisão", pwAudit.documentRevisionRecords || 0],
+        ["Revisões de documentos", pwAudit.documentRevisionRecords || 0],
         ["Documentos únicos", pwAudit.uniqueDocuments || 0],
       ],
     },
     "pw-current-emitted": {
-      title: "Emitidos no PW atual",
-      formula: "Documento + revisão válido cuja coluna Última emissão traz SIM (evidência atual) ou NÃO (evidência histórica), preservando a semântica vigente do Dashboard.",
+      title: "Emitidas no PW atual",
+      formula: "Revisão de documento válida cuja coluna Última emissão traz SIM (evidência atual) ou NÃO (evidência histórica), preservando a semântica vigente do Dashboard.",
       rows: [
-        ["Documento + revisão emitido", pwAudit.emittedDocumentRevisionRecords || 0],
+        ["Revisões de documentos emitidas", pwAudit.emittedDocumentRevisionRecords || 0],
         ["Documentos únicos emitidos", pwAudit.emittedUniqueDocuments || 0],
         ["Evidência atual · SIM", pwAudit.emissionBreakdown?.current || 0],
         ["Evidência histórica · NÃO", pwAudit.emissionBreakdown?.historical || 0],
       ],
     },
     "pw-current-not-emitted": {
-      title: "Não emitidos no PW atual",
-      formula: "Documento + revisão cadastrado cuja Última emissão é PREVISTO. Valores ausentes ou desconhecidos ficam fora desta métrica e são classificados como indeterminados.",
+      title: "Não emitidas no PW atual",
+      formula: "Revisão de documento cadastrada cuja Última emissão é PREVISTO. Valores ausentes ou desconhecidos ficam fora desta métrica e são classificados como indeterminados.",
       rows: [
-        ["Documento + revisão não emitido determinável", pwAudit.notEmittedDocumentRevisionRecords || 0],
+        ["Revisões de documentos não emitidas (determinável)", pwAudit.notEmittedDocumentRevisionRecords || 0],
         ["PREVISTO", pwAudit.emissionBreakdown?.planned || 0],
       ],
     },
@@ -298,24 +298,24 @@ function MetricAuditDrawer({
       title: "Emissão indeterminada no PW",
       formula: "A fonte não permite afirmar emitido nem não emitido: Última emissão está ausente ou contém valor não reconhecido.",
       rows: [
-        ["Documento + revisão indeterminado", pwAudit.indeterminateEmissionDocumentRevisionRecords || 0],
+        ["Revisões de documentos com emissão indeterminada", pwAudit.indeterminateEmissionDocumentRevisionRecords || 0],
         ["Sem valor", pwAudit.emissionBreakdown?.missing || 0],
         ["Valor desconhecido", pwAudit.emissionBreakdown?.unknown || 0],
       ],
     },
     "only-sigem": {
       title: "Somente SIGEM",
-      formula: "Documento + revisão válido presente no SIGEM atual e ausente no PW atual.",
+      formula: "Revisão de documento válida presente no SIGEM atual e ausente no PW atual.",
       rows: [["Somente SIGEM", comparison?.current?.onlySigem.length || 0]],
     },
     "only-pw": {
       title: "Somente PW",
-      formula: "Documento + revisão válido presente no PW atual e ausente no SIGEM atual.",
+      formula: "Revisão de documento válida presente no PW atual e ausente no SIGEM atual.",
       rows: [["Somente PW", comparison?.current?.onlyPw.length || 0]],
     },
     "current-both": {
       title: "Presentes nas duas bases",
-      formula: "Documento + revisão válido localizado simultaneamente nos snapshots SIGEM e PW atuais.",
+      formula: "Revisão de documento válida localizada simultaneamente nos snapshots SIGEM e PW atuais.",
       rows: [
         ["SIGEM + PW", comparison?.current?.both.length || 0],
         ["Ambos · emitidos", comparison?.current?.bothEmitted.length || 0],
@@ -426,7 +426,7 @@ function DetailDrawer({
     ["Motivo de inclusão", row.inclusionReason],
     ["Motivo de exclusão", row.exclusionReason || row.reason],
     ["Regra/evidência de emissão", row.matchedPw?.emissionReason || row.emissionReason],
-    ["Chave documento + revisão", row.documentRevisionKey],
+    ["Chave da revisão de documento", row.documentRevisionKey],
   ];
   // O painel é portalizado para não ficar preso ao scroll/stacking do módulo.
   return createPortal(
@@ -516,7 +516,7 @@ export function SigemPwEvolutionApp() {
           <h3>O que mudou entre as bases</h3>
           <p>{state.revisionScope === "revision0"
             ? "Visão inicial: revisão 0 e cadastros previstos sem revisão identificada são exibidos separadamente, sem presumir revisão 0."
-            : "Visão histórica completa: cada Documento + Revisão participa do comparativo entre snapshots."}</p>
+            : "Visão histórica completa: cada revisão de documento participa do comparativo entre snapshots."}</p>
         </div>
         <div className="spw-evo-actions">
           <button className="text-button" id="spw-evo-refresh-bases" type="button" disabled={state.busy}
@@ -578,13 +578,13 @@ export function SigemPwEvolutionApp() {
             onClick={() => adapter.setRevisionScope("all")}
           >
             <strong>Todas as revisões</strong>
-            <span>Documento + Revisão</span>
+            <span>Revisões de documentos</span>
           </button>
         </div>
         <p className="spw-revision-scope-note" aria-live="polite">
           {state.revisionScope === "revision0"
             ? "Somente ocorrências cuja revisão normalizada pela mesma regra do Dashboard é 0 entram nos cálculos."
-            : "Todas as revisões válidas são comparadas como ocorrências Documento + Revisão independentes."}
+            : "Todas as revisões válidas são comparadas como revisões de documentos independentes."}
         </p>
       </div>
 
@@ -629,19 +629,19 @@ export function SigemPwEvolutionApp() {
       <div className="spw-evo-kpis" id="spw-evo-kpis">
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi sigem" data-evo-list="sigem-new" aria-pressed={state.listMode === "sigem-new"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("sigem-new")}>
-            <span>Entraram no SIGEM</span><strong>{value(Boolean(comparison?.sigem), counts["sigem-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Revisão 0" : "Ocorrências técnicas novas"} · doc+rev {fmt(comparison?.sigem?.documentRevision?.added.length)}</small>
+            <span>Entraram no SIGEM</span><strong>{value(Boolean(comparison?.sigem), counts["sigem-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Revisão 0" : "Ocorrências técnicas novas"} · {fmt(comparison?.sigem?.documentRevision?.added.length)} revisões de documentos</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.sigem} onClick={() => setAuditMetric("sigem-new")}>Como foi calculado?</button>
         </div>
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi pw" data-evo-list="pw-new" aria-pressed={state.listMode === "pw-new"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-new")}>
-            <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Cadastros novos na revisão 0" : "Cadastros novos"} · doc+rev {fmt(comparison?.pw?.documentRevision?.added.length)}</small>
+            <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Cadastros novos na revisão 0" : "Cadastros novos"} · {fmt(comparison?.pw?.documentRevision?.added.length)} revisões de documentos</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.pw} onClick={() => setAuditMetric("pw-new")}>Como foi calculado?</button>
         </div>
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi emitted" data-evo-list="pw-emitted" aria-pressed={state.listMode === "pw-emitted"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-emitted")}>
-            <span>Emitidos no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-emitted"], true)}</strong><small>Entradas emitidas/transições entre bases · doc. + revisão</small>
+            <span>Emitidas no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-emitted"], true)}</strong><small>Entradas emitidas/transições entre bases · revisões de documentos</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.pw} onClick={() => setAuditMetric("pw-emitted")}>Como foi calculado?</button>
         </div>
@@ -679,7 +679,7 @@ export function SigemPwEvolutionApp() {
 
       <section className="spw-evo-current" id="spw-evo-current">
         <header>
-          <div><strong>Leitura da base atual</strong><small>{state.revisionScope === "revision0" ? "Somente revisão 0; documento + revisão e documentos únicos permanecem auditáveis." : "Documento + revisão é mostrado em paralelo a documentos únicos para eliminar ambiguidade de contagem."}</small></div>
+          <div><strong>Leitura da base atual</strong><small>{state.revisionScope === "revision0" ? "Somente revisão 0; revisões de documentos e documentos únicos permanecem auditáveis." : "A revisão de documento é mostrada em paralelo a documentos únicos para eliminar ambiguidade de contagem."}</small></div>
         </header>
         <div className="spw-evo-current-grid">
           <article>
@@ -697,13 +697,13 @@ export function SigemPwEvolutionApp() {
           <article>
             <span>Somente SIGEM</span>
             <strong>{hasValidatedLd ? fmt(comparison?.current?.onlySigem.length) : "—"}</strong>
-            <small>documento + revisão</small>
+            <small>revisões de documentos</small>
             <div><button type="button" data-evo-current-list="only-sigem" onClick={() => adapter.setListMode("only-sigem")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("only-sigem")}>Como calculado?</button></div>
           </article>
           <article>
             <span>Somente PW</span>
             <strong>{hasValidatedLd ? fmt(comparison?.current?.onlyPw.length) : "—"}</strong>
-            <small>documento + revisão</small>
+            <small>revisões de documentos</small>
             <div><button type="button" data-evo-current-list="only-pw" onClick={() => adapter.setListMode("only-pw")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("only-pw")}>Como calculado?</button></div>
           </article>
         </div>
@@ -732,13 +732,13 @@ export function SigemPwEvolutionApp() {
         </header>
         <div className="spw-evo-diagnostic-grid">
           <article><strong>{fmt(Math.max(0, Number(selectedPw?.audit?.documentRevisionRecords || 0) - Number(selectedPw?.audit?.uniqueDocuments || 0)))}</strong><span>revisões adicionais do mesmo documento no PW</span></article>
-          <article><strong>{fmt(selectedPw?.audit?.technicalVariantsSameDocumentRevision)}</strong><span>variações técnicas da mesma chave documento + revisão</span></article>
+          <article><strong>{fmt(selectedPw?.audit?.technicalVariantsSameDocumentRevision)}</strong><span>variações técnicas da mesma revisão de documento</span></article>
           <article><strong>{fmt(selectedPw?.audit?.technicalDuplicates)}</strong><span>duplicidades técnicas exatas removidas</span></article>
           <article><strong>{fmt(selectedPw?.audit?.discardedRecords)}</strong><span>registros PW fora do universo válido / inválidos</span></article>
           <article><strong>{fmt(selectedPw?.audit?.emissionBreakdown?.planned)}</strong><span>registros PW com emissão PREVISTO</span></article>
-          <article><strong>{fmt(selectedPw?.audit?.indeterminateEmissionDocumentRevisionRecords)}</strong><span>documento + revisão com emissão indeterminada <button type="button" className="text-button" onClick={() => adapter.setListMode("pw-current-indeterminate")}>ver registros</button></span></article>
+          <article><strong>{fmt(selectedPw?.audit?.indeterminateEmissionDocumentRevisionRecords)}</strong><span>revisões de documentos com emissão indeterminada <button type="button" className="text-button" onClick={() => adapter.setListMode("pw-current-indeterminate")}>ver registros</button></span></article>
         </div>
-        <p>O GRCON não ajusta esses valores para coincidir com uma expectativa externa. Cada grupo acima pode alterar a interpretação entre documento, documento + revisão, cadastrado e emitido.</p>
+        <p>O GRCON não ajusta esses valores para coincidir com uma expectativa externa. Cada grupo acima pode alterar a interpretação entre documento, revisão de documento, cadastrada e emitida.</p>
       </section>
 
       <nav className="spw-evo-tabs" id="spw-evo-tabs" aria-label="Listas da evolução">

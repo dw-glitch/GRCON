@@ -22,7 +22,7 @@ export function SigemPwHeader({ busy, ready, onEvolution, onHistory, onCoordinat
         meta={(
           <>
             <UiMetaPill><strong>PW: CSG + QTM · coluna C</strong></UiMetaPill>
-            <UiMetaPill>Indicadores por <strong>documento + revisão</strong></UiMetaPill>
+            <UiMetaPill>Indicadores por <strong>revisão de documento</strong></UiMetaPill>
             <UiMetaPill className={ready ? "spw-meta-ready" : "spw-meta-pending"}>
               <strong>{ready ? "Bases prontas" : "Aguardando bases"}</strong>
             </UiMetaPill>

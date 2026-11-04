@@ -1858,7 +1858,38 @@
     }
   }
 
+  // Falha passageira do servidor (500/503, estouro de tempo, rede): não é mudança de schema nem de política.
+  function isTransientServerError(error) {
+    const status = Number(error && (error.status || error.statusCode));
+    if (status >= 500) return true;
+    const code = String(error && error.code || "");
+    if (code === "57014" || code === "PGRST000" || code === "PGRST001" || code === "PGRST002") return true;
+    return /failed to fetch|networkerror|load failed|timeout|timed out|service unavailable|internal server error|bad gateway|gateway time-?out/i
+      .test(String(error && (error.message || error.details) || error || ""));
+  }
+
+  // Leituras simultâneas do histórico (login, sincronização, atualização periódica) compartilham UMA consulta:
+  // durante uma queda, o console mostrava a mesma consulta pesada repetida várias vezes em sequência.
+  let historyPullInFlight = null;
   async function pullCloudHistory(options) {
+    const settings = options || {};
+    const workspaceId = state.membership?.workspace_id || "";
+    if (historyPullInFlight && historyPullInFlight.workspaceId === workspaceId) {
+      const running = historyPullInFlight;
+      if (!settings.forceFull || running.forceFull) return running.promise;
+      // Pedido de espelho completo durante uma leitura incremental: espera a atual e refaz completo.
+      try { await running.promise; } catch (_) { /* a nova leitura trata o erro */ }
+      return pullCloudHistory(options);
+    }
+    const entry = { workspaceId, forceFull: Boolean(settings.forceFull), promise: null };
+    entry.promise = pullCloudHistoryNow(settings).finally(() => {
+      if (historyPullInFlight === entry) historyPullInFlight = null;
+    });
+    historyPullInFlight = entry;
+    return entry.promise;
+  }
+
+  async function pullCloudHistoryNow(options) {
     if (!state.online || !state.membership?.workspace_id || !History) return { records: [], removed: 0 };
     const settings = options || {};
     setSyncLabel("Atualizando histórico…", "info");
@@ -1911,11 +1942,17 @@
       window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { cloudPull: true, incremental: true, records, removed } }));
       return { records, removed };
     } catch (error) {
-      console.warn("GRCON Cloud: leitura compartilhada indisponível", error);
-      // Se uma consulta incremental falhar por mudança de schema/política, a
-      // próxima tentativa volta ao espelho completo em vez de ficar presa.
-      state.historyFullSyncDone = false;
-      state.historySyncSince = "";
+      if (isTransientServerError(error)) {
+        // Queda do servidor: o que já foi espelhado continua valendo; a próxima tentativa segue incremental
+        // (voltar ao espelho completo baixaria o histórico inteiro de novo no pior momento).
+        console.debug("GRCON Cloud: leitura compartilhada indisponível (falha passageira do servidor)", error);
+      } else {
+        console.warn("GRCON Cloud: leitura compartilhada indisponível", error);
+        // Se uma consulta incremental falhar por mudança de schema/política, a
+        // próxima tentativa volta ao espelho completo em vez de ficar presa.
+        state.historyFullSyncDone = false;
+        state.historySyncSince = "";
+      }
       throw error;
     }
   }

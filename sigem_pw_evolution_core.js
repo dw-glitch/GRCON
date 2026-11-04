@@ -566,11 +566,11 @@
       if (after.emissionState !== "emitted") return;
       const before = previous.get(key);
       if (!before) {
-        transitions.push({ ...after, movement: "Nova entrada documento + revisão já emitida" });
+        transitions.push({ ...after, movement: "Nova entrada de revisão de documento já emitida" });
         return;
       }
       if (before.emissionState === "not-emitted") {
-        transitions.push({ ...after, movement: "Documento + revisão passou de não emitido para emitido", previous: before });
+        transitions.push({ ...after, movement: "Revisão de documento passou de não emitida para emitida", previous: before });
         return;
       }
       if (before.emissionState === "indeterminate") {

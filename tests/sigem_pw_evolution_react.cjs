@@ -76,7 +76,7 @@ assert.ok(adapter.includes('fieldValue("spw-evo-filter-query", filters.query)'),
 assert.ok(adapter.includes('fieldValue("spw-evo-filter-tag", filters.tag)'));
 assert.ok(adapter.includes('fieldValue("spw-evo-filter-eap", filters.eap)'));
 
-for (const label of ["Entraram no SIGEM", "Entraram no PW", "Emitidos no PW", "SIGEM novo sem PW", "Gerenciar histórico"]) {
+for (const label of ["Entraram no SIGEM", "Entraram no PW", "Emitidas no PW", "SIGEM novo sem PW", "Gerenciar histórico"]) {
   assert.ok(app.includes(label), "texto funcional ausente: " + label);
 }
 for (const id of ["spw-evo-date-start", "spw-evo-date-end", "spw-evo-filter-query", "spw-evo-filter-document-type", "spw-evo-filter-source", "spw-evo-table"]) {

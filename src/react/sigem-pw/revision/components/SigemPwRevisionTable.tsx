@@ -43,7 +43,7 @@ function DetailRow({ row, histories }: {
               <div><dt>Tipo</dt><dd>{row.documentType || "—"}</dd></div>
               <div><dt>Revisão SIGEM</dt><dd>{row.sigemRevision || "—"}</dd></div>
               <div><dt>Revisões PW</dt><dd>{pwRevisions}</dd></div>
-              <div><dt>Critério</dt><dd>documento + revisão</dd></div>
+              <div><dt>Critério</dt><dd>revisão de documento</dd></div>
             </dl>
           </section>
         </div>

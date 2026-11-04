@@ -112,7 +112,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   const header2: CellValue[] = Array(headers.length).fill("");
   [header1[0], header1[1], header1[2], header1[3], header1[4], header1[5], header1[6], header1[7], header1[8], header1[9]] =
     ["CONTROLE PW • GRCON", "REVISÕES", summary.active, "PW CAD.", summary.registered, "PW EMIT.", summary.emitted, "SIGEM", summary.posted, summary.pending];
-  header2[0] = "Documento + revisão"; header2[5] = "Evidência PW";
+  header2[0] = "Revisão de documento"; header2[5] = "Evidência PW";
   revisions.forEach((rev, index) => {
     header2[index + 11] = rev;
     header1[index + 11] = report.rows.filter(row => row.revision === rev && !row.pwEmitted).length;
