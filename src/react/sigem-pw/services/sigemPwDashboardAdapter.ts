@@ -743,7 +743,11 @@ async function refresh(reason = ""): Promise<void> {
       state.ld = bases.ld?.meta ? bases.ld : EMPTY_BASE();
       state.history = bases.history;
       state.analysisError = "";
-      if (!state.model || modelSourcesKey() !== lastModelSources) await timed("refresh.model", rebuildModelAsync);
+      if (!state.model || modelSourcesKey() !== lastModelSources) {
+        // Etapa seguinte, a mais demorada com bases grandes: dizer o que está acontecendo.
+        if (state.busy && !state.ready) { state.progressMessage = "Calculando a comparação entre as bases…"; emit(); }
+        await timed("refresh.model", rebuildModelAsync);
+      }
       state.ready = true;
       renderFromModel(true);
       if (resetApplied) notify("Bases anteriores SIGEM, PW e LD removidas. O módulo está pronto para novas importações.", "success");
