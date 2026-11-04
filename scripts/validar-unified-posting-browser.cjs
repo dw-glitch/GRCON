@@ -236,7 +236,7 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
    const played=document.querySelector('.grcon-mascot-runner-video').currentSrc;
    window.GrconMascotRunner.stop('QA-original');return played;
   });
-  assert.ok(originalRun.includes('/grcon-mascot-running-alpha.webm'),'SIGEM × PW retains its actual original video');
+  assert.ok(originalRun.includes('/grcon-mascot-sigem-pw-running-alpha.webm'),'SIGEM × PW plays its dedicated transparent running clip');
   await page.emulateMedia({reducedMotion:'reduce'});
   assert.equal(await page.evaluate(()=>window.GrconMascotRunner.run({context:'control'})),false);
   await page.emulateMedia({reducedMotion:'no-preference'});

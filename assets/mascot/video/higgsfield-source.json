@@ -112,5 +112,15 @@
       "visualReview": "Official G preserved; clean matte on light and dark backgrounds",
       "sizeBytes": 669284
     }
+  },
+  "sigemPwRunning": {
+    "asset": "grcon-mascot-sigem-pw-running-alpha.webm",
+    "preparedAt": "2026-11-04",
+    "size": "448x448",
+    "durationSeconds": 1.125,
+    "codec": "VP9 alpha, silent",
+    "source": "clipe enviado pelo usuário (Higgsfield), mascote correndo para a direita sobre fundo rosa",
+    "backgroundRemoval": "Offline magenta matte (scripts/rebuild_mascot_pink_alpha.py): alfa pela diferença min(R,B)-G, despill nas bordas, quadrado comum e laço de 27 quadros escolhido por similaridade de pose; sem chroma key no navegador",
+    "usage": "Corrida horizontal do mascote no módulo SIGEM × PW (abertura do módulo e carga de bases/consultas), via GrconMascotRunner"
   }
 }

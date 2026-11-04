@@ -750,7 +750,18 @@
     return /sigem-pw|projectwise|\bpw\b|worker|combinar pdf|importa|base grande|muitos documentos/.test(text);
   }
 
+  // SIGEM × PW: a corrida começa na hora (abertura do módulo, importação de bases e consultas)
+  // e, mesmo em operações rápidas, completa ao menos uma travessia da tela.
+  const SIGEM_PW_MIN_RUN_MS = 5_100;
+  let sigemPwMinUntil = 0;
+  let sigemPwEndTimer = 0;
+  function isSigemPwOperation(detail) {
+    return detail?.state === "sigem-pw-analysis" || detail?.context === "sigem-pw";
+  }
+
   function beginLegacy(detail) {
+    root.clearTimeout(sigemPwEndTimer);
+    sigemPwEndTimer = 0;
     if (legacyOperation) legacyOperation.cancel();
     const controlAnalysis = detail?.context === "control" && /conferência|analis|preparando/i.test(detail?.task || "");
     if (controlAnalysis) { warningUntil = 0; root.clearTimeout(warningTimer); warningTimer = 0; }
@@ -762,6 +773,9 @@
     root.clearTimeout(longOperationTimer);
     if (controlAnalysis) {
       legacyOperation?.running(detail?.task || "Analisando documentos…");
+    } else if (isSigemPwOperation(detail)) {
+      if (!sigemPwMinUntil || Date.now() >= sigemPwMinUntil) sigemPwMinUntil = Date.now() + SIGEM_PW_MIN_RUN_MS;
+      legacyOperation?.running(detail?.task || "Comparando SIGEM e ProjectWise");
     } else if (running) {
       longOperationTimer = root.setTimeout(() => {
         legacyOperation?.running(detail?.task || "Processando dados…");
@@ -792,8 +806,20 @@
 
   function handleOperationEvent(event) {
     const detail = event?.detail || {};
-    if (detail.active) beginLegacy(detail);
-    else endLegacy(Boolean(detail.success) || pendingSuccess);
+    if (detail.active) { beginLegacy(detail); return; }
+    const remaining = sigemPwMinUntil - Date.now();
+    if (legacyOperation && remaining > 60) {
+      // Termina só depois da travessia em curso; um novo início cancela este adiamento.
+      root.clearTimeout(sigemPwEndTimer);
+      sigemPwEndTimer = root.setTimeout(() => {
+        sigemPwEndTimer = 0;
+        sigemPwMinUntil = 0;
+        endLegacy(Boolean(detail.success) || pendingSuccess);
+      }, remaining);
+      return;
+    }
+    sigemPwMinUntil = 0;
+    endLegacy(Boolean(detail.success) || pendingSuccess);
   }
 
   function handlePulse(event) {

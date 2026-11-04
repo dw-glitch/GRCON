@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "6.2.0";
+  const VERSION = "6.3.0";
   const ASSET_REVISION = "20260917.1";
   const STYLE_ID = "grcon-mascot-runner-style";
   const STRIP_ID = "grcon-mascot-activity-strip";
@@ -14,6 +14,9 @@
 
   const papersSource = new URL("assets/mascot/video/grcon-mascot-papers-running-alpha.webm", root.location.origin + "/");
   papersSource.searchParams.set("v", "20261014.1");
+  // SIGEM × PW: mascote correndo para a direita (clipe do Higgsfield com fundo rosa, alfa gerado offline).
+  const sigemPwSource = new URL("assets/mascot/video/grcon-mascot-sigem-pw-running-alpha.webm", root.location.origin + "/");
+  sigemPwSource.searchParams.set("v", "20261104.1");
   let activeSource = source;
   let fallback = null;
   let strip = null;
@@ -94,6 +97,13 @@
         if (fallback) fallback.hidden = true;
       });
       video.addEventListener("error", () => {
+        // Se o clipe novo do SIGEM × PW falhar, volta para a corrida original aprovada.
+        if (running && activeSource === sigemPwSource) {
+          activeSource = source;
+          video.src = source.href;
+          try { void video.play(); } catch (_) {}
+          return;
+        }
         if (running && activeSource === papersSource && fallback) {
           video.style.visibility = "hidden";
           fallback.hidden = false;
@@ -135,7 +145,12 @@
 
   async function run(options) {
     const config = options || {};
-    const requestedSource = config.context === "control" ? papersSource : source;
+    // O módulo SIGEM × PW visível também conta: o contexto do controlador pode ainda não ter
+    // trocado quando a operação começa (abertura do módulo).
+    const sigemPwVisible = Boolean(document.getElementById("sigem-pw-dashboard-module") && !document.getElementById("sigem-pw-dashboard-module").hidden);
+    const requestedSource = config.context === "control" ? papersSource
+      : (config.context === "sigem-pw" || (sigemPwVisible && config.context !== "control")) ? sigemPwSource
+      : source;
     if (running && activeSource.href !== requestedSource.href) stop("context-changed");
     activeSource = requestedSource;
     ensureStrip();

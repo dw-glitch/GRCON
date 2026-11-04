@@ -16,7 +16,7 @@ for (const file of files) {
   const fullPath = path.join(directory, file);
   const result = spawnSync("ffmpeg", [
     "-hide_banner", "-loglevel", "error", "-c:v", "libvpx-vp9", "-i", fullPath,
-    "-vf", "select='eq(n,8)+eq(n,48)+eq(n,88)',format=rgba,alphaextract,signalstats,metadata=print:file=-",
+    "-vf", "select='eq(n,5)+eq(n,12)+eq(n,20)+eq(n,48)+eq(n,88)',format=rgba,alphaextract,signalstats,metadata=print:file=-",
     "-vsync", "0", "-f", "null", "-",
   ], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
   assert.equal(result.status, 0, `${file}: ffmpeg precisa decodificar o VP9 com alfa`);
