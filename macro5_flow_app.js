@@ -130,7 +130,7 @@
       const label = list.length === 1 ? (Flow.text(list[0]) || "(Vazias)") : list.length ? `${list.length} selecionados` : "Nenhum valor";
       chips.push(chip(`${column?.label || key}: ${label}`, "column", key));
     });
-    if (snapshot.groupByStatus) chips.push(chip("Agrupado por situação", "group"));
+    // O agrupamento por situação é o padrão e já tem botão próprio na barra; como chip virava ruído de "filtro ativo".
     els.filters.innerHTML = chips.join("");
     els.filters.hidden = chips.length === 0;
   }

@@ -1501,7 +1501,7 @@
      junto do rolamento interno ele confundia a altura intrínseca. */
   html[data-app="GRCON"] .virtual-table-scroll {
     position: relative;
-    block-size: clamp(24rem, calc(100vh - 22rem), 52rem);
+    block-size: clamp(24rem, calc(100vh - 15rem), 60rem);
     max-block-size: none;
     min-block-size: 0;
     overflow: auto;
@@ -1685,7 +1685,7 @@
   /* Com a área de trabalho rolando por dentro, a tabela ocupa o que sobra da
      altura em vez de um pedaço fixo. */
   html[data-app="GRCON"] .virtual-table-scroll {
-    block-size: clamp(20rem, calc(100vh - 21rem), 60rem);
+    block-size: clamp(20rem, calc(100vh - 14rem), 64rem);
   }
 }
 
