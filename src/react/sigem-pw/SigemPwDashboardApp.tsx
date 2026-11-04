@@ -45,6 +45,30 @@ export function SigemPwDashboardApp() {
   const classifiedTotal = state.result?.summary?.classifiedTotal || 0;
   const loadedBases = [state.sigem.meta, state.pw.meta, state.ld.meta].filter(Boolean).length;
 
+  // Antes da primeira leitura terminar, as bases ainda não estão no estado: mostrar
+  // "Não carregada / Pendente / Pronto para receber novas bases" faz parecer que
+  // os dados salvos sumiram e leva o operador a reimportar sem necessidade.
+  if (!state.ready) {
+    return (
+      <div className="spw-dashboard-shell spw-phase-b">
+        <SigemPwHeader
+          busy
+          ready={false}
+          onEvolution={() => {}}
+          onHistory={() => {}}
+          onCoordinatorExport={() => {}}
+        />
+        <div className="spw-loading" role="status" aria-live="polite" aria-busy="true">
+          <i aria-hidden="true"></i>
+          <div>
+            <strong>{state.progressMessage || "Carregando as bases salvas…"}</strong>
+            <span>As bases importadas estão salvas neste navegador. Com bases grandes, a leitura e a comparação podem levar alguns segundos; nada precisa ser reimportado.</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="spw-dashboard-shell spw-phase-b">
       <SigemPwHeader

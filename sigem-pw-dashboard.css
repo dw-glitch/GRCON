@@ -93,6 +93,53 @@
   animation: spw-spin .7s linear infinite;
 }
 
+/* Carregamento inicial das bases salvas (antes de qualquer indicador existir). */
+#sigem-pw-dashboard-module .spw-loading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 18px 20px;
+  border: 1px solid rgba(35, 130, 173, .18);
+  border-left: 4px solid var(--brand-500, #2382ad);
+  border-radius: 12px;
+  background: var(--brand-50, #eaf5fb);
+  color: var(--brand-800, #0f537a);
+}
+
+#sigem-pw-dashboard-module .spw-loading i {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin-top: 2px;
+  border: 3px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spw-spin .7s linear infinite;
+}
+
+#sigem-pw-dashboard-module .spw-loading strong {
+  display: block;
+  font-size: .95rem;
+}
+
+#sigem-pw-dashboard-module .spw-loading span {
+  display: block;
+  margin-top: 4px;
+  font-size: .8rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sigem-pw-dashboard-module .spw-loading i { animation: none; }
+}
+
+[data-theme="dark"] #sigem-pw-dashboard-module .spw-loading {
+  background: rgba(35, 130, 173, .12);
+  color: var(--text-1, #dcebf4);
+}
+
 @keyframes spw-spin {
   to { transform: rotate(360deg); }
 }

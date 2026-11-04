@@ -1561,8 +1561,17 @@
       .trim();
   }
 
+  // A chave é pedida várias vezes por arquivo (seleção, assinatura, análise) e a
+  // primeira leitura de size/lastModified consulta o disco; memorizar por File.
+  const physicalKeyCache = new WeakMap();
   function listPhysicalKey(file) {
-    return [file.webkitRelativePath || file.name, Number(file.size), Number(file.lastModified)].join("::");
+    if (!file || typeof file !== "object") return [file && file.name, Number(file && file.size), Number(file && file.lastModified)].join("::");
+    let key = physicalKeyCache.get(file);
+    if (key === undefined) {
+      key = [file.webkitRelativePath || file.name, Number(file.size), Number(file.lastModified)].join("::");
+      physicalKeyCache.set(file, key);
+    }
+    return key;
   }
 
   function addListCandidate(target, seen, rawValue, sheetName, rowNumber, header) {
