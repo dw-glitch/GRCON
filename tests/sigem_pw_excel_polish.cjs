@@ -71,11 +71,11 @@ const labels = new Map(plan.sheets.Resumo.map(row => [row[0], row[1]]));
 const find = prefix => plan.sheets.Resumo.find(row => String(row[0]).startsWith(prefix));
 
 // Indicadores novos: cadastro e emissão são situações distintas.
-assert.equal(find("No SIGEM")[1], 2);
-assert.equal(find("Cadastrar no PW — SIGEM")[1], 0);
-assert.equal(find("Cadastrar no PW — Não postados")[1], 0);
-assert.equal(find("Emitir no PW")[1], 1);
-assert.equal(find("Emitidos no PW")[1], 1);
+assert.equal(find("Constam no SIGEM")[1], 2);
+assert.equal(find("A cadastrar no PW — já constam no SIGEM")[1], 0);
+assert.equal(find("A cadastrar no PW — não constam no SIGEM")[1], 0);
+assert.equal(find("A emitir no PW")[1], 1);
+assert.equal(find("Emitidas no PW")[1], 1);
 assert.ok(plan.overviewSections.length === 3, "resumo organizado em seções");
 assert.ok(plan.overviewSections.every(row => plan.sheets.Resumo[row - 1][1] === ""));
 assert.ok(labels.has("Gerado em") && labels.has("Data da base PW"), "proveniência com datas no resumo");
@@ -114,8 +114,8 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   assert.equal(control.pageSetup.fitToWidth, 1);
   const overview = reopened.getWorksheet("Resumo");
   const row = label => { for (let i = 1; i <= overview.rowCount; i++) if (String(overview.getCell("A" + i).value).startsWith(label)) return i; return 0; };
-  assert.equal(overview.getCell("B" + row("Emitir no PW")).value, 1);
-  assert.equal(overview.getCell("B" + row("Emitir no PW")).numFmt, "#,##0");
+  assert.equal(overview.getCell("B" + row("A emitir no PW")).value, 1);
+  assert.equal(overview.getCell("B" + row("A emitir no PW")).numFmt, "#,##0");
   assert.equal(overview.getCell("A3").value, "VISÃO GERAL");
   assert.equal(argb(overview.getCell("A3")), "FFEDF3F8", "título de seção destacado");
   assert.equal(overview.pageSetup.fitToWidth, 1);

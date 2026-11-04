@@ -63,3 +63,22 @@ Não existe script `lint` no repositório. Foram usados os verificadores existen
 A alteração está preparada para revisão e integração em `main`. Depois da integração, usar o procedimento existente de Cloudflare Workers Builds, sem acionar os workflows manuais do GitHub. Confirmar o commit publicado antes de declarar produção atualizada.
 
 Esta conversa trouxe o prompt, sem as planilhas corporativas atuais. Os testes são sintéticos e não estabelecem os números reais do contrato. A homologação com Consulta Geral, LDs e PW atuais e a confirmação do deploy continuam pendentes. Não foram alteradas bases corporativas nem publicado conteúdo em produção.
+
+
+## Nomenclatura na tela e no Excel (atualização)
+
+A unidade deixou de ser chamada de "par documento + revisão" e passou a ser **revisão de documento**: cada revisão de cada documento conta uma vez (o documento X nas revisões 0 e A são 2 revisões de documentos). A lógica de contagem não mudou; só os nomes.
+
+| Antes | Agora |
+|---|---|
+| Pares (documento + revisão) | Revisões de documentos |
+| No SIGEM | Constam no SIGEM |
+| Cadastrar no PW — SIGEM | A cadastrar no PW — já constam no SIGEM |
+| Cadastrar no PW — Não postados | A cadastrar no PW — não constam no SIGEM |
+| Cadastrados no PW | Cadastradas no PW (a emitir + emitidas) |
+| Emitir no PW | A emitir no PW |
+| Emitidos no PW | Emitidas no PW |
+| Constam nas referências | Constam nas LDs ativas |
+| Trabalhar (coluna X) | Falta fazer (X) |
+
+A tela tem a linha "Como ler os números" e o quadro "Entenda os números", e o Resumo do Excel traz a mesma explicação ("Como contar"). Os valores da coluna Ação (Cadastrar no PW, Emitir no PW, Concluído) continuam iguais.

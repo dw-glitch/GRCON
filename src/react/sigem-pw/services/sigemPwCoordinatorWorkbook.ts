@@ -111,7 +111,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   const header1: CellValue[] = Array(headers.length).fill("");
   const header2: CellValue[] = Array(headers.length).fill("");
   [header1[0], header1[1], header1[2], header1[3], header1[4], header1[5], header1[6], header1[7], header1[8], header1[9]] =
-    ["CONTROLE PW • GRCON", "PARES", summary.active, "PW CAD.", summary.registered, "PW EMIT.", summary.emitted, "SIGEM", summary.posted, summary.pending];
+    ["CONTROLE PW • GRCON", "REVISÕES", summary.active, "PW CAD.", summary.registered, "PW EMIT.", summary.emitted, "SIGEM", summary.posted, summary.pending];
   header2[0] = "Documento + revisão"; header2[5] = "Evidência PW";
   revisions.forEach((rev, index) => {
     header2[index + 11] = rev;
@@ -163,15 +163,15 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     h[9] = entry.registerSigem + entry.registerAbsent + entry.issue;
     revisions.forEach((rev, index) => { h[index + 11] = report.rows.filter(row => row.documentClass === entry.documentClass && row.revision === rev && !row.pwEmitted).length; });
   }
-  const overview: Matrix = [["GRCON | SIGEM × PW", "DEMANDA DA EQUIPE PW"], ["INDICADOR", "PARES DOCUMENTO + REVISÃO"]];
+  const overview: Matrix = [["GRCON | SIGEM × PW", "DEMANDA DA EQUIPE PW"], ["INDICADOR", "REVISÕES DE DOCUMENTOS"]];
   const overviewSections: number[] = [];
   const section = (title: string) => { overview.push([title, ""]); overviewSections.push(overview.length); };
   section("VISÃO GERAL");
   for (const indicator of PW_INDICATORS) overview.push([indicator.label, report.totals[indicator.key]]);
-  overview.push(["Unidade", "Pares documento + revisão únicos; revisão 0 independente"]);
+  overview.push(["Como contar", "Cada revisão de cada documento conta uma vez (exemplo: o documento X nas revisões 0 e A são 2 revisões de documentos)"]);
   overview.push(["Escopo exportado", Object.values(filters).some(v => v && v !== "all") ? "Filtros da relação operacional: " + JSON.stringify(filters) : "Completo: todas as classes e revisões das bases ativas"]);
   section("PENDÊNCIAS POR CLASSE");
-  overview.push(["Classe", "Cadastrar — SIGEM", "Cadastrar — Não postados", "Emitir no PW"]);
+  overview.push(["Classe", "A cadastrar — já constam no SIGEM", "A cadastrar — não constam no SIGEM", "A emitir no PW"]);
   for (const row of report.byClass) overview.push([row.documentClass, row.registerSigem, row.registerAbsent, row.issue]);
   overview.push(["TOTAL", report.totals.registerSigem, report.totals.registerAbsent, report.totals.issue]);
   section("ORIENTAÇÃO DE LEITURA");
@@ -179,7 +179,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   overview.push(["Ação: Emitir no PW", "Cadastro confirmado; emissão pendente"]);
   overview.push(["Ação: Concluído", "Emissão comprovada da revisão indicada"]);
   overview.push(["X na revisão", "Revisão exata a trabalhar no PW; emitidas não recebem X"]);
-  overview.push(["Não postados", "Não consta na Consulta Geral; ausência na consulta não comprova falta de postagem"]);
+  overview.push(["Não constam no SIGEM", "A revisão não aparece na Consulta Geral; isso não comprova que falta postar"]);
   overview.push(["Gerado em", new Date().toLocaleString("pt-BR")]);
   overview.push(["Consulta Geral", text(state.sigem.meta?.fileName)]);
   overview.push(["Data da Consulta Geral", text(state.sigem.meta?.referenceDate || state.sigem.meta?.importedAt)]);
@@ -189,8 +189,8 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   const r = report.reconciliation;
   const reconciliation: Matrix = [["CONCILIAÇÃO DA CONSULTA GERAL INTEGRAL", "QUANTIDADE"],
     ["Registros disponíveis da Consulta Geral ativa", r.records], ["Documentos únicos (inclui revisão desconhecida)", r.documents],
-    ["Pares documento + revisão únicos válidos", r.pairs], ["Pares dentro das LDs (antes das exceções operacionais)", r.inScopePairs],
-    ["Pares fora das LDs", r.outsidePairs], ["Repetições adicionais de pares válidos", r.duplicates],
+    ["Revisões de documentos únicas e válidas", r.pairs], ["Revisões que constam nas LDs (antes das exceções operacionais)", r.inScopePairs],
+    ["Revisões que não constam nas LDs", r.outsidePairs], ["Repetições adicionais de revisões válidas", r.duplicates],
     ["Registros sem código ou revisão interpretável", r.invalid], ["Linhas da fonte não disponibilizadas pelo importador", r.omitted === null ? "Não informado pela fonte" : r.omitted],
     ["Critério PW", "Somente CSG/QTM na coluna C; Previsto = cadastrado"],
     ["Exceções", "CV, cancelados e inconsistências ficam fora dos totais operacionais"],

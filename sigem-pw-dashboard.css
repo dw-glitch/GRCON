@@ -1651,3 +1651,8 @@
 /* Medidor do gráfico: a barra precisa ser bloco para aparecer (botões herdam display global). */
 #sigem-pw-dashboard-module .spw-charts button.spw-meter{display:grid;justify-items:stretch;text-align:left}
 #sigem-pw-dashboard-module .spw-charts .spw-meter-track{display:block;width:100%}
+/* Entenda os números: glossário curto da visão operacional */
+#sigem-pw-dashboard-module .spw-glossary dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 18px;margin:10px 0 4px;padding:0 4px}
+#sigem-pw-dashboard-module .spw-glossary dt{font-weight:800;font-size:.84rem;color:var(--spw-text,#17324a)}
+#sigem-pw-dashboard-module .spw-glossary dd{margin:2px 0 0;font-size:.8rem;line-height:1.45;color:var(--spw-muted,#5b7083)}
+#sigem-pw-dashboard-module .spw-operation-unit{line-height:1.5}

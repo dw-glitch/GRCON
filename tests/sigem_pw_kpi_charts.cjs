@@ -18,9 +18,9 @@ assert.match(overview, /spw-operation-kpis/, "os cinco indicadores continuam");
 // As quatro partes da barra são exatamente as ações operacionais, na mesma ordem de prioridade.
 for (const key of ["issued", "issue", "registerSigem", "registerAbsent"]) assert.match(charts, new RegExp(`key: "${key}"`), `${key} na barra`);
 assert.match(charts, /<SegmentedBar title="Trabalho da equipe PW" segments=\{pwSegments\} total=\{pairs\}/, "o total da barra é o número de pares do escopo");
-assert.match(charts, /<Meter label="Constam nas referências" value=\{inLd\} total=\{consulted\}/);
+assert.match(charts, /<Meter label="Constam nas LDs ativas" value=\{inLd\} total=\{consulted\}/);
 assert.match(charts, /revisionScope === "revision0" \? reconciliation\.revision0 : reconciliation/, "conferência da Consulta Geral acompanha o filtro de revisão");
-assert.match(charts, /<Meter label="Cadastrados no PW" value=\{totals\.registered\} total=\{pairs\}/, "quantidade cadastrada no PW no gráfico");
+assert.match(charts, /<Meter label="Cadastradas no PW" value=\{totals\.registered\} total=\{pairs\}/, "quantidade cadastrada no PW no gráfico");
 assert.doesNotMatch(charts, /reconcileManagerial|breakdownManagerial|ManagerialSummary/, "o gráfico não recalcula nada: só exibe os totais recebidos");
 // Cor nunca é o único sinal: ícone, número e porcentagem por parte, mais tabela alternativa.
 assert.match(charts, /ToneIcon/);
@@ -29,4 +29,16 @@ assert.match(charts, /Ver como tabela/);
 const ops = read("src/react/sigem-pw/services/sigemPwOperations.ts");
 assert.match(ops, /export const PW_ACTIONS = \["Cadastrar no PW", "Emitir no PW", "Concluído"\] as const/);
 assert.match(ops, /registerSigem|registerAbsent/);
+// Nomenclatura didática: "pares" saiu da tela e do Excel; a unidade é "revisão de documento".
+const workbook = read("src/react/sigem-pw/services/sigemPwCoordinatorWorkbook.ts");
+for (const [name, source] of [["gráfico", charts], ["visão", overview], ["Excel", workbook], ["motor", ops]]) {
+  const visible = source.split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join("\n");
+  assert.doesNotMatch(visible.replace(/pairs|pair\(|inScopePairs|outsidePairs|seenPairs/g, ""), /\bpares?\b|\bPARES\b|par\(es\)/i, `${name}: a palavra "pares" não deve aparecer na tela nem no Excel`);
+}
+assert.match(overview, /Como ler os números/);
+assert.match(overview, /Entenda os números/);
+assert.match(overview, /2 revisões de documentos/);
+for (const label of ["Constam no SIGEM", "A cadastrar no PW — já constam no SIGEM", "A cadastrar no PW — não constam no SIGEM", "Cadastradas no PW", "A emitir no PW", "Emitidas no PW"]) {
+  assert.ok(ops.includes(label), `rótulo claro: ${label}`);
+}
 console.log("sigem_pw_kpi_charts: OK");
