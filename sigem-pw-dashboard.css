@@ -1585,3 +1585,42 @@
 #sigem-pw-dashboard-module .spw-advanced-area,
 #sigem-pw-dashboard-module .spw-sources-disclosure,
 #sigem-pw-dashboard-module .spw-legacy-disclosure{min-width:0;max-width:100%}
+
+/* Onde estão as pendências: situação por classe e providências mais frequentes */
+#sigem-pw-dashboard-module .spw-breakdown{
+  --bd-good:#0ca30c;--bd-warn:#fab219;--bd-bad:#d03b3b;--bd-muted:#8f8e86;--bd-info:#2a78d6;--bd-track:var(--spw-surface-muted,#eaf0f5);
+  margin:14px 0 18px;padding:14px 16px;border:1px solid var(--spw-border,#dce4eb);border-radius:12px;background:var(--spw-surface,#fff)}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])) #sigem-pw-dashboard-module .spw-breakdown{--bd-info:#3987e5;--bd-muted:#7d7c75;--bd-track:#23324a}}
+:root[data-theme="dark"] #sigem-pw-dashboard-module .spw-breakdown{--bd-info:#3987e5;--bd-muted:#7d7c75;--bd-track:#23324a}
+#sigem-pw-dashboard-module .spw-breakdown>header h3{margin:4px 0 2px;font-size:1rem}
+#sigem-pw-dashboard-module .spw-breakdown>header p{margin:0 0 10px;font-size:.8rem;color:var(--spw-muted,#5b7083)}
+#sigem-pw-dashboard-module .spw-breakdown-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px}
+#sigem-pw-dashboard-module .spw-breakdown-panel h4{margin:0 0 8px;font-size:.84rem}
+#sigem-pw-dashboard-module .spw-breakdown ul{list-style:none;margin:0;padding:0}
+#sigem-pw-dashboard-module .spw-breakdown-classes li+li,#sigem-pw-dashboard-module .spw-breakdown-actions li+li{margin-top:4px}
+#sigem-pw-dashboard-module .spw-breakdown-classes button,#sigem-pw-dashboard-module .spw-breakdown-actions button{
+  width:100%;display:grid;align-items:center;gap:4px 10px;padding:7px 9px;border:1px solid transparent;border-radius:9px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+#sigem-pw-dashboard-module .spw-breakdown-classes button{grid-template-columns:minmax(70px,.5fr) minmax(0,2fr) auto}
+#sigem-pw-dashboard-module .spw-breakdown-classes button em{grid-column:2 / -1;font-style:normal;font-size:.72rem;color:var(--spw-muted,#5b7083)}
+#sigem-pw-dashboard-module .spw-breakdown-actions button{grid-template-columns:minmax(120px,1.3fr) minmax(0,1fr) auto}
+#sigem-pw-dashboard-module .spw-breakdown button:hover{background:var(--spw-surface-muted,#f1f6fa)}
+#sigem-pw-dashboard-module .spw-breakdown button[aria-pressed="true"]{border-color:var(--spw-accent,#246a98);background:var(--spw-surface-muted,#eaf3fa)}
+#sigem-pw-dashboard-module .spw-breakdown button:focus-visible{outline:3px solid color-mix(in srgb,var(--spw-accent,#246a98) 40%,transparent);outline-offset:2px}
+#sigem-pw-dashboard-module .spw-breakdown-name{font-weight:700;font-size:.82rem;overflow-wrap:anywhere}
+#sigem-pw-dashboard-module .spw-breakdown strong{font-variant-numeric:tabular-nums;font-size:.86rem}
+#sigem-pw-dashboard-module .spw-breakdown-stack{display:flex;height:14px;border-radius:999px;overflow:hidden;background:var(--bd-track)}
+#sigem-pw-dashboard-module .spw-breakdown-stack i,#sigem-pw-dashboard-module .spw-breakdown-legend i{display:block;height:100%;min-width:2px}
+#sigem-pw-dashboard-module .spw-breakdown [data-tone=ok]{background:var(--bd-good)}
+#sigem-pw-dashboard-module .spw-breakdown [data-tone=warn]{background:var(--bd-warn)}
+#sigem-pw-dashboard-module .spw-breakdown [data-tone=bad]{background:var(--bd-bad)}
+#sigem-pw-dashboard-module .spw-breakdown [data-tone=muted]{background:var(--bd-muted)}
+#sigem-pw-dashboard-module .spw-breakdown [data-tone=info]{background:var(--bd-info)}
+#sigem-pw-dashboard-module .spw-breakdown-legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px!important;font-size:.72rem;color:var(--spw-muted,#5b7083)}
+#sigem-pw-dashboard-module .spw-breakdown-legend li{display:inline-flex;align-items:center;gap:6px}
+#sigem-pw-dashboard-module .spw-breakdown-legend i{width:11px;height:11px;border-radius:3px}
+#sigem-pw-dashboard-module .spw-breakdown-track{height:10px;border-radius:999px;background:var(--bd-track);overflow:hidden}
+#sigem-pw-dashboard-module .spw-breakdown-track i{display:block;height:100%;background:var(--bd-info);border-radius:999px;min-width:2px}
+#sigem-pw-dashboard-module .spw-breakdown-empty{margin:0;font-size:.84rem;color:var(--spw-muted,#5b7083)}
+@media(max-width:1020px){#sigem-pw-dashboard-module .spw-breakdown-grid{grid-template-columns:1fr}}
+@media (forced-colors:active){#sigem-pw-dashboard-module .spw-breakdown-stack i,#sigem-pw-dashboard-module .spw-breakdown-track i{border:1px solid CanvasText}}
+#sigem-pw-dashboard-module .spw-managerial-code button{white-space:normal;overflow-wrap:anywhere;max-width:100%;display:inline-block}

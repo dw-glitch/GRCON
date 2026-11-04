@@ -307,3 +307,65 @@ export function reconcileManagerial(state: SigemPwState): ManagerialReport {
     excludedPw: state.result?.lists?.pwN1710OutsideLd?.length || 0,
   };
 }
+
+export type ManagerialSituation = Exclude<ManagerialDocument["situation"], "Cancelado">;
+export const MANAGERIAL_SITUATIONS: ManagerialSituation[] = ["Em conformidade", "Em andamento", "Com pendência", "Em preparação", "Dados insuficientes"];
+
+export interface ClassBreakdown {
+  /** Aba da LD (N-1710, ET, CV…). Documentos sem aba ficam em "Sem classe". */
+  sheet: string;
+  total: number;
+  counts: Record<ManagerialSituation, number>;
+  /** Percentual de documentos em conformidade (0–100), ou null sem documentos. */
+  compliantPercent: number | null;
+}
+export interface ActionBreakdown {
+  actionCode: ManagerialActionCode;
+  action: string;
+  count: number;
+  /** Quantos desses são "Com pendência" (o resto está em andamento, em preparação ou sem dado). */
+  withPending: number;
+}
+export interface ManagerialBreakdown {
+  byClass: ClassBreakdown[];
+  byAction: ActionBreakdown[];
+  /** Documentos considerados (cancelados ficam de fora) e cancelados separados. */
+  considered: number;
+  cancelled: number;
+}
+
+/**
+ * Onde estão as pendências: por classe de documento e por providência.
+ * Usa só as linhas já conciliadas (mesma unidade do restante do painel: um
+ * documento por linha). Cancelados não entram nas contagens, só são informados.
+ */
+export function breakdownManagerial(rows: ManagerialDocument[]): ManagerialBreakdown {
+  const classes = new Map<string, ClassBreakdown>();
+  const actions = new Map<ManagerialActionCode, ActionBreakdown>();
+  let considered = 0;
+  let cancelled = 0;
+  for (const row of rows) {
+    if (row.situation === "Cancelado") { cancelled += 1; continue; }
+    considered += 1;
+    const sheet = (row.sheet || "").trim() || "Sem classe";
+    let entry = classes.get(sheet);
+    if (!entry) {
+      entry = { sheet, total: 0, compliantPercent: null, counts: { "Em conformidade": 0, "Em andamento": 0, "Com pendência": 0, "Em preparação": 0, "Dados insuficientes": 0 } };
+      classes.set(sheet, entry);
+    }
+    entry.total += 1;
+    entry.counts[row.situation] += 1;
+    if (row.actionCode !== "NONE") {
+      let action = actions.get(row.actionCode);
+      if (!action) { action = { actionCode: row.actionCode, action: row.action, count: 0, withPending: 0 }; actions.set(row.actionCode, action); }
+      action.count += 1;
+      if (row.situation === "Com pendência") action.withPending += 1;
+    }
+  }
+  const byClass = [...classes.values()].map((entry) => ({
+    ...entry,
+    compliantPercent: entry.total ? (100 * entry.counts["Em conformidade"]) / entry.total : null,
+  })).sort((a, b) => b.total - a.total || a.sheet.localeCompare(b.sheet, "pt-BR"));
+  const byAction = [...actions.values()].sort((a, b) => b.count - a.count || a.action.localeCompare(b.action, "pt-BR"));
+  return { byClass, byAction, considered, cancelled };
+}

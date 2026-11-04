@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SigemPwState } from "../types/domain";
 import { SigemPwKpiCharts } from "./SigemPwKpiCharts";
-import { reconcileManagerial, type ManagerialDocument } from "../services/sigemPwManagerial";
+import { SigemPwManagerialBreakdown } from "./SigemPwManagerialBreakdown";
+import { breakdownManagerial, reconcileManagerial, type ManagerialDocument } from "../services/sigemPwManagerial";
 
 type KpiKey = "active" | "registered" | "emitted" | "awaiting" | "notEmitted" | "posted" | "compliant" | "pending" | "other";
 type Selection = KpiKey | "all";
@@ -42,12 +43,15 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
   const [situation, setSituation] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [sheet, setSheet] = useState("");
+  const [actionCode, setActionCode] = useState("");
   const [allRevisions, setAllRevisions] = useState(false);
   const [selectedCode, setSelectedCode] = useState("");
   const evidenceRef = useRef<HTMLElement>(null);
   useEffect(() => { if (selectedCode) evidenceRef.current?.scrollIntoView({ block: "nearest" }); }, [selectedCode]);
   const report = useMemo(() => reconcileManagerial(state), [state.ld, state.pw, state.sigem, state.model, state.result]);
   const sum = report.summary;
+  const breakdown = useMemo(() => breakdownManagerial(report.rows), [report.rows]);
   const kpis: { key: KpiKey; label: string; value: number | null }[] = [
     { key: "active", label: "Documentos controlados", value: sum.active },
     { key: "registered", label: "Cadastrados no PW", value: sum.registered },
@@ -62,17 +66,21 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
   const filtered = useMemo(() => report.rows.filter(row => {
     if (!matchesKpi(row, selection, allRevisions)) return false;
     if (situation && row.situation !== situation) return false;
+    if (sheet && ((row.sheet || "").trim() || "Sem classe") !== sheet) return false;
+    if (actionCode && row.actionCode !== actionCode) return false;
     const needle = query.trim().toLocaleLowerCase("pt-BR");
     return !needle || [row.code, row.title, row.action, row.referenceRevision].some(value =>
       value.toLocaleLowerCase("pt-BR").includes(needle));
   }).sort((a, b) => priority(a) - priority(b) || a.code.localeCompare(b.code, "pt-BR")),
-  [report.rows, selection, situation, query, allRevisions]);
+  [report.rows, selection, situation, query, allRevisions, sheet, actionCode]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const selected = report.rows.find(row => row.code === selectedCode);
   const setKpi = (key: Selection) => { setSelection(key); setSituation(""); setPage(1); };
-  const clearFilters = () => { setSelection("all"); setSituation(""); setQuery(""); setPage(1); };
+  const clearFilters = () => { setSelection("all"); setSituation(""); setQuery(""); setSheet(""); setActionCode(""); setPage(1); };
+  const pickSheet = (value: string) => { setSheet(value); setPage(1); };
+  const pickAction = (value: string) => { setActionCode(value); setPage(1); };
 
   return (
     <section aria-label="Controle documental gerencial" className="spw-managerial" id="spw-managerial-overview">
@@ -83,6 +91,8 @@ export function SigemPwManagerialOverview({ state }: { state: SigemPwState }) {
         </div>
       ) : null}
       <SigemPwKpiCharts summary={report.summary} selection={selection} onSelect={(key) => setKpi(key)} allRevisions={allRevisions} onAllRevisionsChange={setAllRevisions} />
+
+      <SigemPwManagerialBreakdown breakdown={breakdown} sheet={sheet} actionCode={actionCode} onSheet={pickSheet} onAction={pickAction} />
 
       <div className="spw-managerial-workspace" aria-labelledby="spw-managerial-list-title">
         <div className="spw-managerial-list-heading">
