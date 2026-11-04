@@ -562,6 +562,21 @@
           manualRuleOverride,
           manualCompositionOverride,
         };
+        // Propósito descrito na LD: segue para a eGRDT. Não bloqueia a geração,
+        // mas qualquer adaptação ou divergência fica visível ao operador.
+        const ldPurposeText = text(row.purposeOriginalLd) || text(row.record && row.record.purpose);
+        if (!ldPurposeText) {
+          warnings.push(`${row.document}: a LD não informa o propósito de emissão; a coluna PROPÓSITO da eGRDT ficará vazia até ser preenchida.`);
+        } else if (C && typeof C.resolvePurpose === "function") {
+          const purposeResolution = C.resolvePurpose(ldPurposeText);
+          if (!purposeResolution.recognized) {
+            warnings.push(`${row.document}: o propósito “${ldPurposeText}” da LD não consta na lista oficial; foi mantido como está na eGRDT e precisa de conferência.`);
+          } else if (norm(item.purpose) !== norm(purposeResolution.purpose)) {
+            warnings.push(`${row.document}: o propósito da eGRDT (“${item.purpose || "vazio"}”) difere do descrito na LD (“${ldPurposeText}” → “${purposeResolution.purpose}”).`);
+          } else if (purposeResolution.adapted) {
+            warnings.push(`${row.document}: propósito “${ldPurposeText}” da LD adaptado para “${purposeResolution.purpose}” na eGRDT.`);
+          }
+        }
         const sourceDiscipline = text(row.disciplineOriginalLd)
           || text(row.disciplineResolution && row.disciplineResolution.disciplineOriginalLd)
           || text(row.record && row.record.discipline);
