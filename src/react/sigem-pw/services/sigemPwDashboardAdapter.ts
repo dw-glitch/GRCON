@@ -259,6 +259,7 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
       generation,
       // Calcula só o agregado em exibição (+ "all:all", usado na prontidão).
       aggregateKeys: [...new Set(["all:all", scopedAggregateKey(state.revisionScope, state.filters.documentClass)])],
+      lightModel: true,
       sigemRecords: state.sigem.records,
       pwRecords: state.pw.records,
       ldRecords: state.ld.records,
@@ -308,7 +309,8 @@ async function rebuildModelAsync(): Promise<boolean> {
     };
   }
   if (generation !== state.modelGeneration || built.generation !== generation || !built.model || !built.aggregates) return false;
-  state.model = built.model;
+  const core = Core();
+  state.model = core.hydrateModel ? core.hydrateModel(built.model) : built.model;
   state.aggregates = built.aggregates;
   // Registra as fontes do modelo recém-montado: um refresh posterior só refaz o
   // cálculo se as fontes realmente mudaram.

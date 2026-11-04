@@ -55,7 +55,15 @@ self.addEventListener("message", (event) => {
           if (scope === "all") aggregates[label] = value;
         }
       }
-      self.postMessage({ ok: true, type: "model", generation: payload.generation, model, aggregates, computeMs: Date.now() - startedAt });
+      // `lightModel`: os quatro mapas derivam de normalizedSigem/normalizedPw e a
+      // thread principal os reconstrói sob demanda (hydrateModel). Clonar os
+      // mapas custava ~2 s com 30 mil documentos.
+      let outgoing = model;
+      if (payload.lightModel) {
+        outgoing = { ...model };
+        delete outgoing.sigemEntries; delete outgoing.pwEntries; delete outgoing.sigemAll; delete outgoing.pwAll;
+      }
+      self.postMessage({ ok: true, type: "model", generation: payload.generation, model: outgoing, aggregates, computeMs: Date.now() - startedAt });
       return;
     }
     const source = new TextDecoder("utf-8").decode(new Uint8Array(payload.buffer || new ArrayBuffer(0)));

@@ -1019,6 +1019,34 @@
     };
   }
 
+  // Um modelo enviado pelo Worker sem os quatro mapas (são 70% do que a thread
+  // principal recebia, ~2 s de clonagem com 30 mil documentos) recupera-os sob
+  // demanda: eles derivam só de normalizedSigem/normalizedPw. Quem nunca troca
+  // de classe nem abre a análise de revisões/histórico não paga a reconstrução.
+  function hydrateModel(model) {
+    if (!model || typeof model !== "object") return model;
+    const lazy = {
+      sigemEntries: () => buildEntryMap(model.normalizedSigem || [], "sigem"),
+      pwEntries: () => buildEntryMap(model.normalizedPw || [], "pw"),
+      sigemAll: () => buildDocumentMap(model.normalizedSigem || [], "sigem"),
+      pwAll: () => buildDocumentMap(model.normalizedPw || [], "pw"),
+    };
+    Object.keys(lazy).forEach((name) => {
+      if (Object.prototype.hasOwnProperty.call(model, name)) return;
+      Object.defineProperty(model, name, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          const value = lazy[name]();
+          Object.defineProperty(model, name, { configurable: true, enumerable: true, writable: true, value });
+          return value;
+        },
+        set(value) { Object.defineProperty(model, name, { configurable: true, enumerable: true, writable: true, value }); },
+      });
+    });
+    return model;
+  }
+
   function comparisonRow(key, sigemEntry, pwEntry, options) {
     const settings = options || {};
     const reference = sigemEntry || pwEntry;
@@ -1861,7 +1889,7 @@
     text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords,
     PW_COMPANIES, PW_COMPANY_COLUMN_INDEX, companyCodes, recordCompany, isPwCompanyInScope, partitionPwCompanyRecords, documentIdentity, documentClass, n1710DocumentType, isN1710Candidate,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
-    parsePwCsv, parseLdMatrix, parseReferenceSheets, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
+    parsePwCsv, parseLdMatrix, parseReferenceSheets, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap, hydrateModel,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
     openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory, loadHistoryIndex, loadHistorySnapshot,
     saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, updateSnapshotMetadata, deleteSnapshot, migrateLegacyBases, loadBases,
