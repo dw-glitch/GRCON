@@ -82,6 +82,13 @@ assert.equal(s.pwApplicable - s.awaitingRegistration - s.registeredNotEmitted, 1
   ));
   assert.deepEqual(r.summary.sigemIssued, { rev0: 3, all: 4 }, "inclui documentos fora das LDs");
   assert.deepEqual(r.summary.sigemInLd, { rev0: 1, all: 2 }, "só LDs ativas; cancelado não entra");
+  assert.deepEqual(r.summary.sigemCancelledInLd, { rev0: 1, all: 1 }, "cancelado nas LDs é separado dos que estão fora delas");
+  // No app real o modelo já vem filtrado pelas LDs: o total emitido vem da Consulta Geral inteira.
+  const filtered = state([ref(x, { revision: "0" }), ref(y)], [], [sigem(x, "0"), sigem(y, "A"), sigem(outside, "0"), sigem(outside, "B")]);
+  filtered.model.normalizedSigem = [sigem(x, "0"), sigem(y, "A")];
+  const real = reconcileManagerial(filtered).summary;
+  assert.deepEqual(real.sigemIssued, { rev0: 2, all: 3 }, "não depende do modelo filtrado pelas LDs");
+  assert.deepEqual(real.sigemInLd, { rev0: 1, all: 2 });
   assert.equal(r.rows.find(row => row.code === x).sigemRev0, true);
   assert.equal(r.rows.find(row => row.code === y).sigemRev0, false);
   const missing = reconcileManagerial({ ...state([ref(x)], [], []), sigem: { meta: null, records: [] } });
