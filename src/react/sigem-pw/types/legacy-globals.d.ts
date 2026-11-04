@@ -16,6 +16,7 @@ import type {
   RevisionAnalysis,
   RevisionFilters,
   RevisionHistoryItem,
+  RevisionMatrix,
   RevisionRow,
   RevisionUiState,
 } from "../revision/types/domain";
@@ -121,6 +122,7 @@ interface SigemPwRevisionCoreApi {
   analyzeAsync(model: SigemPwModel, options?: RevisionAnalyzeOptions): Promise<RevisionAnalysis>;
   filterRows(rows: RevisionRow[], filters?: Partial<RevisionFilters>): RevisionRow[];
   historyForRows(rows: SigemPwRecord[], kind: "sigem" | "pw"): RevisionHistoryItem[];
+  revisionMatrix(sigem: RevisionHistoryItem[], pw: RevisionHistoryItem[]): RevisionMatrix;
 }
 interface SigemPwRevisionUiApi {
   activate(): Promise<RevisionAnalysis | null>;
