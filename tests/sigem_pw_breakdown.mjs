@@ -43,6 +43,7 @@ assert.equal(empty.considered, 0);
 assert.deepEqual(empty.byClass, []);
 // Integração no painel gerencial: filtros por classe e providência
 const overview = readFileSync(new URL("../src/react/sigem-pw/components/SigemPwManagerialOverview.tsx", import.meta.url), "utf8");
-assert.match(overview, /SigemPwManagerialBreakdown/);
-assert.match(overview, /row\.actionCode !== actionCode/);
+assert.match(overview, /filterPwOperations/);
+assert.match(overview, /documentClass: event.target.value/);
+assert.match(overview, /action: event.target.value/);
 console.log("sigem_pw_breakdown: OK");

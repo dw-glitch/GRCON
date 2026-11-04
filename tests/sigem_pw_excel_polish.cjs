@@ -26,8 +26,8 @@ const code = "CR-5290.00-22313-911-C1O-001";
 const planned = "PR-5290.00-22313-955-C1O-002";
 const outside = "PR-5290.00-22313-955-C1O-099";
 const refs = [
-  { document: code, documentKey: code, canonicalDocument: code, revision: "A", title: "Cronograma", status: "EMITIDO" },
-  { document: planned, documentKey: planned, canonicalDocument: planned, revision: "0", title: "Plano", status: "EM EMISSÃO" },
+  { document: code, documentKey: code, canonicalDocument: code, revision: "A", title: "Cronograma", documentClass: "N-1710", status: "EMITIDO" },
+  { document: planned, documentKey: planned, canonicalDocument: planned, revision: "0", title: "Plano", documentClass: "N-1710", status: "EM EMISSÃO" },
 ];
 const headers = Array.from({length:70},(_,i) => "Atributo " + i);
 headers[0] = "NumeroDocumentoCliente";
@@ -71,12 +71,12 @@ const labels = new Map(plan.sheets.Resumo.map(row => [row[0], row[1]]));
 const find = prefix => plan.sheets.Resumo.find(row => String(row[0]).startsWith(prefix));
 
 // Indicadores novos: cadastro e emissão são situações distintas.
-assert.equal(find("Documentos controlados")[1], 2);
-assert.equal(find("Aguardando cadastro no PW")[1], 0);
-assert.equal(find("Cadastrados, não emitidos")[1], 1);
-assert.equal(find("Atendimento — cadastrados")[1], 1);
-assert.equal(find("Atendimento — emitidos")[1], 0.5);
-assert.ok(plan.overviewSections.length >= 4, "resumo organizado em seções");
+assert.equal(find("No SIGEM")[1], 2);
+assert.equal(find("Cadastrar no PW — SIGEM")[1], 0);
+assert.equal(find("Cadastrar no PW — Não postados")[1], 0);
+assert.equal(find("Emitir no PW")[1], 1);
+assert.equal(find("Emitidos no PW")[1], 1);
+assert.ok(plan.overviewSections.length === 3, "resumo organizado em seções");
 assert.ok(plan.overviewSections.every(row => plan.sheets.Resumo[row - 1][1] === ""));
 assert.ok(labels.has("Gerado em") && labels.has("Data da base PW"), "proveniência com datas no resumo");
 assert.equal(plan.sheets["Fora das LDs"], undefined, "sem documentos fora das LDs a aba não é criada");
@@ -84,18 +84,14 @@ assert.deepEqual(plan.formulas.map(f => f.pwSituation), ["emitted", "registered"
 
 // Com documentos fora das LDs: aba separada, sem alterar os indicadores principais.
 const withOutside = structuredClone(state);
-withOutside.aggregates = { "all:all": { lists: {
-  sigemN1710OutsideLd: [{ document: "OUT-SIGEM-1", revision: "0", sigemStatus: "Postado", situation: "Documento fora das referências vigentes" }],
-  pwN1710OutsideLd: [
-    { document: "OUT-PW-1", revision: "A", pwStatus: "Liberado", pwEmission: "Sim", pwCompany: "CSG", pwSourceRow: 7, situation: "Documento fora das referências vigentes" },
-    { document: "OUT-PW-1", revision: "A", pwStatus: "Liberado", pwEmission: "Sim", pwCompany: "CSG", pwSourceRow: 7, situation: "duplicado" },
-  ],
-} } };
+withOutside.sigem.records.push({document:"OUT-SIGEM-1",revision:"0",status:"Postado"});
+const outsideCells=rec("OUT-PW-1", "Liberado", "CSG", "A", "Sim", "Fonte externa");
+withOutside.pw.sourceRecords.push({document:"OUT-PW-1",revision:"A",state:"Liberado",lastEmission:"Sim",company:"CSG",sourceRow:9,pwRawCells:outsideCells});
 const planOutside = coordinatorPlan(withOutside);
-assert.deepEqual(Object.keys(planOutside.sheets), ["Resumo", "Conferência Documental", "REL. PW", "Fora das LDs"]);
+assert.deepEqual(Object.keys(planOutside.sheets), ["Resumo", "Conferência Documental", "N-1710", "REL. PW", "Conciliação", "Fora das LDs"]);
 assert.equal(planOutside.sheets["Fora das LDs"].length, 3, "cabeçalho + 2 registros (duplicata exata colapsada)");
 assert.equal(plan.sheets["Conferência Documental"][2][10], "ABA");
-assert.equal(planOutside.sheets["Fora das LDs"][0][9], "CLASSE");
+assert.equal(planOutside.sheets["Fora das LDs"][0][3], "MOTIVO");
 assert.equal(planOutside.summary.active, plan.summary.active, "fora das LDs não infla os indicadores");
 assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["Conferência Documental"].length);
 
@@ -104,24 +100,23 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   const { workbook } = buildCoordinatorWorkbook(withOutside, ExcelJS, logo);
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
-  assert.deepEqual(reopened.worksheets.map(s => s.name), ["Resumo", "Conferência Documental", "REL. PW", "Fora das LDs"]);
+  assert.deepEqual(reopened.worksheets.map(s => s.name), ["Resumo", "Conferência Documental", "N-1710", "REL. PW", "Conciliação", "Fora das LDs"]);
   const out = reopened.getWorksheet("Fora das LDs");
   assert.equal(out.getCell("B2").value, "OUT-SIGEM-1");
   assert.equal(out.getCell("A3").value, "PW");
-  assert.equal(out.autoFilter, "A1:J3");
+  assert.equal(out.autoFilter, "A1:E3");
   assert.equal(out.views[0].ySplit, 1);
   const control = reopened.getWorksheet("Conferência Documental");
   const argb = cell => cell.fill && cell.fill.fgColor && cell.fill.fgColor.argb;
   assert.equal(argb(control.getCell("J4")), "FFE6F6EE", "emitido: verde discreto");
-  assert.equal(argb(control.getCell("J5")), "FFFFF4DF", "cadastrado e não emitido: âmbar");
+  assert.equal(argb(control.getCell("J5")), "FFE8F2FF", "cadastrado e não emitido: azul");
   assert.equal(control.pageSetup.orientation, "landscape");
   assert.equal(control.pageSetup.fitToWidth, 1);
   const overview = reopened.getWorksheet("Resumo");
   const row = label => { for (let i = 1; i <= overview.rowCount; i++) if (String(overview.getCell("A" + i).value).startsWith(label)) return i; return 0; };
-  assert.equal(overview.getCell("B" + row("Atendimento — emitidos")).value, 0.5);
-  assert.equal(overview.getCell("B" + row("Atendimento — emitidos")).numFmt, "0.0%");
-  assert.equal(overview.getCell("B" + row("Documentos controlados")).numFmt, "#,##0");
-  assert.equal(overview.getCell("A3").value, "DOCUMENTOS CONTROLADOS E CADASTRO NO PW");
+  assert.equal(overview.getCell("B" + row("Emitir no PW")).value, 1);
+  assert.equal(overview.getCell("B" + row("Emitir no PW")).numFmt, "#,##0");
+  assert.equal(overview.getCell("A3").value, "VISÃO GERAL");
   assert.equal(argb(overview.getCell("A3")), "FFEDF3F8", "título de seção destacado");
   assert.equal(overview.pageSetup.fitToWidth, 1);
   // Marca GRCON no cabeçalho (faixa branca) das abas Resumo e Conferência Documental.
@@ -140,12 +135,7 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   assert.equal(typeof control.getCell("A4").value, "string");
   console.log("sigem_pw_excel_polish: resumo em seções, KPIs de cadastro/emissão, aba Fora das LDs condicional, cores de status, impressão e texto literal OK");
 })().catch(error => { console.error(error); process.exit(1); });
-// Contrato do painel gráfico (fonte): barras empilhadas clicáveis que filtram a relação.
-{
-  const chart = fs.readFileSync(path.resolve(__dirname, "..", "src/react/sigem-pw/components/SigemPwKpiCharts.tsx"), "utf8");
-  assert.match(chart, /spw-chart-bar/);
-  assert.match(chart, /aria-label=\{`\$\{item\.label\}: \$\{nf\(item\.value\)\}/, "segmentos acessíveis com texto, não só cor");
-  for (const key of ["emitted", "notEmitted", "awaiting", "compliant", "pending", "posted", "other", "active"]) assert.ok(chart.includes(`"${key}"`), key);
-  const overview = fs.readFileSync(path.resolve(__dirname, "..", "src/react/sigem-pw/components/SigemPwManagerialOverview.tsx"), "utf8");
-  assert.match(overview, /<SigemPwKpiCharts /);
-}
+// Os cinco indicadores operacionais são compartilhados com o Excel.
+const overviewSource=fs.readFileSync(path.resolve(__dirname,"..","src/react/sigem-pw/components/SigemPwManagerialOverview.tsx"),"utf8");
+assert.match(overviewSource,/PW_INDICATORS.map/);
+assert.match(overviewSource,/onExport\(filters\)/);

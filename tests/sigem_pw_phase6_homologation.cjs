@@ -19,6 +19,7 @@ function moduleTs(file) {
   return module.exports;
 }
 const {reconcileManagerial}=moduleTs("src/react/sigem-pw/services/sigemPwManagerial.ts");
+const {reconcilePwOperations}=moduleTs("src/react/sigem-pw/services/sigemPwOperations.ts");
 const {coordinatorPlan}=moduleTs("src/react/sigem-pw/services/sigemPwCoordinatorWorkbook.ts");
 const DOCUMENTS=6041, PW_ROWS=29421;
 const codeAt=i=>"RL-5290.00-22313-955-C1O-"+String(i).padStart(5,"0");
@@ -77,34 +78,31 @@ assert.equal(report.summary.emitted,refs.slice(50).filter(x=>emissionByDoc.has(x
 assert.equal(report.summary.posted,refs.slice(50).filter(x=>sigemByDoc.has(x.documentKey)).length);
 assert.ok(report.summary.compliant<=report.summary.posted);
 assert.ok(report.summary.pending<=report.summary.active);
+const operational=reconcilePwOperations(state);
 const plan=coordinatorPlan(state);
-assert.deepEqual(Object.keys(plan.sheets),["Resumo","Conferência Documental","REL. PW"]);
-assert.equal(plan.sheets["Conferência Documental"].length,DOCUMENTS+3);
+assert.deepEqual(Object.keys(plan.sheets),["Resumo","Conferência Documental","N-1710","REL. PW","Conciliação"]);
+assert.equal(plan.sheets["Conferência Documental"].length,DOCUMENTS-50+3);
 assert.equal(plan.sheets["Conferência Documental"][2].length,32);
 assert.equal(plan.sheets["REL. PW"].length,PW_ROWS+1);
 assert.equal(plan.sheets["REL. PW"][0].length,70);
 assert.equal(plan.sheets["REL. PW"][PW_ROWS].length,70);
 assert.ok(plan.sheets.Resumo.length >= 16, "o painel da planilha deve trazer indicadores e proveniência");
-assert.equal(plan.formulas.length,DOCUMENTS);
-for(const name of ["active","registered","emitted","posted","compliant","pending"]){
-  assert.equal(plan.summary[name],report.summary[name],name+" deve ser idêntico ao cartão");
-}
-for(const index of [0,51,200,1350,3000,6040]){
-  const row=plan.sheets["Conferência Documental"][index+3],f=plan.formulas[index];
-  assert.equal(row[0],refs[index].document);
-  assert.equal(row[8],report.rows[index].action);
-  assert.equal(row[5],f.results[0]);
-  assert.equal(row[6],f.results[1]);
+assert.equal(plan.formulas.length,DOCUMENTS-50);
+assert.deepEqual(plan.report.totals,operational.totals,"mesma fonte dos cartões operacionais");
+assert.equal(plan.summary.active,operational.rows.length);
+for(const index of [0,51,200,1350,3000,5990]){
+  const row=plan.sheets["Conferência Documental"][index+3],f=plan.formulas[index],item=operational.rows[index];
+  assert.equal(row[0],item.code);
+  assert.equal(row[8],item.action);
+  assert.equal(row[5],f.results[0]); assert.equal(row[6],f.results[1]);
   assert.ok(!/\b#REF!|\b#VALUE!/.test(f.f+f.g+f.h));
-  if(report.rows[index].pwRegistered){
+  if(item.pwRegistered){
     const match=f.f.match(/'REL\. PW'!\$[A-Z]+\$(\d+)/);
-    assert.ok(match,"fórmula deve citar a linha de origem PW para "+row[0]);
+    assert.ok(match,"fórmula deve citar a linha PW");
     const source=plan.sheets["REL. PW"][Number(match[1])-1];
-    assert.equal(source[0],row[0],"sem cruzar documento de outra revisão ou empresa");
-    // A evidência é sempre uma linha real da relação do PW do mesmo documento (qualquer empresa).
-    assert.equal(source[3],row[5],"a revisão da fórmula deve corresponder à revisão exibida");
-    assert.equal(source[1],row[6],"o status da fórmula deve ser da mesma ocorrência");
-    assert.equal(source[4],row[7],"a emissão deve pertencer à mesma ocorrência");
+    assert.equal(source[0],row[0]); assert.equal(source[3],row[5]);
+    assert.equal(source[1],row[6]); assert.equal(source[4],row[7]);
+    assert.ok(["CSG","QTM"].includes(source[2]),"apenas empresas aplicáveis comprovam cadastro");
   }
 }
 assert.equal(plan.sheets["REL. PW"][1][69],"Trace-0");
@@ -126,7 +124,7 @@ const legacy={
   pw:{meta:{fileName:"PW histórico",companyColumn:"C",pwRawHeaders:headers,pwRawColumnCount:70,
     columns:{state:"o_statename",revision:"Revisao",lastEmission:"Última emissão"}},
     records:[{document:legacyCode,revision:"B",state:"Liberado",lastEmission:"Sim",sourceRow:2}],
-    sourceRecords:[{document:legacyCode,revision:"B",sourceRow:2,pwRawCells:legacyCells}]},
+    sourceRecords:[{document:legacyCode,revision:"B",state:"Liberado",lastEmission:"Sim",company:"CSG",sourceRow:2,pwRawCells:legacyCells}]},
   sigem:{meta:{fileName:"SIGEM histórico"},records:[{document:legacyCode,revision:"B",status:"Sem Comentários"}]},
   model:{normalizedPw:[{document:legacyCode,revision:"B",state:"Liberado",lastEmission:"Sim",sourceRow:2}],
     normalizedSigem:[{document:legacyCode,revision:"B",status:"Sem Comentários"}]},
@@ -142,7 +140,7 @@ assert.equal(legacyReport.summary.compliant,1);
 const legacyPlan=coordinatorPlan(legacy);
 assert.equal(legacyPlan.formulas.length,1);
 assert.match(legacyPlan.formulas[0].f,/'REL\. PW'!\$D\$2/);
-assert.equal(legacyPlan.sheets["Conferência Documental"][3][8],"Sem ação necessária");
+assert.equal(legacyPlan.sheets["Conferência Documental"][3][8],"Concluído");
 
 console.log(JSON.stringify({suite:"sigem-pw-phase6-volume",passed:true,
   referenceDocuments:DOCUMENTS,pwRawRows:PW_ROWS,pwColumns:70,
