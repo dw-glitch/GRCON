@@ -8,7 +8,7 @@
   const esc = v => t(v).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch]));
   const number = n => Number(n || 0).toLocaleString("pt-BR");
   const state = {scope:"",version:"",prepared:[],duplicates:0,options:{search:"",allocation:"",status:"",stage:"",sheet:"",action:"",from:"",to:""},
-    aggregated:null,full:null,fullByAllocation:null,page:1,pageSize:65,detail:"",loading:false,busy:false};
+    sort:{key:"",dir:1},aggregated:null,full:null,fullByAllocation:null,page:1,pageSize:65,detail:"",loading:false,busy:false};
   function shell(){
     const el=$("allocation-dashboard-root");if(!el||el.dataset.ready)return;
     el.dataset.ready="true";
@@ -22,6 +22,13 @@
       </div></header>
       <p id="ad-meta" class="allocation-dashboard-meta" aria-live="polite"></p>
       <p id="ad-alert" class="allocation-dashboard-alert" role="status" hidden></p>
+      <div id="ad-segments" class="allocation-dashboard-segments" role="group" aria-label="Filtrar por fiscal">
+        <button type="button" data-ad-stage="" aria-pressed="true">Todos</button>
+        <button type="button" data-ad-stage="fiscal1" aria-pressed="false">Fiscal 01</button>
+        <button type="button" data-ad-stage="fiscal2" aria-pressed="false">Fiscal 02</button>
+        <button type="button" data-ad-stage="unclassified" aria-pressed="false">Sem fiscal explícita</button>
+      </div>
+      <details id="ad-more" class="allocation-dashboard-more"><summary><span>Mais filtros</span><small id="ad-more-count"></small></summary>
       <div class="allocation-dashboard-filters" role="group" aria-label="Filtros de alocação">
         <label>Número da alocação<input id="ad-allocation" type="search" inputmode="search" placeholder="Ex.: 0200 ou C1O-ALOC"></label>
         <label>Documento / workflow<input id="ad-search" type="search" placeholder="Código do documento ou workflow"></label>
@@ -33,13 +40,19 @@
         <label>Envio até<input id="ad-to" type="date"></label>
         <button id="ad-clear" class="secondary-button" type="button">Limpar filtros</button>
       </div>
+      </details>
       <div id="ad-summary" class="allocation-dashboard-summary" aria-live="polite"></div>
-      <div class="allocation-dashboard-layout">
-        <section class="allocation-dashboard-panel"><h3>Situação das alocações</h3>
+      <div class="allocation-dashboard-charts">
+      <section class="allocation-dashboard-panel"><h3>Distribuição por situação</h3>
+        <p class="allocation-dashboard-caption">Cada alocação aparece em uma única categoria, por isso os percentuais somam 100%. Os indicadores acima e o gráfico lateral contam alocações com documentos em cada status e podem se sobrepor.</p>
+        <div id="ad-distribution"></div></section>
+        <section class="allocation-dashboard-panel"><h3>Alocações por status</h3>
         <p class="allocation-dashboard-caption">Uma alocação pode ter documentos em vários status; as categorias podem se sobrepor.</p>
         <div id="ad-chart"></div></section>
+      </div>
+      <div class="allocation-dashboard-layout">
         <section class="allocation-dashboard-panel"><div class="allocation-dashboard-table-heading"><h3>Alocações e documentos</h3><small id="ad-count"></small></div>
-        <div class="allocation-dashboard-table-scroll"><table class="allocation-dashboard-table"><thead><tr><th>Alocação</th><th>Situação</th><th>Documentos</th><th>Concluídos</th><th>Pendentes / outros</th><th>Último envio</th><th>Detalhes</th></tr></thead><tbody id="ad-table"></tbody></table></div>
+        <div class="allocation-dashboard-table-scroll"><table class="allocation-dashboard-table"><thead><tr><th data-sort-key="allocation"><button type="button" class="allocation-dashboard-sort" data-ad-sort="allocation">Alocação<i aria-hidden="true"></i></button></th><th data-sort-key="situation"><button type="button" class="allocation-dashboard-sort" data-ad-sort="situation">Situação<i aria-hidden="true"></i></button></th><th data-sort-key="documentsCount"><button type="button" class="allocation-dashboard-sort" data-ad-sort="documentsCount">Documentos<i aria-hidden="true"></i></button></th><th data-sort-key="completed"><button type="button" class="allocation-dashboard-sort" data-ad-sort="completed">Concluídos<i aria-hidden="true"></i></button></th><th data-sort-key="pending"><button type="button" class="allocation-dashboard-sort" data-ad-sort="pending">Pendentes / outros<i aria-hidden="true"></i></button></th><th data-sort-key="lastSentAt"><button type="button" class="allocation-dashboard-sort" data-ad-sort="lastSentAt">Último envio<i aria-hidden="true"></i></button></th><th>Detalhes</th></tr></thead><tbody id="ad-table"></tbody></table></div>
         <div class="allocation-dashboard-pager"><span id="ad-page"></span><button id="ad-prev" class="secondary-button" type="button">Anterior</button><button id="ad-next" class="secondary-button" type="button">Próxima</button></div></section>
       </div></div>`;
     $("ad-status").innerHTML='<option value="">Todos os status</option>'+Object.entries(Model.STATUS).map(([c,v])=>`<option value="${c}">${esc(v)}</option>`).join("");
@@ -47,9 +60,20 @@
     for(const key of keys)$("ad-"+key).addEventListener(key==="search"||key==="allocation"||key==="sheet"?"input":"change",ev=>{
       state.options[key]=ev.target.value;state.page=1;state.detail="";scheduleRender();
     });
+    $("ad-segments").addEventListener("click",ev=>{
+      const b=ev.target.closest("button[data-ad-stage]");if(!b)return;
+      state.options.stage=b.dataset.adStage;$("ad-stage").value=state.options.stage;state.page=1;state.detail="";scheduleRender();
+    });
+    $("ad-table").closest("table").querySelector("thead").addEventListener("click",ev=>{
+      const b=ev.target.closest("button[data-ad-sort]");if(!b)return;
+      const key=b.dataset.adSort;
+      state.sort=state.sort.key===key?{key,dir:-state.sort.dir}:{key,dir:key==="allocation"||key==="situation"||key==="lastSentAt"?1:-1};
+      state.page=1;state.detail="";render();
+    });
     $("ad-clear").addEventListener("click",()=>{
       state.options={search:"",allocation:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
       for(const key of keys)$("ad-"+key).value="";
+      state.sort={key:"",dir:1};
       state.page=1;state.detail="";render();
     });
     $("ad-back").addEventListener("click",()=>root.GRCONModuleLoader?.ensureModule?.("additional-tools"));
@@ -161,9 +185,41 @@
       ["Fiscal 02 · Aguardando",a.byStatus.fiscal2Waiting,"fiscal2Waiting"],
       ["Fiscal 01 · Recusado",a.byStatus.fiscal1Rejected,"fiscal1Rejected"],
       ["Demais recusas",a.byStatus.rejected,"rejected"]];
+    // Percentual sobre as alocações do filtro atual. As categorias de status se
+    // sobrepõem (uma alocação pode ter documentos em vários status), então o
+    // percentual nunca é apresentado como partição do total.
+    const totalAllocations=a.groups.length;
+    const share=(value,label)=>label==="Documentos"||!totalAllocations?"":`<small>${(100*value/totalAllocations).toLocaleString("pt-BR",{maximumFractionDigits:1})}% das alocações</small>`;
     $("ad-summary").innerHTML=cards.map(([label,value,code])=>code
-      ?`<button type="button" class="allocation-dashboard-kpi" data-ad-filter="${code}" aria-pressed="${state.options.status===code}"><span>${esc(label)}</span><strong>${number(value)}</strong></button>`
-      :`<div class="allocation-dashboard-kpi"><span>${esc(label)}</span><strong>${number(value)}</strong></div>`).join("");
+      ?`<button type="button" class="allocation-dashboard-kpi" data-ad-filter="${code}" aria-pressed="${state.options.status===code}"><span>${esc(label)}</span><strong>${number(value)}</strong>${share(value,label)}</button>`
+      :`<div class="allocation-dashboard-kpi"><span>${esc(label)}</span><strong>${number(value)}</strong>${share(value,label)}</div>`).join("");
+    // Situação de cada alocação: categorias que NÃO se sobrepõem, somam 100%.
+    const situations=new Map();
+    for(const g of a.groups)situations.set(g.situation,(situations.get(g.situation)||0)+1);
+    const slugOf=v=>({"Concluída":"done","Parcialmente concluída":"partial","Status mistos":"mixed"}[v]||"single");
+    const ranked=[...situations.entries()].sort((x,y)=>y[1]-x[1]);
+    $("ad-distribution").innerHTML=ranked.length?`<div class="allocation-dashboard-stack" role="img" aria-label="${esc(ranked.map(([k,n])=>`${k}: ${number(n)}`).join("; "))}">${ranked.map(([k,n],i)=>`<i class="is-${slugOf(k)} tone-${i%6}" style="width:${(100*n/totalAllocations).toFixed(2)}%" title="${esc(k)}: ${number(n)}"></i>`).join("")}</div>
+      <ul class="allocation-dashboard-legend">${ranked.map(([k,n],i)=>`<li><i class="is-${slugOf(k)} tone-${i%6}" aria-hidden="true"></i><span>${esc(k)}</span><strong>${number(n)}</strong><small>${(100*n/totalAllocations).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</small></li>`).join("")}</ul>`
+      :'<p class="allocation-dashboard-empty">Sem alocações correspondentes aos filtros.</p>';
+    // Segmentos de fiscal e contagem de filtros avançados.
+    $("ad-segments").querySelectorAll("button[data-ad-stage]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.adStage===(state.options.stage||""))));
+    $("ad-stage").value=state.options.stage||"";
+    const advanced=["allocation","status","sheet","action","from","to"].filter(k=>state.options[k]).length;
+    $("ad-more-count").textContent=advanced?`${advanced} ativo${advanced>1?"s":""}`:"";
+    if(advanced&&!$("ad-more").open)$("ad-more").open=true;
+    // Ordenação por coluna (padrão: ordem numérica da alocação, como antes).
+    if(state.sort.key){
+      const k=state.sort.key,dir=state.sort.dir;
+      a.groups.sort((x,y)=>{const vx=x[k]??"",vy=y[k]??"";
+        const c=typeof vx==="number"&&typeof vy==="number"?vx-vy:String(vx).localeCompare(String(vy),"pt-BR",{numeric:true});
+        return (c||String(x.allocation).localeCompare(String(y.allocation),"pt-BR",{numeric:true}))*dir;});
+    }
+    // O realce global de tabelas (ui-v3) deriva o aria-sort de data-sort-direction.
+    document.querySelectorAll("#allocation-dashboard-root th[data-sort-key]").forEach(th=>{
+      const direction=th.dataset.sortKey===state.sort.key?(state.sort.dir>0?"asc":"desc"):"";
+      if(direction)th.dataset.sortDirection=direction;else delete th.dataset.sortDirection;
+      th.setAttribute("aria-sort",direction==="asc"?"ascending":direction==="desc"?"descending":"none");
+    });
     const visible=Object.entries(a.byStatus).filter(([,n])=>n>0).sort((x,y)=>y[1]-x[1]),max=Math.max(1,...visible.map(([,n])=>n));
     $("ad-chart").innerHTML=visible.length?visible.map(([code,n])=>`<button type="button" class="allocation-dashboard-bar" data-ad-filter="${code}" aria-pressed="${state.options.status===code}">
       <span>${esc(Model.STATUS[code])}</span><span class="allocation-dashboard-bar-track"><i style="width:${(100*n/max).toFixed(2)}%"></i></span><strong>${number(n)}</strong></button>`).join("")
@@ -173,7 +229,7 @@
     const rows=a.groups.slice((state.page-1)*state.pageSize,state.page*state.pageSize);
     $("ad-table").innerHTML=rows.map((g,i)=>{
       const id=String((state.page-1)*state.pageSize+i);
-      const main=`<tr><td><strong>${esc(g.allocation)}</strong></td><td>${esc(g.situation)}</td><td>${number(g.documentsCount)}</td>
+      const main=`<tr><td><strong>${esc(g.allocation)}</strong></td><td><span class="allocation-dashboard-pill is-${slugOf(g.situation)}">${esc(g.situation)}</span></td><td>${number(g.documentsCount)}</td>
         <td>${number(g.completed)}</td><td>${number(g.pending)}</td><td>${esc(g.lastSentAt||"—")}</td>
         <td><button type="button" class="secondary-button" data-ad-detail="${id}" aria-expanded="${state.detail===id}">${state.detail===id?"Fechar":"Documentos"}</button></td></tr>`;
       if(state.detail!==id)return main;
