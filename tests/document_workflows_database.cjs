@@ -276,8 +276,10 @@ const workspace='00000000-0000-4000-8000-000000000001';
     await as('', 'service_role');
     const fetchBeforeDeadlineSchedule=global.fetch;let scheduledDeadlineCalls=0;
     try{global.fetch=async(url,options)=>{if(url.endsWith('/grcon_document_task_deadlines')){scheduledDeadlineCalls++;assert.deepEqual(JSON.parse(options.body),{});return Response.json(await rpc('grcon_document_task_deadlines',[]));}return Response.json([]);};
-     const scheduledJobs=[];await worker.scheduled({cron:'* * * * *'},env,{waitUntil(p){scheduledJobs.push(p);}});await Promise.all(scheduledJobs);
-     assert.equal(scheduledDeadlineCalls,1,'existing minute schedule checks deadlines without an open client');
+     const scheduledJobs=[];await worker.scheduled({cron:'*/15 * * * *'},env,{waitUntil(p){scheduledJobs.push(p);}});await Promise.all(scheduledJobs);
+     assert.equal(scheduledDeadlineCalls,1,'the 15-minute schedule checks deadlines without an open client');
+     const minuteJobs=[];await worker.scheduled({cron:'* * * * *'},env,{waitUntil(p){minuteJobs.push(p);}});await Promise.all(minuteJobs);
+     assert.equal(scheduledDeadlineCalls,1,'the every-minute schedule no longer runs the heavy deadline check');
     }finally{global.fetch=fetchBeforeDeadlineSchedule;}
     console.log('Prazos: autor exclusivo, responsável real, RLS por destinatário, leitura compartilhada, cron restrito, atraso sem duplicação e revisão confirmada aprovados.');
     const masterQuery=(input,target=workspace,actor=viewer)=>rpc('grcon_master_query',[target,actor,input]);

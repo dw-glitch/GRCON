@@ -310,7 +310,7 @@
     if (state.openPromise) return state.openPromise;
 
     state.openPromise = new Promise((resolve, reject) => {
-      console.info(`[GRCON Storage][open] Abrindo ${DB_NAME} v${DB_VERSION}...`);
+      console.debug(`[GRCON Storage][open] Abrindo ${DB_NAME} v${DB_VERSION}...`);
       const request = root.indexedDB.open(DB_NAME, DB_VERSION);
       let upgradeError = null;
 
@@ -329,7 +329,7 @@
 
       request.onsuccess = () => {
         const db = attachDatabase(request.result);
-        console.info(`[GRCON Storage][open] Banco aberto na versão ${db.version}.`);
+        console.debug(`[GRCON Storage][open] Banco aberto na versão ${db.version}.`);
         resolve(db);
       };
 
@@ -866,7 +866,7 @@
     if (state.retryTimer) { root.clearTimeout?.(state.retryTimer); state.retryTimer = null; }
     state.readyAt = Date.now();
     state.initDurationMs = Math.max(0, state.readyAt - state.startedAt);
-    console.info(`[GRCON Storage][ready] Storage ready em ${state.initDurationMs} ms.`);
+    console.debug(`[GRCON Storage][ready] Storage ready em ${state.initDurationMs} ms.`);
     dispatch("grcon:persistence-ready", { ...status(), schema: schemaSnapshot(db) });
     dispatch("grcon:history-updated", { durableHydration: true });
     dispatch("grcon:sigem-updated", { durableHydration: true });
