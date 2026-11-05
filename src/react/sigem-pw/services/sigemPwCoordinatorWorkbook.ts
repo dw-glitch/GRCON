@@ -78,6 +78,7 @@ const GRCON = Object.freeze({
 /** Status do código na Consulta Geral do SIGEM: o da própria revisão; sem ela, o das outras revisões; sem nada, informa que não consta. */
 function sigemStatusText(row: PwOperation): string {
   if (row.sigemStatus) return row.sigemStatus;
+  if (row.inSigem) return "Consta no SIGEM, sem status informado";
   return row.sigemOtherStatus ? "Revisão não consta no SIGEM · " + row.sigemOtherStatus : "Não consta no SIGEM";
 }
 const text = (value: unknown): string => value == null ? "" : String(value);

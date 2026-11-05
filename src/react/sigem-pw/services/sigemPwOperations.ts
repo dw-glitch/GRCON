@@ -89,8 +89,7 @@ function otherSigemStatus(revisions: Map<string, SigemPwRecord[]> | undefined, c
   return parts.join("; ");
 }
 /** Emissão fora de ordem: uma revisão emitida enquanto outra, anterior e de ordem conhecida, ainda não foi emitida. */
-function markOutOfSequence(rows: PwOperation[], documentKey: string): void {
-  const own = rows.filter(row => row.documentKey === documentKey);
+function markOutOfSequence(own: PwOperation[]): void {
   for (const row of own) {
     const rank = sequenceRank(row.revision);
     if (!row.pwEmitted || rank === null) continue;
@@ -246,6 +245,7 @@ export function computePwOperations(state: PwOperationsInput): PwOperationsRepor
       if (seenPw.has(rev)) report.diagnostics.push(diagnostic("PW", entry, "Mesma revisão do mesmo documento repetida no PW; evidência preservada na relação PW original"));
       seenPw.add(rev);
     }
+    const firstRow = report.rows.length;
     for (const rev of required) {
       // A SIGEM line with unknown revision cannot prove absence for another revision.
       const entries = sigem.get(key)?.get(rev) || [];
@@ -266,7 +266,7 @@ export function computePwOperations(state: PwOperationsInput): PwOperationsRepor
         sigemStatus: [...new Set(entries.map(row => text(row.status || row.sigemStatus)).filter(Boolean))].join("; "),
         pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence, missingBefore: [], sigemOtherStatus: otherSigemStatus(sigem.get(key), rev) });
     }
-    markOutOfSequence(report.rows, key);
+    markOutOfSequence(report.rows.slice(firstRow));
   }
   report.rows.sort((a, b) => a.code.localeCompare(b.code, "pt-BR") || a.revision.localeCompare(b.revision, "pt-BR", { numeric: true }));
   return filterPwOperations(report);
