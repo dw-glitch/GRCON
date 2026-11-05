@@ -3,6 +3,18 @@ type Evidence={field:string;value:string;source:string;reference?:string;verifie
 type TitleRow={id:string;sourceId?:string;sourceFile?:string;document:string;sheet:string;row:number;discipline:string;current:string;proposed:string;originalProposed:string;issue:string;reason:string;confidence:string;classification:string;tag:string;descriptionSource:string;facts:Evidence[];hasConflict:boolean;reviewRequired:boolean;decision:'pending'|'approved'|'kept';evidenceSummary:string;sourceRows:Record<string,number[]>};
 type Analysis={rows:TitleRow[];files?:Array<{file:string;count:number}>;unmatched:string[];coverage?:{sheets?:Array<{sheet:string;rows:number;role:string}>;skippedSheets?:Array<{sheet:string;reason:string}>};sourceCounts:Record<string,number>;standard:string};
 type Output={bytes:Uint8Array;name:string;changes:unknown[];preservation:{valid:boolean}};
+/** Cópia em memória do arquivo escolhido: a análise nunca relê o disco (o navegador recusa a referência antiga se o arquivo mudou ou foi bloqueado). */
+type Snapshot={name:string;size:number;bytes:ArrayBuffer};
+const readableError=(error:unknown,name:string)=>{
+ const raw=error instanceof Error?error.message:String(error);
+ return /could not be read|NotReadable|permission/i.test(raw)||(error as {name?:string})?.name==='NotReadableError'
+  ?'Não foi possível ler "'+name+'". Feche o arquivo no Excel (ou espere o OneDrive/SharePoint terminar de sincronizar) e selecione-o de novo.'
+  :'Falha ao ler "'+name+'": '+raw;
+};
+async function snapshotOf(file:File):Promise<Snapshot>{
+ try{return {name:file.name,size:file.size,bytes:await file.arrayBuffer()};}
+ catch(error){throw new Error(readableError(error,file.name));}
+}
 type Responder={resolve:(value:any)=>void;reject:(reason:Error)=>void};
 const labels:Record<string,string>={ok:'Adequado',empty:'Título vazio',generic:'Pouco específico',document_type:'Tipo documental',description_mismatch:'Descrição divergente',missing_tag:'TAG ausente',wrong_tag:'TAG incorreta',possible_identifier:'Identificador incerto',format:'Padronização',conflict:'Conflito'};
 const factLabels:Record<string,string>={tipo:'Tipo documental',objeto:'O que é',localizacao:'Onde é',finalidade_documental:'Para que é / objetivo documental',eap_classificacao:'EAP — classificação, não localização física'};
@@ -23,12 +35,12 @@ function useTitleWorker(){
  return call;
 }
 export function TitleCorrectorApp(){
- const call=useTitleWorker(),[files,setFiles]=useState<File[]>([]),[reference,setReference]=useState<File|null>(null),
+ const call=useTitleWorker(),[files,setFiles]=useState<Snapshot[]>([]),[reference,setReference]=useState<Snapshot|null>(null),
  [codeText,setCodeText]=useState(''),[sourceMode,setSourceMode]=useState('auto'),[analysis,setAnalysis]=useState<Analysis|null>(null),
  [rows,setRows]=useState<TitleRow[]>([]),[selected,setSelected]=useState<Set<string>>(new Set()),[detail,setDetail]=useState<string|null>(null),
  [search,setSearch]=useState(''),[filter,setFilter]=useState('all'),[sheet,setSheet]=useState(''),[busy,setBusy]=useState(false),
  [message,setMessage]=useState(''),[scrollTop,setScrollTop]=useState(0),[history,setHistory]=useState<Array<{id:string;approved_title:string;approved_at:string;actor_id:string;source_reference:string}>>([]);
- const inputRef=useRef<HTMLInputElement>(null);
+ const inputRef=useRef<HTMLInputElement>(null),filesSeq=useRef(0),referenceSeq=useRef(0),reading=useRef(0);
  const cloud=()=> (window as unknown as {GrconCloud?:{state?:any}}).GrconCloud?.state;
  const scope=()=>String(cloud()?.membership?.workspace_id||'');
  const visible=useMemo(()=>rows.filter(row=>{
@@ -42,9 +54,30 @@ export function TitleCorrectorApp(){
  const sheets=useMemo(()=>[...new Set(rows.map(r=>r.sheet).filter(Boolean))].sort(),[rows]);
  const totalApproved=rows.filter(r=>r.decision==='approved'&&r.proposed.trim()&&r.proposed.trim()!==r.current.trim()&&!r.hasConflict).length;
  const metrics=[['Analisados',rows.length],['Adequados',rows.filter(r=>r.issue==='ok').length],['Revisão pendente',rows.filter(r=>r.decision==='pending'&&r.issue!=='ok').length],['Aprovados',totalApproved]];
+ const pickFiles=async(list:FileList|null)=>{
+  const token=++filesSeq.current,picked=Array.from(list||[]);
+  resetResult();
+  if(!picked.length){setFiles([]);return;}
+  reading.current++;setBusy(true);
+  try{
+   if(picked.length>8||picked.some(file=>file.size>50*1024*1024)||picked.reduce((sum,file)=>sum+file.size,0)>120*1024*1024)throw Error('Máximo: 8 LDs, 50 MB por arquivo e 120 MB no lote.');
+   const loaded=await Promise.all(picked.map(snapshotOf));
+   if(token===filesSeq.current)setFiles(loaded);
+  }catch(error){if(token===filesSeq.current){setFiles([]);setMessage(error instanceof Error?error.message:String(error));}}
+  finally{if(--reading.current===0)setBusy(false);}
+ };
+ const pickReference=async(list:FileList|null)=>{
+  const token=++referenceSeq.current,file=list?.[0]||null;
+  resetResult();
+  if(!file){setReference(null);return;}
+  reading.current++;setBusy(true);
+  try{const loaded=await snapshotOf(file);if(token===referenceSeq.current)setReference(loaded);}
+  catch(error){if(token===referenceSeq.current){setReference(null);setMessage(error instanceof Error?error.message:String(error));}}
+  finally{if(--reading.current===0)setBusy(false);}
+ };
  const resetResult=()=>{setAnalysis(null);setRows([]);setSelected(new Set());setDetail(null);setHistory([]);setScrollTop(0);setMessage('');};
  useEffect(()=>{
-  const reset=()=>{setFiles([]);resetResult();};
+  const reset=()=>{filesSeq.current++;referenceSeq.current++;setFiles([]);setReference(null);resetResult();};
   window.addEventListener('grcon:contract-context-changed',reset);
   window.addEventListener('grcon:cloud-signed-out',reset);
   return ()=>{window.removeEventListener('grcon:contract-context-changed',reset);window.removeEventListener('grcon:cloud-signed-out',reset);};
@@ -121,8 +154,8 @@ export function TitleCorrectorApp(){
    try{
      if(files.length>8||files.some(file=>file.size>50*1024*1024)||files.reduce((sum,file)=>sum+file.size,0)>120*1024*1024)throw Error('Máximo: 8 LDs, 50 MB por arquivo e 120 MB no lote.');
      const codes=[...new Set(codeText.split(/[;\n\r\t,]+/).map(s=>s.trim()).filter(Boolean))];
-     const data:Analysis=await call('analyzeBatch',{files:await Promise.all(files.map(async file=>({name:file.name,bytes:await file.arrayBuffer()}))),codes,sourceMode,
-       referenceBytes:reference?await reference.arrayBuffer():null});
+     const data:Analysis=await call('analyzeBatch',{files:files.map(file=>({name:file.name,bytes:file.bytes})),codes,sourceMode,
+       referenceBytes:reference?reference.bytes:null});
      if(initialScope!==scope()||initialUser!==cloud()?.session?.user?.id)throw Error('O contrato ou usuário mudou. Reanalise a LD.');
      setAnalysis(data);setRows(data.rows);
      setMessage(data.rows.length+' documento(s) avaliados. '+(data.unmatched.length?data.unmatched.length+' código(s) não localizado(s).':'Confira as evidências antes de aprovar.'));
@@ -166,8 +199,8 @@ export function TitleCorrectorApp(){
    <header className="tc-header"><div><small>FERRAMENTAS ADICIONAIS / QUALIDADE DOCUMENTAL</small><h2>Corretor Inteligente de Títulos</h2><p>Identifique o que é, onde se aplica e para que serve — com evidências verificáveis e aprovação antes da alteração.</p></div><button type="button" className="secondary-button" data-grcon-view="additional-tools">Voltar às ferramentas</button></header>
    <section className="tc-panel tc-source" aria-label="Preparar análise">
      <div className="tc-source-grid">
-       <label className="tc-upload"><strong>1. LDs originais (até 8 XLSX/XLSM)</strong><input ref={inputRef} type="file" multiple accept=".xlsx,.xlsm" onChange={e=>{setFiles(Array.from(e.currentTarget.files||[]));resetResult();}}/><small>{files.length?files.map(f=>f.name).join(' · '):'Selecione uma ou várias LDs. Os arquivos permanecem no navegador.'}</small></label>
-       <label className="tc-upload"><strong>2. Base complementar (opcional)</strong><input type="file" accept=".xlsx,.xlsm" onChange={e=>{setReference(e.currentTarget.files?.[0]||null);resetResult();}}/><small>{reference?reference.name:'SCON TAG SGP ou relação controlada de títulos'}</small></label>
+       <label className="tc-upload"><strong>1. LDs originais (até 8 XLSX/XLSM)</strong><input ref={inputRef} type="file" multiple accept=".xlsx,.xlsm" onClick={e=>{e.currentTarget.value='';}} onChange={e=>{void pickFiles(e.currentTarget.files);}}/><small>{files.length?files.map(f=>f.name).join(' · '):'Selecione uma ou várias LDs. Os arquivos permanecem no navegador.'}</small></label>
+       <label className="tc-upload"><strong>2. Base complementar (opcional)</strong><input type="file" accept=".xlsx,.xlsm" onClick={e=>{e.currentTarget.value='';}} onChange={e=>{void pickReference(e.currentTarget.files);}}/><small>{reference?reference.name:'SCON TAG SGP ou relação controlada de títulos'}</small></label>
        <label><strong>3. Fonte da descrição</strong><select value={sourceMode} onChange={e=>{setSourceMode(e.target.value);resetResult();}}><option value="auto">Automático — bases oficiais</option><option value="scon_only">Somente SCON TAG SGP</option><option value="appendix_only">Somente Apêndice 3</option></select></label>
      </div>
      <label className="tc-codes"><strong>4. Códigos específicos (opcional)</strong><textarea rows={2} value={codeText} onChange={e=>setCodeText(e.target.value)} placeholder="Cole um código por linha. Em branco, analisa toda a LD."/></label>
