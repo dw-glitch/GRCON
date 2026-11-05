@@ -1,5 +1,5 @@
 import type { SigemPwState } from "../types/domain";
-import { filterPwOperations, PW_INDICATORS, reconcilePwOperations, type PwFilters, type PwOperationsReport } from "./sigemPwOperations";
+import { filterPwOperations, PW_INDICATORS, reconcilePwOperations, type PwFilters, type PwOperation, type PwOperationsReport } from "./sigemPwOperations";
 import { getPwOriginalMatrix } from "./sigemPwRawPw";
 
 type CellValue = string | number;
@@ -65,7 +65,7 @@ const LOGO_HEIGHT = 42;
 const REVISIONS = Object.freeze(["0", "A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"]);
 export const COORDINATOR_HEADERS = Object.freeze([
   "DOCUMENTO", "REVISÃO", "TÍTULO", "STATUS LD", "SITUAÇÃO SIGEM", "REVISÃO PW",
-  "STATE", "Última emissão", "AÇÃO", "Cadastro", "ABA",
+  "STATE", "Última emissão", "AÇÃO", "Cadastro", "ABA", "STATUS SIGEM",
   ...REVISIONS.map(revision => "Rev. " + revision),
 ]);
 const GRCON = Object.freeze({
@@ -75,6 +75,12 @@ const GRCON = Object.freeze({
   border: "FFDCE5ED", muted: "FFEDF3F8",
 });
 
+/** Status do código na Consulta Geral do SIGEM: o da própria revisão; sem ela, o das outras revisões; sem nada, informa que não consta. */
+function sigemStatusText(row: PwOperation): string {
+  if (row.sigemStatus) return row.sigemStatus;
+  if (row.inSigem) return "Consta no SIGEM, sem status informado";
+  return row.sigemOtherStatus ? "Revisão não consta no SIGEM · " + row.sigemOtherStatus : "Não consta no SIGEM";
+}
 const text = (value: unknown): string => value == null ? "" : String(value);
 function columnLetter(index: number): string {
   let n = index + 1; let output = "";
@@ -107,15 +113,15 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     pending: report.totals.registerSigem + report.totals.registerAbsent + report.totals.issue,
   };
   const revisions = [...new Set([...REVISIONS, ...report.rows.map(row => row.revision)])];
-  const headers = [...COORDINATOR_HEADERS.slice(0, 11), ...revisions.map(rev => "Rev. " + rev)];
+  const headers = [...COORDINATOR_HEADERS.slice(0, 12), ...revisions.map(rev => "Rev. " + rev)];
   const header1: CellValue[] = Array(headers.length).fill("");
   const header2: CellValue[] = Array(headers.length).fill("");
   [header1[0], header1[1], header1[2], header1[3], header1[4], header1[5], header1[6], header1[7], header1[8], header1[9]] =
     ["CONTROLE PW • GRCON", "REVISÕES", summary.active, "PW CAD.", summary.registered, "PW EMIT.", summary.emitted, "SIGEM", summary.posted, summary.pending];
   header2[0] = "Revisão de documento"; header2[5] = "Evidência PW";
   revisions.forEach((rev, index) => {
-    header2[index + 11] = rev;
-    header1[index + 11] = report.rows.filter(row => row.revision === rev && !row.pwEmitted).length;
+    header2[index + 12] = rev;
+    header1[index + 12] = report.rows.filter(row => row.revision === rev && !row.pwEmitted).length;
   });
   const master: Matrix = [header1, header2, headers];
   const sourceNumbers = new Map<number, number>();
@@ -151,7 +157,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     };
     formulas.push(info);
     const values = [row.code, row.revision, row.title, row.referenceStatus, row.sigemSituation,
-      ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass,
+      ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" + (row.missingBefore.length ? " · FORA DE SEQUÊNCIA: falta " + row.missingBefore.join(", ") : "") : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass, sigemStatusText(row),
       ...revisions.map(rev => row.revision === rev && !row.pwEmitted ? "X" : "")];
     master.push(values);
     const name = classNames.get(row.documentClass)!;
@@ -162,7 +168,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     const h = sheets[name][0];
     h[2] = classFormulas[name].length; h[4] = entry.registered; h[6] = entry.issued; h[8] = entry.sigem;
     h[9] = entry.registerSigem + entry.registerAbsent + entry.issue;
-    revisions.forEach((rev, index) => { h[index + 11] = report.rows.filter(row => row.documentClass === entry.documentClass && row.revision === rev && !row.pwEmitted).length; });
+    revisions.forEach((rev, index) => { h[index + 12] = report.rows.filter(row => row.documentClass === entry.documentClass && row.revision === rev && !row.pwEmitted).length; });
   }
   const overview: Matrix = [["GRCON | SIGEM × PW", "DEMANDA DA EQUIPE PW"], ["INDICADOR", "REVISÕES DE DOCUMENTOS"]];
   const overviewSections: number[] = [];
@@ -179,6 +185,8 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   overview.push(["Regra do PW", "Só a revisão 0 é cadastro; da revisão A em diante cada revisão é uma emissão. Se o SIGEM está em B, o PW precisa emitir 0, A e depois B, nessa ordem"]);
   overview.push(["Ação: Cadastrar no PW", "Revisão 0 ainda sem cadastro no PW"]);
   overview.push(["Ação: Emitir no PW", "Revisão 0 já cadastrada, ou revisão A em diante, com emissão pendente"]);
+  overview.push(["Coluna STATUS SIGEM", "Status do código na Consulta Geral do SIGEM (ex.: Postado, Não Postado). Se a revisão da linha não consta no SIGEM, mostra o status das outras revisões do código"]);
+  overview.push(["Fora de sequência", "Revisão emitida enquanto uma revisão anterior (0, A, B…) ainda não foi emitida; aparece na coluna Cadastro e na relação, sem alterar as contagens"]);
   overview.push(["Ação: Concluído", "Emissão comprovada da revisão indicada"]);
   overview.push(["X na revisão", "Revisão exata a trabalhar no PW; emitidas não recebem X"]);
   overview.push(["Não constam no SIGEM", "A revisão não aparece na Consulta Geral; isso não comprova que falta postar"]);
@@ -223,7 +231,7 @@ function placeLogo(workbook: ExcelWorkbook, sheet: ExcelSheet, logo: Coordinator
 }
 function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.views = [{ state: "frozen", xSplit: 2, ySplit: 3, topLeftCell: "C4" }];
-  sheet.autoFilter = `A3:${columnLetter(10 + plan.revisions.length)}${Math.max(3, plan.sheets[MAIN_SHEET].length)}`;
+  sheet.autoFilter = `A3:${columnLetter(11 + plan.revisions.length)}${Math.max(3, plan.sheets[MAIN_SHEET].length)}`;
   sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:3" };
   sheet.headerFooter = { oddFooter: "&LGRCON · SIGEM × PW&CPágina &P de &N&R&D" };
   sheet.getRow(1).height = 28;
@@ -240,13 +248,14 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.getColumn(9).width = 22;
   sheet.getColumn(10).width = 19;
   sheet.getColumn(11).width = 14;
-  for (let index = 12; index <= 11 + plan.revisions.length; index++) sheet.getColumn(index).width = 10;
+  sheet.getColumn(12).width = 30;
+  for (let index = 13; index <= 12 + plan.revisions.length; index++) sheet.getColumn(index).width = 10;
   // Excel rows 4+ are actual data, never inject unrelated title rows.
-  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(index => sheet.getColumn(index).numFmt = "@");
-  for (let column = 0; column < 11 + plan.revisions.length; column++) {
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].forEach(index => sheet.getColumn(index).numFmt = "@");
+  for (let column = 0; column < 12 + plan.revisions.length; column++) {
     formatHeader(sheet.getCell(`${columnLetter(column)}3`));
     const top = sheet.getCell(`${columnLetter(column)}1`);
-    formatHeader(top, column >= 11 ? GRCON.teal : GRCON.navy);
+    formatHeader(top, column >= 12 ? GRCON.teal : GRCON.navy);
     const group = sheet.getCell(`${columnLetter(column)}2`);
     formatHeader(group, GRCON.slate);
   }
@@ -286,6 +295,9 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
       : info.pwSituation === "registered" ? "FFE8F2FF"
       : info.pwSituation === "missing" ? GRCON.amber : GRCON.muted;
     registration.fill = { type: "pattern", pattern: "solid", fgColor: { argb: registrationFill } };
+    const sigemStatus = sheet.getCell(`L${excelRow}`);
+    sigemStatus.font = { name: "Aptos", size: 9, color: { argb: GRCON.ink } };
+    sigemStatus.alignment = { vertical: "middle", wrapText: true };
     const aba = sheet.getCell(`K${excelRow}`);
     aba.font = { name: "Aptos", size: 9, bold: true, color: { argb: GRCON.navy } };
     aba.alignment = { vertical: "middle", horizontal: "center" };

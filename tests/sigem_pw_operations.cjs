@@ -77,6 +77,35 @@ assert.deepEqual(sequence.rows.map(row => [row.revision,row.action,row.inSigem])
 assert.deepEqual(sequence.totals, t(1,0,1,2,0,0));
 // Nenhuma revisão A em diante vira "Cadastrar no PW", mesmo sem nenhuma linha no PW.
 assert.ok(run(state([ref(1,"C")], [sig(1,"C")], [pw(1,"0","Sim")])).rows.filter(row => row.revision !== "0").every(row => row.action === "Emitir no PW"));
+// Fora de sequência: B emitida com A pendente é sinalizada (só informa; as contagens não mudam).
+const outOfOrder = run(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"B","Sim")]));
+assert.deepEqual(outOfOrder.rows.map(row => [row.revision,row.missingBefore]), [["0",[]],["A",[]],["B",["A"]]]);
+// Em sequência (0, A, B emitidas) e nenhuma emitida: nada é sinalizado.
+assert.ok(run(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"A","Sim"), pw(1,"B","Sim")])).rows.every(row => !row.missingBefore.length));
+// O Excel do coordenador acompanha a tela: a coluna Cadastro da linha B informa que falta a A.
+{
+  const planOut = coordinatorPlan(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"B","Sim")]));
+  const master = planOut.sheets[MAIN_SHEET].flat().map(String);
+  assert.ok(master.some(cell => /FORA DE SEQUÊNCIA: falta A/.test(cell)), "Excel marca a revisão emitida fora de sequência");
+  assert.equal(master.filter(cell => /FORA DE SEQUÊNCIA/.test(cell)).length, 1, "só a revisão B é marcada");
+  // Coluna STATUS SIGEM (L): status do código na Consulta Geral; sem a revisão no SIGEM, mostra o das outras revisões.
+  const statusPlan = coordinatorPlan(state([ref(1,"B")], [{ ...sig(1,"B"), status: "Postado" }], [pw(1,"0","Sim")]));
+  const statusRows = statusPlan.sheets[MAIN_SHEET];
+  assert.equal(statusRows[2][11], "STATUS SIGEM");
+  const byRevision = Object.fromEntries(statusRows.slice(3).map(row => [row[1], row[11]]));
+  assert.equal(byRevision.B, "Postado");
+  assert.equal(byRevision.A, "Revisão não consta no SIGEM · Rev. B: Postado");
+  assert.equal(byRevision["0"], "Revisão não consta no SIGEM · Rev. B: Postado");
+  assert.equal(statusRows[2][12], "Rev. 0", "as colunas de revisão começam depois do STATUS SIGEM");
+  // Revisão presente no SIGEM mas sem status: não pode dizer que não consta (a coluna E diz que consta).
+  const noStatus = coordinatorPlan(state([ref(1,"0")], [{ ...sig(1,"0"), status: "" }], [pw(1,"0","Sim")])).sheets[MAIN_SHEET].slice(3)[0];
+  assert.equal(noStatus[4], "Consta no SIGEM");
+  assert.equal(noStatus[11], "Consta no SIGEM, sem status informado");
+  const absent = coordinatorPlan(state([ref(1,"0")], [], [pw(1,"0","Sim")])).sheets[MAIN_SHEET].slice(3)[0];
+  assert.equal(absent[11], "Não consta no SIGEM");
+}
+
+assert.ok(sequence.rows.every(row => !row.missingBefore.length));
 // Revisões sem ordem conhecida (numéricas, #1…) não são preenchidas: só existem as informadas.
 assert.deepEqual(run(state([ref(1,"#1")], [sig(1,"#1")], [pw(1,"0","Sim")])).rows.map(row => row.revision), ["#1"]);
 // PR #403: Não = historical emission. Both 0/A are issued; neither needs an X.
