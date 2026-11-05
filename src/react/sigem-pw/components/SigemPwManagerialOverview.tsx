@@ -33,6 +33,8 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
   const revisionTabs = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of filterPwOperations(base, { ...filters, revision: "" }).rows) counts.set(row.revision, (counts.get(row.revision) || 0) + 1);
+    // A aba escolhida nunca some, mesmo que os demais filtros a deixem sem linhas: é por ela que se volta para "Todas".
+    if (filters.revision && !counts.has(filters.revision)) counts.set(filters.revision, 0);
     const keys = [...counts.keys()].sort((a, b) => (a === "0" ? -1 : b === "0" ? 1 : a.localeCompare(b, "pt-BR", { numeric: true })));
     return { total: [...counts.values()].reduce((sum, value) => sum + value, 0), items: keys.map(key => ({ key, count: counts.get(key) || 0 })) };
   }, [base, filters]);
@@ -81,7 +83,7 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
       <label><span>Mostrar apenas</span><select value={filters.indicator || "all"} onChange={event => change({ indicator: event.target.value as PwIndicator })}><option value="all">Todos</option>{PW_INDICATORS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
       <button type="button" className="secondary-button" onClick={() => { setFilters({ revisionScope: "all", indicator: "all", revision: "" }); setPage(1); broadcastRevisionScope("all"); }}>Limpar filtros</button>
     </div>
-    {base.ready && revisionTabs.items.length > 1 ? <div className="spw-revision-tabs" role="group" aria-label="Revisão de documento">
+    {base.ready && (revisionTabs.items.length > 1 || filters.revision) ? <div className="spw-revision-tabs" role="group" aria-label="Revisão de documento">
       <span>Revisão</span>
       <button type="button" data-revision-tab="" aria-pressed={!filters.revision} onClick={() => change({ revision: "" })}>Todas <b>{fmt(revisionTabs.total)}</b></button>
       {revisionTabs.items.map(item => <button type="button" key={item.key} data-revision-tab={item.key} aria-pressed={filters.revision === item.key}

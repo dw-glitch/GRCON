@@ -110,7 +110,7 @@ export function EgrdtTable({
                           </div>
                           <div className="egrdt-table-scroll" role="region" tabIndex={0} aria-label={"Documentos da " + record.egrdtNumber}>
                             <table className="egrdt-docs-table">
-                              <thead><tr><th scope="col">Documento</th><th scope="col">Rev. na GRDT</th><th scope="col">Formato</th><th scope="col">Classificação</th><th scope="col">Status SIGEM</th><th scope="col">Alocação</th></tr></thead>
+                              <thead><tr><th scope="col">Documento</th><th scope="col">Rev. na GRDT</th><th scope="col">Formato</th><th scope="col">Classificação</th><th scope="col" title="Situação registrada na triagem na época da emissão; o status SIGEM atual está no detalhe completo">Situação na geração</th><th scope="col">Alocação</th></tr></thead>
                               <tbody>
                                 {record.files.map((file, index) => (
                                   <tr key={(file.document || "doc") + "-" + index}>
