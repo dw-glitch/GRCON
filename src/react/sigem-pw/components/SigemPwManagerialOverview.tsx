@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SigemPwState } from "../types/domain";
 import { SigemPwKpiCharts } from "./SigemPwKpiCharts";
-import { filterPwOperations, PW_ACTIONS, PW_INDICATORS, reconcilePwOperations, type PwFilters, type PwIndicator } from "../services/sigemPwOperations";
+import { filterPwOperations, PW_ACTIONS, PW_INDICATORS, reconcilePwOperations, sigemStatusText, type PwFilters, type PwIndicator } from "../services/sigemPwOperations";
 
 const PAGE_SIZE = 25;
 const fmt = (value: number) => value.toLocaleString("pt-BR");
@@ -96,9 +96,9 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
     <span className="spw-managerial-count">{base.ready ? fmt(report.rows.length) : "—"} revisões de documentos no escopo · {base.ready ? fmt(new Set(report.rows.map(row => row.documentKey)).size) : "—"} documentos únicos</span>
     <div className="spw-managerial-table-wrap" tabIndex={0} aria-label="Relação operacional do PW"><table>
       <caption>Revisão 0 = cadastro; revisão A em diante = emissão, em sequência. X identifica uma revisão pendente; linhas concluídas ficam sem X.</caption>
-      <thead><tr><th scope="col">Documento</th><th scope="col">Título</th><th scope="col">Classe</th><th scope="col">Revisão</th><th scope="col">Situação SIGEM</th><th scope="col">Ação</th><th scope="col" title="X = revisão que ainda precisa de trabalho da equipe PW">Falta fazer (X)</th></tr></thead>
+      <thead><tr><th scope="col">Documento</th><th scope="col">Título</th><th scope="col">Classe</th><th scope="col">Revisão</th><th scope="col">Situação SIGEM</th><th scope="col" title="Status do código na Consulta Geral do SIGEM">Status SIGEM</th><th scope="col">Ação</th><th scope="col" title="X = revisão que ainda precisa de trabalho da equipe PW">Falta fazer (X)</th></tr></thead>
       <tbody>{visible.map(row => <tr key={row.key}><td className="spw-managerial-code"><button type="button" className="text-button" onClick={() => setSelectedKey(selectedKey === row.key ? "" : row.key)} aria-label={`Examinar evidências ${row.code} revisão ${row.revision}`}>{row.code}</button></td>
-        <td className="spw-managerial-title" title={row.title}>{row.title || "Título não informado"}</td><td>{row.documentClass}</td><td>{row.revision}</td><td>{row.sigemSituation}</td>
+        <td className="spw-managerial-title" title={row.title}>{row.title || "Título não informado"}</td><td>{row.documentClass}</td><td>{row.revision}</td><td>{row.sigemSituation}</td><td className="spw-sigem-status">{sigemStatusText(row)}</td>
         <td><span className="spw-operation-action" data-action={row.action}>{row.action}</span>{row.missingBefore.length ? <span className="spw-operation-sequence" data-out-of-sequence="true" title={`Esta revisão foi emitida, mas faltam emitir antes: ${row.missingBefore.join(", ")}`}>Fora de sequência: falta {row.missingBefore.join(", ")}</span> : null}</td><td>{row.pwEmitted ? "" : "X"}</td></tr>)}</tbody>
     </table></div>
     {!visible.length ? <div className="spw-empty" role="status"><strong>{base.ready ? "Nenhum documento para estes filtros" : "Aguardando bases válidas"}</strong><span>{base.ready ? "Limpe os filtros ou consulte as exceções na conciliação." : base.reason}</span></div> : null}

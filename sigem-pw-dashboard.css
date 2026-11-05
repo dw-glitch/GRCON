@@ -1666,3 +1666,4 @@
 #sigem-pw-dashboard-module .spw-revision-tabs button[aria-pressed="true"]{background:#155c8a;border-color:#155c8a;color:#fff;font-weight:600}
 #sigem-pw-dashboard-module .spw-revision-tabs button[aria-pressed="true"] b{background:rgba(255,255,255,.22);color:#fff}
 #sigem-pw-dashboard-module .spw-revision-tabs button:focus-visible{outline:2px solid #316b9c;outline-offset:2px}
+#sigem-pw-dashboard-module .spw-managerial-table-wrap td.spw-sigem-status { min-width: 11rem; max-width: 18rem; font-size: inherit; }
