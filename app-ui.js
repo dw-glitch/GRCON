@@ -517,22 +517,47 @@
                 toggle.focus();
         };
         const isOpen = () => root.dataset.sidebarOpen === "true";
-        toggle.addEventListener("click", () => set(!isOpen(), true));
+        const isPinned = () => root.dataset.sidebarDrawer === "off";
+        // Fixar: a barra volta a ficar sempre visível, como antes. Soltar: volta ao menu de hambúrguer. A escolha fica neste navegador.
+        const pin = $("#grcon-sidebar-pin");
+        const applyPinned = (pinned, persist) => {
+            root.dataset.sidebarDrawer = pinned ? "off" : "on";
+            if (pinned) {
+                root.dataset.sidebarOpen = "false";
+                scrim.hidden = true;
+                sidebar.removeAttribute("inert");
+            }
+            else
+                set(false, false);
+            if (pin) {
+                pin.setAttribute("aria-pressed", String(pinned));
+                pin.title = pinned ? "Soltar a barra lateral e usar o menu de hambúrguer" : "Fixar a barra lateral, como era antes";
+                pin.setAttribute("aria-label", pinned ? "Soltar a barra lateral" : "Fixar a barra lateral");
+            }
+            if (persist) {
+                try {
+                    window.localStorage.setItem("grcon.sidebar.pinned", String(pinned));
+                }
+                catch (_) { /* preferência só deste navegador */ }
+            }
+        };
+        toggle.addEventListener("click", () => { if (!isPinned()) set(!isOpen(), true); });
         scrim.addEventListener("click", () => set(false, true));
+        pin?.addEventListener("click", () => applyPinned(!isPinned(), true));
         // Escolher um módulo (ou abrir as configurações) fecha o menu depois que a navegação aconteceu.
         sidebar.addEventListener("click", (event) => {
-            if (event.target?.closest?.("button, a"))
+            if (!isPinned() && event.target?.closest?.("button, a") && !event.target.closest("#grcon-sidebar-pin"))
                 window.setTimeout(() => set(false, false), 0);
         });
         document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape" && isOpen() && !document.querySelector("dialog[open]")) {
+            if (event.key === "Escape" && !isPinned() && isOpen() && !document.querySelector("dialog[open]")) {
                 event.preventDefault();
                 set(false, true);
             }
         });
         window.addEventListener("resize", () => { if (isOpen()) place(); });
         window.addEventListener("scroll", () => { if (isOpen()) place(); }, { passive: true });
-        set(false, false);
+        applyPinned(isPinned(), false);
     }
 
     function syncGrconSidebar() {

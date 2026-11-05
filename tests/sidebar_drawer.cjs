@@ -21,10 +21,24 @@ assert.match(css, /\[data-sidebar-open="true"\] \.app-shell > \.ops-sidebar/);
 
 // Comportamento: clique abre/fecha; Esc, clique fora e escolher um módulo fecham; foco volta ao botão.
 assert.match(ui, /function installSidebarDrawer\(\)/);
-assert.match(ui, /toggle\.addEventListener\("click", \(\) => set\(!isOpen\(\), true\)\)/);
+assert.match(ui, /toggle\.addEventListener\("click", \(\) => \{ if \(!isPinned\(\)\) set\(!isOpen\(\), true\); \}\)/);
 assert.match(ui, /scrim\.addEventListener\("click", \(\) => set\(false, true\)\)/);
-assert.match(ui, /event\.key === "Escape" && isOpen\(\) && !document\.querySelector\("dialog\[open\]"\)/, "Esc não atropela janelas abertas");
-assert.match(ui, /closest\?\.\("button, a"\)\)\s*window\.setTimeout\(\(\) => set\(false, false\), 0\)/, "escolher um módulo fecha o menu");
+assert.match(ui, /event\.key === "Escape" && !isPinned\(\) && isOpen\(\) && !document\.querySelector\("dialog\[open\]"\)/, "Esc não atropela janelas abertas");
+assert.match(ui, /closest\?\.\("button, a"\) && !event\.target\.closest\("#grcon-sidebar-pin"\)\)\s*window\.setTimeout\(\(\) => set\(false, false\), 0\)/, "escolher um módulo fecha o menu");
 assert.match(ui, /sidebar\.setAttribute\("inert", ""\)/);
 assert.match(ui, /installSidebarDrawer\(\);\s*installRenamerUx\(\)/, "instalado na inicialização");
+
+// Fixar menu: volta ao formato de antes (barra sempre visível); a escolha é lembrada e aplicada antes da tela aparecer.
+assert.match(html, /<button aria-label="Fixar a barra lateral" aria-pressed="false" class="ops-sidebar-pin" id="grcon-sidebar-pin"[^>]*type="button">/);
+const head = read("grcon_bootstrap_head.js");
+assert.match(head, /localStorage\.getItem\("grcon\.sidebar\.pinned"\) === "true"\) document\.documentElement\.dataset\.sidebarDrawer = "off"/, "preferência lida no head (sem piscar)");
+assert.match(ui, /const applyPinned = \(pinned, persist\)/);
+assert.match(ui, /root\.dataset\.sidebarDrawer = pinned \? "off" : "on"/);
+assert.match(ui, /setItem\("grcon\.sidebar\.pinned", String\(pinned\)\)/);
+assert.match(ui, /toggle\.addEventListener\("click", \(\) => \{ if \(!isPinned\(\)\) set\(!isOpen\(\), true\); \}\)/, "hambúrguer não age quando fixada");
+assert.match(ui, /!isPinned\(\) && event\.target\?\.closest\?\.\("button, a"\) && !event\.target\.closest\("#grcon-sidebar-pin"\)/, "fixada: escolher módulo não fecha nem torna inerte");
+assert.match(ui, /event\.key === "Escape" && !isPinned\(\)/);
+assert.match(css, /\[data-sidebar-drawer="off"\] \.grcon-menu-toggle \{ display: none; \}/, "fixada: sem hambúrguer");
+// As regras da gaveta só valem em modo "on": em "off" a barra é a de antes.
+assert.doesNotMatch(css.slice(css.indexOf("@layer grcon-drawer"), css.indexOf("@layer grcon-drawer") + 2500).replace(/\[data-sidebar-drawer="on"\]/g, ""), /data-sidebar-drawer="off"/, "camada da gaveta não mexe no modo fixado");
 console.log("sidebar_drawer: OK");
