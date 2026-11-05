@@ -20,6 +20,8 @@ export interface PwOperation {
    * Vazio = em sequência. Só informa; não altera nenhuma contagem.
    */
   missingBefore: string[];
+  /** Status do código na Consulta Geral do SIGEM nas OUTRAS revisões, ex.: "Rev. B: Postado" (vazio se não há outra revisão no SIGEM). */
+  sigemOtherStatus: string;
 }
 export interface PwTotals {
   sigem: number; registerSigem: number; registerAbsent: number;
@@ -75,6 +77,16 @@ function fillRevisionSequence(required: Set<string>): void {
   if (highest === 0) return;
   required.add("0");
   for (let rank = 1; rank <= highest; rank++) required.add(String.fromCharCode(64 + rank));
+}
+function otherSigemStatus(revisions: Map<string, SigemPwRecord[]> | undefined, current: string): string {
+  if (!revisions) return "";
+  const parts: string[] = [];
+  for (const [rev, entries] of [...revisions].sort((a, b) => (sequenceRank(a[0]) ?? 99) - (sequenceRank(b[0]) ?? 99) || a[0].localeCompare(b[0], "pt-BR", { numeric: true }))) {
+    if (rev === current) continue;
+    const status = [...new Set(entries.map(row => text(row.status || row.sigemStatus)).filter(Boolean))].join("/");
+    parts.push("Rev. " + rev + ": " + (status || "sem status"));
+  }
+  return parts.join("; ");
 }
 /** Emissão fora de ordem: uma revisão emitida enquanto outra, anterior e de ordem conhecida, ainda não foi emitida. */
 function markOutOfSequence(rows: PwOperation[], documentKey: string): void {
@@ -252,7 +264,7 @@ export function computePwOperations(state: PwOperationsInput): PwOperationsRepor
         documentClass, referenceStatus: text(reference.status), sources, action: isCadastro && !registered ? "Cadastrar no PW" : emitted ? "Concluído" : "Emitir no PW",
         inSigem, sigemSituation: inSigem ? "Consta no SIGEM" : "Não consta na Consulta Geral",
         sigemStatus: [...new Set(entries.map(row => text(row.status || row.sigemStatus)).filter(Boolean))].join("; "),
-        pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence, missingBefore: [] });
+        pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence, missingBefore: [], sigemOtherStatus: otherSigemStatus(sigem.get(key), rev) });
     }
     markOutOfSequence(report.rows, key);
   }

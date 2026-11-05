@@ -88,6 +88,15 @@ assert.ok(run(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"A","Sim"
   const master = planOut.sheets[MAIN_SHEET].flat().map(String);
   assert.ok(master.some(cell => /FORA DE SEQUÊNCIA: falta A/.test(cell)), "Excel marca a revisão emitida fora de sequência");
   assert.equal(master.filter(cell => /FORA DE SEQUÊNCIA/.test(cell)).length, 1, "só a revisão B é marcada");
+  // Coluna STATUS SIGEM (L): status do código na Consulta Geral; sem a revisão no SIGEM, mostra o das outras revisões.
+  const statusPlan = coordinatorPlan(state([ref(1,"B")], [{ ...sig(1,"B"), status: "Postado" }], [pw(1,"0","Sim")]));
+  const statusRows = statusPlan.sheets[MAIN_SHEET];
+  assert.equal(statusRows[2][11], "STATUS SIGEM");
+  const byRevision = Object.fromEntries(statusRows.slice(3).map(row => [row[1], row[11]]));
+  assert.equal(byRevision.B, "Postado");
+  assert.equal(byRevision.A, "Revisão não consta no SIGEM · Rev. B: Postado");
+  assert.equal(byRevision["0"], "Revisão não consta no SIGEM · Rev. B: Postado");
+  assert.equal(statusRows[2][12], "Rev. 0", "as colunas de revisão começam depois do STATUS SIGEM");
 }
 
 assert.ok(sequence.rows.every(row => !row.missingBefore.length));
