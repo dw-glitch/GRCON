@@ -2,6 +2,7 @@ import { useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { DocumentClassBadge } from "../../core/ui/DocumentClassBadge";
 import { UiDrawer } from "../../core/ui/UiPrimitives";
+import { EvolutionOperationsPanel } from "./EvolutionOperationsPanel";
 import { useSigemPwEvolution } from "./hooks/useSigemPwEvolution";
 import {
   EVOLUTION_LIST_LABELS,
@@ -259,11 +260,11 @@ function MetricAuditDrawer({
       ],
     },
     "missing-pw": {
-      title: "SIGEM novo sem PW",
+      title: "Novos no SIGEM sem cadastro no PW",
       formula: "Novas ocorrências SIGEM do período sem correspondência código + revisão na base PW atual selecionada.",
       rows: [
         ["Novos SIGEM sem PW atual", comparison?.relation?.newSigemMissingPw.length || 0],
-        ["Somente SIGEM no snapshot atual", comparison?.current?.onlySigem.length || 0],
+        ["Só no SIGEM na base atual", comparison?.current?.onlySigem.length || 0],
       ],
     },
     "pw-current": {
@@ -304,14 +305,14 @@ function MetricAuditDrawer({
       ],
     },
     "only-sigem": {
-      title: "Somente SIGEM",
+      title: "Só no SIGEM",
       formula: "Revisão de documento válida presente no SIGEM atual e ausente no PW atual.",
-      rows: [["Somente SIGEM", comparison?.current?.onlySigem.length || 0]],
+      rows: [["Só no SIGEM", comparison?.current?.onlySigem.length || 0]],
     },
     "only-pw": {
-      title: "Somente PW",
+      title: "Só no PW",
       formula: "Revisão de documento válida presente no PW atual e ausente no SIGEM atual.",
-      rows: [["Somente PW", comparison?.current?.onlyPw.length || 0]],
+      rows: [["Só no PW", comparison?.current?.onlyPw.length || 0]],
     },
     "current-both": {
       title: "Presentes nas duas bases",
@@ -567,7 +568,7 @@ export function SigemPwEvolutionApp() {
             className={state.revisionScope === "revision0" ? "active" : ""}
             onClick={() => adapter.setRevisionScope("revision0")}
           >
-            <strong>Revisão 0</strong>
+            <strong>Somente revisão 0</strong>
             <span>Cadastro inicial</span>
           </button>
           <button
@@ -626,6 +627,15 @@ export function SigemPwEvolutionApp() {
         />
       </div>
 
+      <EvolutionOperationsPanel
+        view={state.operations}
+        hasLd={hasValidatedLd}
+        sigemCurrent={adapter.selectedSnapshot("sigem", "current")}
+        pwCurrent={adapter.selectedSnapshot("pw", "current")}
+        sigemPrevious={adapter.selectedSnapshot("sigem", "previous")}
+        pwPrevious={adapter.selectedSnapshot("pw", "previous")}
+      />
+
       <div className="spw-evo-kpis" id="spw-evo-kpis">
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi sigem" data-evo-list="sigem-new" aria-pressed={state.listMode === "sigem-new"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("sigem-new")}>
@@ -647,7 +657,7 @@ export function SigemPwEvolutionApp() {
         </div>
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi pending" data-evo-list="missing-pw" aria-pressed={state.listMode === "missing-pw"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("missing-pw")}>
-            <span>SIGEM novo sem PW</span><strong>{value(Boolean(comparison?.sigem), counts["missing-pw"])}</strong><small>Entradas ainda não localizadas no PW atual</small>
+            <span>Novos no SIGEM sem cadastro no PW</span><strong>{value(Boolean(comparison?.sigem), counts["missing-pw"])}</strong><small>Entradas ainda não localizadas no PW atual</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.sigem} onClick={() => setAuditMetric("missing-pw")}>Como foi calculado?</button>
         </div>
@@ -683,27 +693,27 @@ export function SigemPwEvolutionApp() {
         </header>
         <div className="spw-evo-current-grid">
           <article>
-            <span>PW cadastrado</span>
+            <span>Cadastradas no PW</span>
             <strong>{hasValidatedLd ? fmt(selectedPw?.audit?.documentRevisionRecords) : "—"}</strong>
             <small>{fmt(selectedPw?.audit?.uniqueDocuments)} documentos únicos</small>
             <div><button type="button" data-evo-current-list="pw-current" onClick={() => adapter.setListMode("pw-current")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("pw-current")}>Como calculado?</button></div>
           </article>
           <article>
-            <span>PW emitido</span>
+            <span>Emitidas no PW</span>
             <strong>{hasValidatedLd ? fmt(selectedPw?.audit?.emittedDocumentRevisionRecords) : "—"}</strong>
             <small>{fmt(selectedPw?.audit?.emittedUniqueDocuments)} documentos únicos · {fmt(selectedPw?.audit?.indeterminateEmissionDocumentRevisionRecords)} indeterminado(s)</small>
             <div><button type="button" data-evo-current-list="pw-current-emitted" onClick={() => adapter.setListMode("pw-current-emitted")}>Ver emitidos</button><button type="button" onClick={() => setAuditMetric("pw-current-emitted")}>Como calculado?</button></div>
           </article>
           <article>
-            <span>Somente SIGEM</span>
+            <span>Só no SIGEM</span>
             <strong>{hasValidatedLd ? fmt(comparison?.current?.onlySigem.length) : "—"}</strong>
-            <small>revisões de documentos</small>
+            <small>revisões de documentos que constam no SIGEM e não no PW</small>
             <div><button type="button" data-evo-current-list="only-sigem" onClick={() => adapter.setListMode("only-sigem")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("only-sigem")}>Como calculado?</button></div>
           </article>
           <article>
-            <span>Somente PW</span>
+            <span>Só no PW</span>
             <strong>{hasValidatedLd ? fmt(comparison?.current?.onlyPw.length) : "—"}</strong>
-            <small>revisões de documentos</small>
+            <small>revisões de documentos cadastradas no PW e fora do SIGEM</small>
             <div><button type="button" data-evo-current-list="only-pw" onClick={() => adapter.setListMode("only-pw")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("only-pw")}>Como calculado?</button></div>
           </article>
         </div>

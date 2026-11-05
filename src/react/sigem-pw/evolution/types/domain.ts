@@ -1,3 +1,5 @@
+import type { PwTotals } from "../../services/sigemPwOperations";
+
 export type EvolutionSystem = "sigem" | "pw";
 export type EvolutionRevisionScope = "revision0" | "all";
 export type EvolutionListMode =
@@ -229,6 +231,33 @@ export interface EvolutionMetrics {
   evolutionCacheMissCount: number;
 }
 
+export interface EvolutionOperationsPoint extends PwTotals {
+  /** Revisões de documentos no escopo (cada revisão de cada documento conta uma vez). */
+  revisions: number;
+}
+
+export interface EvolutionOperationsMovement {
+  /** Revisões que passaram a constar no SIGEM entre as duas bases. */
+  newInSigem: number;
+  /** Revisões que deixaram de constar no SIGEM. */
+  leftSigem: number;
+  /** Revisões que passaram a ter cadastro comprovado no PW. */
+  newlyRegistered: number;
+  /** Revisões que passaram a ter emissão comprovada no PW. */
+  newlyIssued: number;
+}
+
+export interface EvolutionOperationsView {
+  ready: boolean;
+  reason: string;
+  scope: EvolutionRevisionScope;
+  current: EvolutionOperationsPoint | null;
+  previous: EvolutionOperationsPoint | null;
+  movement: EvolutionOperationsMovement | null;
+  /** Quais lados da base anterior foram usados; o lado ausente repete a base atual. */
+  previousUsed: { sigem: boolean; pw: boolean };
+}
+
 export interface EvolutionUiState {
   active: boolean;
   ready: boolean;
@@ -242,6 +271,8 @@ export interface EvolutionUiState {
   selections: EvolutionSelections;
   revisionScope: EvolutionRevisionScope;
   comparison: EvolutionComparison | null;
+  /** Seis indicadores do painel gerencial para a base anterior e a atual (mesmo motor). */
+  operations: EvolutionOperationsView | null;
   timeline: EvolutionTimelineDay[];
   listMode: EvolutionListMode;
   filters: EvolutionFilters;
@@ -284,19 +315,19 @@ export const EMPTY_EVOLUTION_FILTERS = (): EvolutionFilters => ({
 });
 
 export const EVOLUTION_LIST_LABELS: Readonly<Record<EvolutionListMode, readonly [string, string]>> = Object.freeze({
-  "sigem-new": ["Cadastrados no SIGEM", "Ocorrências técnicas novas entre os dois snapshots SIGEM; a auditoria mostra também as revisões de documentos."],
-  "pw-new": ["Encontrados no ProjectWise", "Ocorrências técnicas novas entre os dois snapshots PW; presença no PW significa cadastro, não emissão."],
+  "sigem-new": ["Novos na Consulta Geral do SIGEM", "Ocorrências técnicas que passaram a constar na Consulta Geral entre as duas bases. A contagem por revisão de documento está no painel de cadastro e emissão e na auditoria."],
+  "pw-new": ["Novos cadastros no PW", "Ocorrências técnicas que passaram a constar no PW entre as duas bases (empresas CSG/QTM). Constar no PW significa cadastro, não emissão."],
   "pw-emitted": ["Emissões identificadas entre bases PW", "Entradas já emitidas e transições de PREVISTO para emitido. Fotografias da base não representam todas as operações realizadas no intervalo."],
   both: ["Chegaram nas duas bases", "Novas ocorrências equivalentes no SIGEM e no PW no período selecionado."],
-  "missing-pw": ["Novos SIGEM ainda não identificados no PW", "Novas ocorrências SIGEM sem correspondência na base PW atual."],
+  "missing-pw": ["Novos no SIGEM, ainda sem cadastro no PW", "Ocorrências novas na Consulta Geral que ainda não têm correspondência na base PW atual."],
   "removed-sigem": ["Não encontrados nesta base SIGEM", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
   "removed-pw": ["Não encontrados nesta base PW", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
   "pw-current": ["Cadastradas no PW atual", "Todos os registros válidos da base PW atual; a revisão de documento é exibida em paralelo à ocorrência técnica."],
   "pw-current-emitted": ["Emitidas no PW atual", "Registros PW atuais com evidência de emissão reconhecida pela regra vigente."],
   "pw-current-not-emitted": ["Não emitidas no PW atual", "Registros PW atuais com PREVISTO, isto é, não emissão determinável pela regra vigente."],
   "pw-current-indeterminate": ["Emissão indeterminada no PW", "Registros PW com Última emissão ausente ou com valor não reconhecido; não entram como emitidos nem como não emitidos determináveis."],
-  "only-sigem": ["Somente SIGEM", "Revisão de documento presente no SIGEM atual e ausente no PW atual."],
-  "only-pw": ["Somente PW", "Revisão de documento presente no PW atual e ausente no SIGEM atual."],
+  "only-sigem": ["Só no SIGEM", "Revisão de documento que consta no SIGEM atual e não está cadastrada no PW atual."],
+  "only-pw": ["Só no PW", "Revisão de documento cadastrada no PW atual e que não consta no SIGEM atual."],
   "current-both": ["SIGEM + PW", "Revisão de documento presente nas duas bases atuais."],
   "excluded-sigem": ["Excluídos da análise SIGEM", "Linhas SIGEM rejeitadas pela regra de escopo/validação, com motivo preservado."],
   "excluded-pw": ["Excluídos da análise PW", "Linhas PW rejeitadas pela regra de escopo/validação, com motivo preservado."],

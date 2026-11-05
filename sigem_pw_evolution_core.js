@@ -646,7 +646,7 @@
       const fallbackPw = plannedMatches.get(key);
       const pwRow = pw.get(key) || fallbackPw;
       if (!pwRow) {
-        onlySigem.push({ ...sigemRow, movement: "Somente SIGEM" });
+        onlySigem.push({ ...sigemRow, movement: "Só no SIGEM" });
         return;
       }
       const indeterminate = pwRow.emissionState === "indeterminate" || Boolean(fallbackPw && pwRow.emitted);
@@ -666,7 +666,7 @@
     pw.forEach((pwRow, key) => {
       if (sigem.has(key) || consumedPw.has(key)) return;
       const indeterminate = pwRow.emissionState === "indeterminate";
-      const linked = { ...pwRow, movement: pwRow.emitted ? "Somente PW emitido" : indeterminate ? "Somente PW emissão indeterminada" : "Somente PW não emitido" };
+      const linked = { ...pwRow, movement: pwRow.emitted ? "Só no PW, emitido" : indeterminate ? "Só no PW, emissão indeterminada" : "Só no PW, não emitido" };
       onlyPw.push(linked);
       if (pwRow.emitted) pwOnlyEmitted.push(linked);
       else if (indeterminate) pwOnlyIndeterminate.push(linked);

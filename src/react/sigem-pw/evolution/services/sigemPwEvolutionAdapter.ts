@@ -1,11 +1,13 @@
 import type { SigemPwRecord } from "../../types/domain";
 import { ensureSharedSigemHistoryCompatibility } from "../../services/sharedSigemHistoryCompatibility";
+import { buildEvolutionOperations } from "./evolutionOperations";
 import { buildEvolutionSourceCatalog, type EvolutionSourceCatalog } from "./evolutionSourceCatalog";
 import {
   EMPTY_EVOLUTION_FILTERS,
   EVOLUTION_EVENT_DEBOUNCE_MS,
   EVOLUTION_PAGE_SIZE,
   type EvolutionFilters,
+  type EvolutionOperationsView,
   type EvolutionListMode,
   type EvolutionPageData,
   type EvolutionRecord,
@@ -80,6 +82,7 @@ const state: EvolutionUiState = {
   selections: { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" },
   revisionScope: "all",
   comparison: null,
+  operations: null,
   timeline: [],
   listMode: "sigem-new",
   filters: EMPTY_EVOLUTION_FILTERS(),
@@ -413,6 +416,12 @@ function hasValidatedLd(): boolean {
 
 function selectionKey(system: EvolutionSystem, role: "previous" | "current"): keyof EvolutionUiState["selections"] {
   return `${system}${role === "previous" ? "Prev" : "Current"}` as keyof EvolutionUiState["selections"];
+}
+
+/** Base escolhida SEM filtro de revisão: o painel de cadastro e emissão aplica o escopo pelo mesmo filtro do painel gerencial. */
+function selectedSourceSnapshot(system: EvolutionSystem, role: "previous" | "current"): EvolutionSnapshot | null {
+  const selected = state[system].find((item) => item.id === state.selections[selectionKey(system, role)]) || null;
+  return selected && !selected.unavailableReason ? selected : null;
 }
 
 function selectedSnapshot(system: EvolutionSystem, role: "previous" | "current"): EvolutionSnapshot | null {
@@ -784,6 +793,7 @@ async function buildPreparedSnapshots(
 function recalculate(): void {
   if (!hasValidatedLd()) {
     state.comparison = null;
+    state.operations = null;
     syncFilteredRows();
     return;
   }
@@ -799,9 +809,31 @@ function recalculate(): void {
     if (comparisonCache.size > 12) comparisonCache.delete(comparisonCache.keys().next().value!);
   }
   state.metrics.evolutionComparisonMs = now() - started;
+  state.operations = operationsView();
   state.page = 1;
   state.detailRow = null;
   syncFilteredRows();
+}
+
+const operationsCache = new Map<string, EvolutionOperationsView>();
+function operationsView(): EvolutionOperationsView | null {
+  const ld = window.GrconSigemPwDashboardUi?.state?.ld;
+  const picks = [selectedSourceSnapshot("sigem", "previous"), selectedSourceSnapshot("sigem", "current"),
+    selectedSourceSnapshot("pw", "previous"), selectedSourceSnapshot("pw", "current")] as const;
+  const key = [Core().CALCULATION_VERSION, state.revisionScope, ld?.meta?.snapshotId || ld?.meta?.fileName || "", ld?.records?.length || 0,
+    ...picks.map((row) => row ? `${row.id}@${row.importedAt}@${row.contentFingerprint}` : "none")].join("|");
+  const cached = operationsCache.get(key);
+  if (cached) return cached;
+  let view: EvolutionOperationsView;
+  try {
+    view = buildEvolutionOperations({ ld, scope: state.revisionScope, sigemPrevious: picks[0], sigemCurrent: picks[1], pwPrevious: picks[2], pwCurrent: picks[3] });
+  } catch (error) {
+    debugMetric("operations-failed", { message: messageOf(error, "Falha ao calcular cadastro e emissão") });
+    return null;
+  }
+  operationsCache.set(key, view);
+  if (operationsCache.size > 8) operationsCache.delete(operationsCache.keys().next().value!);
+  return view;
 }
 
 function timelineKey(sigem = state.sigem, pw = state.pw): string {
@@ -1218,8 +1250,8 @@ async function exportAuditWorkbook(): Promise<number> {
       { Métrica: "PW · documentos únicos emitidos", Valor: pwAudit.emittedUniqueDocuments || 0 },
       { Métrica: "PW · revisões de documentos não emitidas (determinável)", Valor: pwAudit.notEmittedDocumentRevisionRecords || 0 },
       { Métrica: "PW · emissão indeterminada (revisões de documentos)", Valor: pwAudit.indeterminateEmissionDocumentRevisionRecords || 0 },
-      { Métrica: "Somente SIGEM (revisões de documentos)", Valor: comparison?.current.onlySigem.length || 0 },
-      { Métrica: "Somente PW (revisões de documentos)", Valor: comparison?.current.onlyPw.length || 0 },
+      { Métrica: "Só no SIGEM (revisões de documentos)", Valor: comparison?.current.onlySigem.length || 0 },
+      { Métrica: "Só no PW (revisões de documentos)", Valor: comparison?.current.onlyPw.length || 0 },
       { Métrica: "SIGEM + PW (revisões de documentos)", Valor: comparison?.current.both.length || 0 },
       { Métrica: "Emissões identificadas entre bases · revisões de documentos", Valor: comparison?.pwEmissions.length || 0 },
       { Métrica: "Movimentos técnicos emitidos · compatibilidade", Valor: comparison?.pwEmissionsTechnical.length || 0 },
@@ -1227,8 +1259,8 @@ async function exportAuditWorkbook(): Promise<number> {
     ]);
     append("SIGEM x PW", [
       ...(comparison?.current.both || []).map((row) => auditRow(row, row.movement || "SIGEM + PW")),
-      ...(comparison?.current.onlySigem || []).map((row) => auditRow(row, "Somente SIGEM")),
-      ...(comparison?.current.onlyPw || []).map((row) => auditRow(row, "Somente PW")),
+      ...(comparison?.current.onlySigem || []).map((row) => auditRow(row, "Só no SIGEM")),
+      ...(comparison?.current.onlyPw || []).map((row) => auditRow(row, "Só no PW")),
     ]);
     append("Novos", [
       ...(comparison?.sigem?.added || []).map((row) => auditRow(row, "Novo SIGEM")),
@@ -1241,8 +1273,8 @@ async function exportAuditWorkbook(): Promise<number> {
     append("Emitidos", Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "emitted").map((row) => auditRow(row, "Emitido")));
     append("Não emitidos", Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "not-emitted").map((row) => auditRow(row, "Não emitido determinável")));
     append("Emissão indeterminada", Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "indeterminate").map((row) => auditRow(row, "Emissão indeterminada")));
-    append("Somente SIGEM", (comparison?.current.onlySigem || []).map((row) => auditRow(row, "Somente SIGEM")));
-    append("Somente PW", (comparison?.current.onlyPw || []).map((row) => auditRow(row, "Somente PW")));
+    append("Só no SIGEM", (comparison?.current.onlySigem || []).map((row) => auditRow(row, "Só no SIGEM")));
+    append("Só no PW", (comparison?.current.onlyPw || []).map((row) => auditRow(row, "Só no PW")));
     append("Excluídos da análise", [
       ...(sigemCurrent?.rejected || []).map((row) => auditRow(row, "Excluído SIGEM")),
       ...(pwCurrent?.rejected || []).map((row) => auditRow(row, "Excluído PW")),
@@ -1391,10 +1423,10 @@ function subscribeExternalEvents(): () => void {
   const onBaseUpdate = () => scheduleRefresh(false);
   const onContext = () => {
     contextEpoch++; state.sigem = []; state.pw = []; state.ldUniverse = null; state.ldSignature = "";
-    state.comparison = null; state.timeline = []; state.filteredRows = []; state.ready = false;
+    state.comparison = null; state.operations = null; state.timeline = []; state.filteredRows = []; state.ready = false;
     state.error = "";
     state.selections = { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" };
-    comparisonCache.clear(); timelineCache.clear(); scopedSnapshotCache.clear(); preparedSnapshotCache.clear();
+    comparisonCache.clear(); timelineCache.clear(); scopedSnapshotCache.clear(); preparedSnapshotCache.clear(); operationsCache.clear();
     emit(); scheduleRefresh(true);
   };
   window.addEventListener("grcon:contract-context-changed", onContext);
