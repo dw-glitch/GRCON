@@ -950,6 +950,9 @@
         evidence: item.disciplineResolution.evidence ? { ...item.disciplineResolution.evidence } : null,
         manual: Boolean(item.disciplineResolution.manual),
       } : null,
+      // Situação e motivo como aparecem na tela: o Excel diz o mesmo que a triagem.
+      situationLabel: Number.isInteger(rowIndex) && row ? selectionSituationLabel(row, rowIndex) : item.situationLabel || "",
+      situationWhy: Number.isInteger(rowIndex) && row ? situationWhyFor(row, rowIndex) : item.situationWhy || null,
       selectedForEgrdt: Number.isInteger(rowIndex) ? state.selected.has(rowIndex) : Boolean(item.selectedForEgrdt),
       manuallyIncluded: Number.isInteger(rowIndex) ? state.manualForceInclude.has(rowIndex) : Boolean(item.manuallyIncluded),
       reasonCode: item.reasonCode || "",
@@ -2231,8 +2234,8 @@
       const fileRevision = row.fileRevisionEvidence || C.fileRevisionEvidence(row.name, row.document);
       // A PDF in revision A and a native file in revision B are independent
       // packages. Never merge them and rename one as if it contained the other.
-      const revisionKey = fileRevision.valid ? fileRevision.revision : `unknown:${row.id}`;
-      const groupKey = row.documentKey ? `doc:${row.documentKey}:rev:${revisionKey}` : `file:${row.id}`;
+      // Mesmo documento + mesma revisão = um pacote só (PDF + XLSX + DOCX); regras em C.packageGroupKey.
+      const groupKey = C.packageGroupKey(row, fileRevision);
       const fileEntry = row.file ? {
         file: row.file,
         name: row.name,
@@ -3209,6 +3212,16 @@
     if (row.decision === C.READY) return "Incluir";
     if (row.decision === C.DISCARD) return "Não incluir";
     return "Conferir";
+  }
+
+  // Por que a linha está Bloqueada/Excluída/Não incluir: a MESMA resposta vale na tela e nos Excel.
+  function situationWhyFor(row, index) {
+    const composition = E.validateEtPlanningPair(row, rowOutputSources(row));
+    return TriageQuery.situationReason(row, {
+      included: rowIncludedForGeneration(row, index),
+      manual: manuallyIncluded(row, index),
+      compositionErrors: composition.valid ? [] : composition.errors || [],
+    });
   }
 
   function selectionSituationLabel(row, index) {
@@ -4238,14 +4251,15 @@
           ? "Pode incluir na GRDT; antes de gerar, abra Editar GRDT e conclua a pendência indicada"
           : row.hardBlock ? "Marcar para incluir manualmente na GRDT; o alerta da triagem será preservado"
           : "Marcar para incluir na GRDT final, inclusive como exceção às regras de composição dos arquivos";
+      // Visível na própria célula, sem abrir evidências.
+      const situationWhy = situationWhyFor(row, index);
       const mainRow = `<tr data-index="${index}" data-decision-group="${decisionGroupKey(row)}" class="result-row ${resultClass} ${groupStart ? "group-start" : ""} ${selected ? "selected" : ""} ${manualSelection ? "manually-included" : ""}">
         <td><div class="situation-cell">
           ${groupStart ? `<span class="triage-group-label">${escapeHtml(decisionGroupLabel(row))}</span>` : ""}
           <input id="select-row-${index}" name="select-row-${index}" class="row-select" data-select-row type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Selecionar para GRDT" title="${selectionTitle}">
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
           <span class="status-chip ${resultClass}" title="Alocação: ${escapeHtml(allocationStatus)} · Status SIGEM: ${escapeHtml(statusPolicy.status || "não identificado")} · Resultado da triagem: ${escapeHtml(compactDecisionLabel(row))}">${escapeHtml(selectionSituationLabel(row, index))}</span>
-          ${allocationAlert === "not_allocated" ? `<span class="grdt-status-reason">Não alocado</span>` : allocationAlert === "conflict" ? `<span class="grdt-status-reason">Conflito de alocação</span>` : ""}
-        </div></td>
+        </div>${situationWhy ? `<span class="grdt-why" data-why="${escapeHtml(situationWhy.code)}" title="${escapeHtml(situationWhy.detail)}"><strong>${escapeHtml(situationWhy.short)}</strong><span>${escapeHtml(situationWhy.detail)}</span></span>` : ""}</td>
         <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
         <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="grdt-document-text"><span class="grdt-document-identity"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span><button type="button" class="grdt-copy-code" data-action="copy-code" aria-label="Copiar código ${escapeHtml(row.document)}" title="Copiar código">⧉</button></span><small class="grdt-document-original" title="${escapeHtml(row.name || "")}">${escapeHtml(row.name || "")}</small><small class="grdt-document-source">${escapeHtml(TriageQuery.origin(row))} · ${escapeHtml(TriageQuery.extensions(row).join(" / ") || "Tipo não identificado")}</small></span></span>${!row.record ? `<button type="button" class="text-button" data-action="suggest-allocation">Sugerir alocação</button>` : ""}${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryUi ? window.GrconGrdtHistoryUi.row(row.document, row.revision) : PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
@@ -4813,6 +4827,8 @@
       const simpleMessage = [message.title, message.explanation, message.nextAction].filter(Boolean).join(" ");
       const output = {
         "SITUAÇÃO GRCON": decisionLabel(row.decision, row),
+        "SITUAÇÃO NA TELA": selectionSituationLabel(row, index),
+        "POR QUE ESTÁ NESTA SITUAÇÃO": (() => { const why = situationWhyFor(row, index); return why ? `${why.short} — ${why.detail}` : "Sem impedimento: entra na GRDT."; })(),
         "GRDT(S) ANTERIOR(ES) NO HISTÓRICO": previousEgrdtHistoryText(row.document),
         "CÓDIGO DO MOTIVO": message.code || row.reasonCode || "",
         "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
@@ -4992,6 +5008,8 @@
       ...row,
       selectedForEgrdt: state.selected.has(index),
       manuallyIncluded: state.manualForceInclude.has(index),
+      situationLabel: selectionSituationLabel(row, index),
+      situationWhy: situationWhyFor(row, index),
     }));
     const summaryRows = ReportSummary
       ? ReportSummary.buildRowsAsync

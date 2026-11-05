@@ -1833,11 +1833,33 @@
     if (sheetOnly && sameDocument(sheetOnly[1])) return result("0", "nome do arquivo (folha sem revisão = revisão 0)");
     // A hyphen belongs to a TAG/code (for example P-101-A); only the
     // documented underscore separator may introduce an implicit revision.
-    const suffix = stem.match(/^(.*?)(?:_\d{4})?_(?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/);
+    const suffixPattern = /^(.*?)(?:_\d{4})?_(?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/;
+    const suffix = stem.match(suffixPattern);
     if (suffix && sameDocument(suffix[1]) && suffix[2] !== "RIR" && revisionInfo(suffix[2]).valid) {
       return result(normalizeRevision(suffix[2]), "nome do arquivo");
     }
+    // Separador sobrando depois da revisão ("..._040_C_.pdf"): é o mesmo nome com um "_" a mais.
+    // Só vale quando existe um sufixo de revisão válido; um "_" solto sem revisão continua não identificado.
+    const trimmedStem = stem.replace(/[_\s.-]+$/, "");
+    if (trimmedStem && trimmedStem !== stem) {
+      const loose = trimmedStem.match(suffixPattern);
+      if (loose && sameDocument(loose[1]) && loose[2] !== "RIR" && revisionInfo(loose[2]).valid) {
+        return result(normalizeRevision(loose[2]), "nome do arquivo (separador final ignorado)");
+      }
+    }
     return { applicable: true, valid: false, revision: "", source: "nome do arquivo (revisão não identificada)", name };
+  }
+
+  /**
+   * Chave do pacote: PDF, XLSX e DOCX do mesmo documento e da mesma revisão são UM documento.
+   * Revisões diferentes seguem como pacotes independentes. Sem revisão reconhecível no nome do arquivo,
+   * só agrupa quem tem o mesmo nome-base (arquivos que só diferem na extensão); nomes diferentes ficam separados.
+   */
+  function packageGroupKey(row, fileRevision) {
+    if (!row || !row.documentKey) return `file:${row && row.id}`;
+    const baseName = text(row.name).split(/[\\/]/).pop().replace(/\.[^.]+$/, "").toUpperCase().replace(/[_\s.-]+$/, "");
+    const revisionKey = fileRevision && fileRevision.valid ? fileRevision.revision : `unknown:${baseName || row.id}`;
+    return `doc:${row.documentKey}:rev:${revisionKey}`;
   }
 
   function revisionFromText(pdfText, document) {
@@ -3362,6 +3384,7 @@
     controlArtifactKind,
     revisionFromName,
     fileRevisionEvidence,
+    packageGroupKey,
     claimedRevisionFromName,
     revisionFromText,
     validateDocumentCode,

@@ -196,3 +196,24 @@ html[data-app="GRCON"] #results-table .status-chip:focus-visible,
 html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-item[data-filter]:focus-visible {
   outline: 2px solid #316b9c; outline-offset: 2px;
 }
+
+/* Por que a linha está Bloqueada/Excluída/Não incluir: texto curto + detalhe, na própria célula de situação. */
+html[data-app="GRCON"] #results-table .grdt-why {
+  display: grid; gap: 1px; margin: 3px 0 0; max-width: 100%; min-width: 0; white-space: normal;
+  font-size: .66rem; line-height: 1.28; color: #4b5d70;
+  border-left: 3px solid var(--grdt-why-tone, #94a3b8); padding-left: 6px;
+}
+html[data-app="GRCON"] #results-table .grdt-why > strong { font-weight: 700; color: var(--grdt-why-ink, #243b53); overflow-wrap: anywhere; }
+html[data-app="GRCON"] #results-table .grdt-why > span {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere;
+  white-space: normal; text-overflow: clip;
+}
+html[data-app="GRCON"] #results-table .grdt-why:is([data-why="sequence"], [data-why="not_allocated"], [data-why="triage_block"], [data-why="status_unresolved"]) {
+  --grdt-why-tone: #c74b43; --grdt-why-ink: #8f2f29;
+}
+html[data-app="GRCON"] #results-table .grdt-why:is([data-why="previous_in_analysis"], [data-why="in_analysis"], [data-why="allocation_conflict"], [data-why="manual_only"], [data-why="composition"]) {
+  --grdt-why-tone: #b7791f; --grdt-why-ink: #7a4f0d;
+}
+html[data-app="GRCON"] #results-table .grdt-why:is([data-why="triage_discard"], [data-why="not_selected"]) {
+  --grdt-why-tone: #64748b; --grdt-why-ink: #334155;
+}

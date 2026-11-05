@@ -83,7 +83,7 @@ const selectionSituationLabel=vm.runInNewContext(labelsSource+';selectionSituati
 assert.equal(selectionSituationLabel(scenario('Sem status',{allocationStatus:'NÃO ALOCADO'}),0),'Não incluir');
 assert.equal(selectionSituationLabel(scenario('Não Postado',{allocationStatus:'NÃO ALOCADO',manualSelected:true}),0),'Não incluir · inclusão manual');
 assert.equal(selectionSituationLabel(scenario('Não Postado',{allocationFinding:{kind:'conflict'}}),0),'Conferir');
-assert.match(ui,/grdt-status-reason">Não alocado/,'motivo operacional visível ao lado do badge');
+assert.match(ui,/class="grdt-why"/,'motivo operacional visível na célula de situação (inclui "Não alocado na LD")');
 const css=fs.readFileSync(path.join(__dirname,'../grdt-central-ux.css'),'utf8');
 assert.match(css,/--grdt-blocked-bg: #f9ecee/);
 assert.match(css,/--grdt-ready-bg: #eaf5ee/);

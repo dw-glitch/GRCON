@@ -701,10 +701,11 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
 
 check("Resumo único prioriza decisão e preserva todas as evidências da auditoria", () => {
   const headers = ReportSummary.SUMMARY_COLUMNS.map((column) => column.header);
-  assert.deepEqual(headers.slice(0, 9), [
+  assert.deepEqual(headers.slice(0, 10), [
     "SITUAÇÃO",
     "DOCUMENTO INFORMADO",
     "ENTRA NA EGRDT?",
+    "POR QUE ESTÁ NESTA SITUAÇÃO",
     "O QUE FAZER",
     "ALOCADO?",
     "ALOCAÇÃO",
@@ -2001,18 +2002,18 @@ check("service worker publica o cache isolado da versão atual", () => {
   await reopened.xlsx.load(bytes);
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO");
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 3).value, "ENTRA NA EGRDT?");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 4).value, "O QUE FAZER");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 7).value, "STATUS INTERNO");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "SERÁ RENOMEADO?");
-  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 5).value, "O QUE FAZER");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "STATUS INTERNO");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 9).value, "SERÁ RENOMEADO?");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 9).value), /De:.*Para:/i);
   // STATUS INTERNO permanece texto puro e o arquivo não cria vínculos externos.
-  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 7);
+  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8);
   assert.equal(internal.formula, undefined);
   assert.equal(internal.value, "Código que consta " + ntBaseDocument);
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "CÓDIGO DA LD");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 12).value, "BUSCA NO APÊNDICE");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 13).value, "Tagueado sim ou não?");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 15).value, "RESULTADO DA BUSCA COM/SEM nt- E TAG");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 12).value, "CÓDIGO DA LD");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 13).value, "BUSCA NO APÊNDICE");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 14).value, "Tagueado sim ou não?");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 16).value, "RESULTADO DA BUSCA COM/SEM nt- E TAG");
   assert.equal(reopened.getWorksheet("Resumo").columnCount, ReportSummary.SUMMARY_COLUMNS.length);
   assert.equal(reopened.getWorksheet("Auditoria detalhada"), undefined);
   checks.push("Excel do relatório reabre com Resumo único e evidências completas");
