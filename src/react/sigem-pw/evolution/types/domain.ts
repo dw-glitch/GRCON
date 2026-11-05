@@ -322,7 +322,7 @@ export const EVOLUTION_LIST_LABELS: Readonly<Record<EvolutionListMode, readonly 
   "missing-pw": ["Novos no SIGEM, ainda sem cadastro no PW", "Ocorrências novas na Consulta Geral que ainda não têm correspondência na base PW atual."],
   "removed-sigem": ["Não encontrados nesta base SIGEM", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
   "removed-pw": ["Não encontrados nesta base PW", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
-  "pw-current": ["Cadastradas no PW atual", "Todos os registros válidos da base PW atual; a revisão de documento é exibida em paralelo à ocorrência técnica."],
+  "pw-current": ["Registros no PW atual", "Todos os registros válidos da base PW atual (revisão 0 = cadastro; revisão A em diante = emissão); a revisão de documento é exibida em paralelo à ocorrência técnica."],
   "pw-current-emitted": ["Emitidas no PW atual", "Registros PW atuais com evidência de emissão reconhecida pela regra vigente."],
   "pw-current-not-emitted": ["Não emitidas no PW atual", "Registros PW atuais com PREVISTO, isto é, não emissão determinável pela regra vigente."],
   "pw-current-indeterminate": ["Emissão indeterminada no PW", "Registros PW com Última emissão ausente ou com valor não reconhecido; não entram como emitidos nem como não emitidos determináveis."],

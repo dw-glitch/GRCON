@@ -123,9 +123,9 @@ export function SigemPwKpiCharts({ totals, pairs, reconciliation, selection, onS
   const scope = revisionScope === "revision0" ? "somente a revisão 0" : "todas as revisões";
   const pwSegments: Segment[] = [
     { key: "issued", label: "Emitidas no PW", value: totals.issued, tone: "ok", hint: "Emissão comprovada no PW. Na lista aparecem como Concluído." },
-    { key: "issue", label: "A emitir no PW", value: totals.issue, tone: "warn", hint: "Já cadastradas no PW; falta emitir." },
-    { key: "registerSigem", label: "A cadastrar — já constam no SIGEM", value: totals.registerSigem, tone: "bad", hint: "Já aparecem no SIGEM e ainda não foram cadastradas no PW." },
-    { key: "registerAbsent", label: "A cadastrar — não constam no SIGEM", value: totals.registerAbsent, tone: "info", hint: "Exigidas pelas LDs, fora da Consulta Geral e sem cadastro no PW. Não constar na consulta não prova que falta postar." },
+    { key: "issue", label: "A emitir no PW", value: totals.issue, tone: "warn", hint: "Revisão 0 já cadastrada no PW, ou revisão A em diante, com emissão pendente." },
+    { key: "registerSigem", label: "A cadastrar — já constam no SIGEM", value: totals.registerSigem, tone: "bad", hint: "Revisão 0 que já aparece no SIGEM e ainda não foi cadastrada no PW." },
+    { key: "registerAbsent", label: "A cadastrar — não constam no SIGEM", value: totals.registerAbsent, tone: "info", hint: "Revisão 0 exigida pelas LDs, fora da Consulta Geral e sem cadastro no PW. Não constar na consulta não prova que falta postar." },
   ];
   // A conferência da Consulta Geral acompanha o filtro de revisões: revisão 0 mostra só as revisões 0.
   const recon = revisionScope === "revision0" ? reconciliation.revision0 : reconciliation;
@@ -159,8 +159,8 @@ export function SigemPwKpiCharts({ totals, pairs, reconciliation, selection, onS
         {pairs > 0
           ? <SegmentedBar title="Trabalho da equipe PW" segments={pwSegments} total={pairs} selection={selection} onSelect={onSelect} unit="revisões" onTip={setTip} />
           : <p className="spw-chart-empty">Nenhuma revisão de documento neste escopo.</p>}
-        <Meter label="Cadastradas no PW" value={totals.registered} total={pairs} tone="info" keyName="registered" selection={selection} onSelect={onSelect}
-          hint="Cadastro comprovado no PW (empresas CSG/QTM): as que aguardam emissão mais as já emitidas." />
+        <Meter label="Revisões 0 cadastradas no PW" value={totals.registered} total={totals.registered + totals.registerSigem + totals.registerAbsent} tone="info" keyName="registered" selection={selection} onSelect={onSelect}
+          hint="Só a revisão 0 é cadastro (empresas CSG/QTM). Da revisão A em diante cada revisão é uma emissão, feita em sequência: 0, A, B…" />
       </section>
 
       <section className="spw-chart-card" aria-labelledby="spw-chart-sigem-title">

@@ -81,13 +81,16 @@ assert.ok(report.summary.pending<=report.summary.active);
 const operational=reconcilePwOperations(state);
 const plan=coordinatorPlan(state);
 assert.deepEqual(Object.keys(plan.sheets),["Resumo","Conferência Documental","N-1710","REL. PW","Conciliação"]);
-assert.equal(plan.sheets["Conferência Documental"].length,DOCUMENTS-50+3);
+// Regra do PW: as referências pedem revisão B → o PW emite 0, A e B (3 revisões por documento).
+assert.ok(operational.rows.length>DOCUMENTS-50,"a sequência 0, A, B acrescenta revisões");
+assert.equal(operational.rows.length,(DOCUMENTS-50)*3,"cada documento em revisão B vira 3 revisões a conferir");
+assert.equal(plan.sheets["Conferência Documental"].length,operational.rows.length+3);
 assert.equal(plan.sheets["Conferência Documental"][2].length,32);
 assert.equal(plan.sheets["REL. PW"].length,PW_ROWS+1);
 assert.equal(plan.sheets["REL. PW"][0].length,70);
 assert.equal(plan.sheets["REL. PW"][PW_ROWS].length,70);
 assert.ok(plan.sheets.Resumo.length >= 16, "o painel da planilha deve trazer indicadores e proveniência");
-assert.equal(plan.formulas.length,DOCUMENTS-50);
+assert.equal(plan.formulas.length,operational.rows.length);
 assert.deepEqual(plan.report.totals,operational.totals,"mesma fonte dos cartões operacionais");
 assert.equal(plan.summary.active,operational.rows.length);
 for(const index of [0,51,200,1350,3000,5990]){
@@ -138,9 +141,10 @@ assert.equal(legacyReport.summary.emitted,1);
 assert.equal(legacyReport.summary.posted,1);
 assert.equal(legacyReport.summary.compliant,1);
 const legacyPlan=coordinatorPlan(legacy);
-assert.equal(legacyPlan.formulas.length,1);
-assert.match(legacyPlan.formulas[0].f,/'REL\. PW'!\$D\$2/);
-assert.equal(legacyPlan.sheets["Conferência Documental"][3][8],"Concluído");
+// Regra do PW: referência e SIGEM em B → o PW precisa da 0 (cadastro), da A e da B (emissões). Só a B tem evidência no PW.
+assert.equal(legacyPlan.formulas.length,3);
+assert.match(legacyPlan.formulas[2].f,/'REL\. PW'!\$D\$2/);
+assert.deepEqual([3,4,5].map(index=>legacyPlan.sheets["Conferência Documental"][index][8]),["Cadastrar no PW","Emitir no PW","Concluído"]);
 
 console.log(JSON.stringify({suite:"sigem-pw-phase6-volume",passed:true,
   referenceDocuments:DOCUMENTS,pwRawRows:PW_ROWS,pwColumns:70,

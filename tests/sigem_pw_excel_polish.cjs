@@ -74,13 +74,16 @@ const find = prefix => plan.sheets.Resumo.find(row => String(row[0]).startsWith(
 assert.equal(find("Constam no SIGEM")[1], 2);
 assert.equal(find("A cadastrar no PW — já constam no SIGEM")[1], 0);
 assert.equal(find("A cadastrar no PW — não constam no SIGEM")[1], 0);
+// Só a revisão 0 é cadastro: documento A (PW 0 e A emitidas; SIGEM em A → o PW emite 0 e A) + documento previsto (rev. 0 cadastrada, a emitir).
+assert.equal(find("Cadastradas no PW")[1], 2, "cadastradas = só revisões 0");
 assert.equal(find("A emitir no PW")[1], 1);
-assert.equal(find("Emitidas no PW")[1], 1);
+assert.equal(find("Emitidas no PW")[1], 2, "0 e A do documento emitido");
 assert.ok(plan.overviewSections.length === 3, "resumo organizado em seções");
 assert.ok(plan.overviewSections.every(row => plan.sheets.Resumo[row - 1][1] === ""));
 assert.ok(labels.has("Gerado em") && labels.has("Data da base PW"), "proveniência com datas no resumo");
 assert.equal(plan.sheets["Fora das LDs"], undefined, "sem documentos fora das LDs a aba não é criada");
-assert.deepEqual(plan.formulas.map(f => f.pwSituation), ["emitted", "registered"]);
+assert.deepEqual(plan.formulas.map(f => f.pwSituation), ["emitted", "notApplicable", "registered"], "a revisão A não é cadastro: a coluna Cadastro não se aplica");
+assert.ok(labels.has("Regra do PW") && /Só a revisão 0 é cadastro/.test(labels.get("Regra do PW")), "o resumo do Excel traz a regra do PW");
 
 // Com documentos fora das LDs: aba separada, sem alterar os indicadores principais.
 const withOutside = structuredClone(state);
@@ -109,7 +112,9 @@ assert.equal(planOutside.sheets["Conferência Documental"].length, plan.sheets["
   const control = reopened.getWorksheet("Conferência Documental");
   const argb = cell => cell.fill && cell.fill.fgColor && cell.fill.fgColor.argb;
   assert.equal(argb(control.getCell("J4")), "FFE6F6EE", "emitido: verde discreto");
-  assert.equal(argb(control.getCell("J5")), "FFE8F2FF", "cadastrado e não emitido: azul");
+  assert.equal(argb(control.getCell("J5")), "FFEDF3F8", "revisão A: emissão, a coluna Cadastro não se aplica (cor neutra)");
+  assert.equal(control.getCell("J5").value, "Emissão (não é cadastro)");
+  assert.equal(argb(control.getCell("J6")), "FFE8F2FF", "revisão 0 cadastrada e não emitida: azul");
   assert.equal(control.pageSetup.orientation, "landscape");
   assert.equal(control.pageSetup.fitToWidth, 1);
   const overview = reopened.getWorksheet("Resumo");

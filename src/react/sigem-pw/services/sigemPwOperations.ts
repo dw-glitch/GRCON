@@ -18,7 +18,10 @@ export interface PwOperation {
 }
 export interface PwTotals {
   sigem: number; registerSigem: number; registerAbsent: number;
-  /** Revisões de documentos com cadastro PW comprovado (CSG/QTM): as que aguardam emissão mais as já emitidas. */
+  /**
+   * Revisões 0 com cadastro comprovado no PW (CSG/QTM). Só a revisão 0 é cadastro; da revisão A em diante cada revisão é uma
+   * emissão (ver "A emitir" e "Emitidas"). Vale: Cadastradas = revisões 0 que estão a emitir + revisões 0 já emitidas.
+   */
   registered: number; issue: number; issued: number;
 }
 export interface PwDiagnostic {
@@ -55,6 +58,19 @@ function emittedEvidence(row: SigemPwRecord): boolean {
   return [flags.CURRENT, flags.HISTORICAL].includes(norm(row.lastEmission));
 }
 const pair = (key: string, rev: string) => JSON.stringify([key, rev]);
+/** 0 → 0, A → 1, B → 2… Outras grafias (#1, AA…) não têm ordem conhecida e não são preenchidas. */
+function sequenceRank(rev: string): number | null {
+  if (rev === "0") return 0;
+  return /^[A-Z]$/.test(rev) ? rev.charCodeAt(0) - 64 : null;
+}
+/** Se a revisão exigida é B, o PW precisa emitir 0, A e depois B: completa a sequência até a maior revisão exigida. */
+function fillRevisionSequence(required: Set<string>): void {
+  let highest = 0;
+  for (const rev of required) { const rank = sequenceRank(rev); if (rank !== null && rank > highest) highest = rank; }
+  if (highest === 0) return;
+  required.add("0");
+  for (let rank = 1; rank <= highest; rank++) required.add(String.fromCharCode(64 + rank));
+}
 const totals = (): PwTotals => ({ sigem: 0, registerSigem: 0, registerAbsent: 0, registered: 0, issue: 0, issued: 0 });
 export const PW_INDICATORS: Array<{ key: Exclude<PwIndicator, "all">; label: string }> = [
   { key: "sigem", label: "Constam no SIGEM" },
@@ -191,6 +207,7 @@ export function computePwOperations(state: PwOperationsInput): PwOperationsRepor
     }
     const required = new Set(references.map(revisionOf).filter(Boolean));
     for (const rev of sigem.get(key)?.keys() || []) required.add(rev);
+    fillRevisionSequence(required);
     if (!required.size) { report.diagnostics.push(diagnostic("LD", reference, "Revisão requerida não identificada")); continue; }
     const sources = [...new Set(references.flatMap(row => Array.isArray(row.referenceSources) ? row.referenceSources.map(text) : [text(row.referenceSourceName || state.ld.meta?.fileName)]).filter(Boolean))];
     if (sources.length > 1 || references.length > 1) report.diagnostics.push(diagnostic("LD", reference, "Referências consolidadas sem duplicar pendências: " + sources.join(", ")));
@@ -206,14 +223,16 @@ export function computePwOperations(state: PwOperationsInput): PwOperationsRepor
       if (unknownSigemRevisions.has(key) && !entries.length) { report.diagnostics.push({ ...diagnostic("SIGEM", reference, "Presença sem revisão: situação inconclusiva"), revision: rev }); continue; }
       const same = (pw.get(key) || []).filter(row => revisionOf(row) === rev);
       const unspecified = (pw.get(key) || []).filter(row => !revisionOf(row));
-      // Previsto sem revisão comprova cadastro do código, nunca emissão de uma revisão presumida.
+      // Só a revisão 0 é cadastro (Previsto sem revisão comprova o cadastro do código, nunca a emissão de uma revisão presumida).
+      // Da revisão A em diante não existe "cadastrar": a revisão ou foi emitida ou está a emitir.
+      const isCadastro = rev === "0";
       const evidence = same.find(row => norm(row.lastEmission) === (core()?.EMISSION_FLAGS.CURRENT || "SIM"))
-        || same.find(emittedEvidence) || same[0] || unspecified[0];
-      const registered = Boolean(evidence);
+        || same.find(emittedEvidence) || same[0] || (isCadastro ? unspecified[0] : undefined);
+      const registered = isCadastro && Boolean(evidence);
       const emitted = same.some(emittedEvidence);
       const inSigem = entries.length > 0;
       report.rows.push({ key: pair(key, rev), documentKey: key, code: codeOf(reference), title: text(reference.title), revision: rev,
-        documentClass, referenceStatus: text(reference.status), sources, action: !registered ? "Cadastrar no PW" : emitted ? "Concluído" : "Emitir no PW",
+        documentClass, referenceStatus: text(reference.status), sources, action: isCadastro && !registered ? "Cadastrar no PW" : emitted ? "Concluído" : "Emitir no PW",
         inSigem, sigemSituation: inSigem ? "Consta no SIGEM" : "Não consta na Consulta Geral",
         sigemStatus: [...new Set(entries.map(row => text(row.status || row.sigemStatus)).filter(Boolean))].join("; "),
         pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence });

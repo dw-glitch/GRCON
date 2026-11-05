@@ -269,10 +269,10 @@ export interface WorkerModelPayload {
 export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.freeze({
   all: "Todas as situações",
   sigem: "Documentos do total SIGEM",
-  pw: "Cadastradas no PW",
+  pw: "Presentes no PW (todas as revisões)",
   pwDuplicates: "Duplicados PW",
-  bothOtherRevision: "Cadastrado: conferir revisão",
-  sigemOnly: "SIGEM: falta cadastrar no PW",
+  bothOtherRevision: "No PW em outra revisão: conferir",
+  sigemOnly: "SIGEM: revisão ainda não está no PW",
   cvNotApplicable: "CV — Currículos (PW não aplicável)",
   bothNotEmitted: "SIGEM + PW: ainda não emitido",
   bothEmitted: "SIGEM + PW: emitido",

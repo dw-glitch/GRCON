@@ -102,7 +102,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   const pw = getPwOriginalMatrix(state.pw);
   if (pw.originalColumnCount !== 70) throw new Error(`O modelo do coordenador exige 70 colunas PW (A–BR), mas a fonte tem ${pw.originalColumnCount}. Reimporte a consulta correta.`);
   const summary = {
-    active: report.rows.length, registered: report.totals.issue + report.totals.issued,
+    active: report.rows.length, registered: report.totals.registered,
     emitted: report.totals.issued, posted: report.totals.sigem,
     pending: report.totals.registerSigem + report.totals.registerAbsent + report.totals.issue,
   };
@@ -146,11 +146,12 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     const results: [string, string, string] = [text(evidence?.revisionComplete || evidence?.revision), text(evidence?.state || evidence?.status), text(evidence?.lastEmission)];
     const info: CoordinatorPlan["formulas"][number] = {
       excelRow: master.length + 1, f: sourceFormula(sourceRow, revisionColumn), g: sourceFormula(sourceRow, statusColumn), h: sourceFormula(sourceRow, emissionColumn), results,
-      pwSituation: !row.pwRegistered ? "missing" : row.pwEmitted ? "emitted" : "registered",
+      // Só a revisão 0 é cadastro; de A em diante a coluna Cadastro não se aplica (a revisão é emissão).
+      pwSituation: row.revision !== "0" ? "notApplicable" : !row.pwRegistered ? "missing" : row.pwEmitted ? "emitted" : "registered",
     };
     formulas.push(info);
     const values = [row.code, row.revision, row.title, row.referenceStatus, row.sigemSituation,
-      ...results, row.action, row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass,
+      ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass,
       ...revisions.map(rev => row.revision === rev && !row.pwEmitted ? "X" : "")];
     master.push(values);
     const name = classNames.get(row.documentClass)!;
@@ -159,7 +160,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   for (const entry of report.byClass) {
     const name = classNames.get(entry.documentClass)!;
     const h = sheets[name][0];
-    h[2] = classFormulas[name].length; h[4] = entry.issue + entry.issued; h[6] = entry.issued; h[8] = entry.sigem;
+    h[2] = classFormulas[name].length; h[4] = entry.registered; h[6] = entry.issued; h[8] = entry.sigem;
     h[9] = entry.registerSigem + entry.registerAbsent + entry.issue;
     revisions.forEach((rev, index) => { h[index + 11] = report.rows.filter(row => row.documentClass === entry.documentClass && row.revision === rev && !row.pwEmitted).length; });
   }
@@ -175,8 +176,9 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   for (const row of report.byClass) overview.push([row.documentClass, row.registerSigem, row.registerAbsent, row.issue]);
   overview.push(["TOTAL", report.totals.registerSigem, report.totals.registerAbsent, report.totals.issue]);
   section("ORIENTAÇÃO DE LEITURA");
-  overview.push(["Ação: Cadastrar no PW", "Cadastro pendente da revisão indicada"]);
-  overview.push(["Ação: Emitir no PW", "Cadastro confirmado; emissão pendente"]);
+  overview.push(["Regra do PW", "Só a revisão 0 é cadastro; da revisão A em diante cada revisão é uma emissão. Se o SIGEM está em B, o PW precisa emitir 0, A e depois B, nessa ordem"]);
+  overview.push(["Ação: Cadastrar no PW", "Revisão 0 ainda sem cadastro no PW"]);
+  overview.push(["Ação: Emitir no PW", "Revisão 0 já cadastrada, ou revisão A em diante, com emissão pendente"]);
   overview.push(["Ação: Concluído", "Emissão comprovada da revisão indicada"]);
   overview.push(["X na revisão", "Revisão exata a trabalhar no PW; emitidas não recebem X"]);
   overview.push(["Não constam no SIGEM", "A revisão não aparece na Consulta Geral; isso não comprova que falta postar"]);

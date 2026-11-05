@@ -52,16 +52,17 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
   return <section className="spw-managerial spw-pw-operations" id="spw-managerial-overview" aria-label="Demanda da equipe PW">
     {!base.ready ? <div className="spw-empty spw-managerial-warning" role="status"><strong>Comparação incompleta</strong><span>{base.reason} Os indicadores ficam indisponíveis até a conclusão.</span></div> : null}
     <p className="spw-operation-unit"><strong>Como ler os números:</strong> cada revisão de cada documento conta uma vez. Exemplo: o documento X nas revisões 0 e A são <strong>2 revisões de documentos</strong>. Os indicadores, o gráfico, a lista e o Excel usam sempre o mesmo escopo e os mesmos filtros.</p>
+    <p className="spw-operation-unit"><strong>Regra do PW:</strong> só a <strong>revisão 0 é cadastro</strong>; da revisão A em diante cada revisão é uma <strong>emissão</strong>. As emissões saem em sequência: se o SIGEM está na revisão B, o PW precisa emitir a 0, a A e depois a B.</p>
     <details className="spw-advanced-area spw-glossary"><summary>Entenda os números</summary>
       <dl>
         <div><dt>Revisão de documento</dt><dd>Uma revisão específica de um documento das LDs (exemplo: o documento X, revisão A).</dd></div>
         <div><dt>Constam no SIGEM</dt><dd>Revisões que aparecem na Consulta Geral do SIGEM.</dd></div>
-        <div><dt>A cadastrar no PW — já constam no SIGEM</dt><dd>Já aparecem no SIGEM e ainda não foram cadastradas no PW.</dd></div>
-        <div><dt>A cadastrar no PW — não constam no SIGEM</dt><dd>Exigidas pelas LDs, não aparecem na Consulta Geral e não foram cadastradas no PW. Não constar na consulta não prova que falta postar.</dd></div>
-        <div><dt>Cadastradas no PW</dt><dd>Revisões com cadastro comprovado no PW (empresas CSG/QTM): as que aguardam emissão mais as já emitidas.</dd></div>
-        <div><dt>A emitir no PW</dt><dd>Já cadastradas no PW; falta emitir.</dd></div>
+        <div><dt>A cadastrar no PW — já constam no SIGEM</dt><dd>Revisão 0 que já aparece no SIGEM e ainda não foi cadastrada no PW.</dd></div>
+        <div><dt>A cadastrar no PW — não constam no SIGEM</dt><dd>Revisão 0 exigida pelas LDs, que não aparece na Consulta Geral e não foi cadastrada no PW. Não constar na consulta não prova que falta postar.</dd></div>
+        <div><dt>Cadastradas no PW</dt><dd>Revisões 0 com cadastro comprovado no PW (empresas CSG/QTM). Só a revisão 0 é cadastro; ela pode estar a emitir ou já emitida.</dd></div>
+        <div><dt>A emitir no PW</dt><dd>Revisão 0 já cadastrada, ou revisão A em diante, com emissão pendente. Se o SIGEM está em B, entram a 0, a A e a B.</dd></div>
         <div><dt>Emitidas no PW</dt><dd>Emissão comprovada no PW. Na lista aparecem como “Concluído” e não recebem X.</dd></div>
-        <div><dt>X na lista</dt><dd>Marca a revisão que ainda precisa de trabalho da equipe PW (cadastrar ou emitir).</dd></div>
+        <div><dt>X na lista</dt><dd>Marca a revisão que ainda precisa de trabalho da equipe PW (cadastrar a revisão 0 ou emitir uma revisão).</dd></div>
       </dl>
     </details>
     {base.ready ? <SigemPwKpiCharts totals={report.totals} pairs={report.rows.length} reconciliation={base.reconciliation}
@@ -71,7 +72,7 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
       {PW_INDICATORS.map(item => <button key={item.key} type="button" disabled={!base.ready} className="spw-operation-kpi" data-indicator={item.key}
         aria-pressed={filters.indicator === item.key} onClick={() => change({ indicator: filters.indicator === item.key ? "all" : item.key })}>
         <span>{item.label}</span><strong>{base.ready ? fmt(report.totals[item.key]) : "—"}</strong>
-        <small>{({ sigem: "Revisões que aparecem na Consulta Geral", registerSigem: "Já no SIGEM, ainda sem cadastro no PW", registerAbsent: "Exigidas pelas LDs, fora da Consulta Geral, sem cadastro no PW", registered: "A emitir + emitidas", issue: "Cadastradas no PW, falta emitir", issued: "Emissão comprovada no PW" } as Record<string, string>)[item.key]}</small>
+        <small>{({ sigem: "Revisões que aparecem na Consulta Geral", registerSigem: "Revisão 0 já no SIGEM, sem cadastro no PW", registerAbsent: "Revisão 0 exigida pelas LDs, fora da Consulta Geral, sem cadastro no PW", registered: "Só a revisão 0 é cadastro", issue: "Revisão 0 cadastrada ou revisão A em diante, falta emitir", issued: "Emissão comprovada no PW" } as Record<string, string>)[item.key]}</small>
       </button>)}
     </div>
     <div className="spw-managerial-toolbar">
@@ -94,7 +95,7 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
     </div>
     <span className="spw-managerial-count">{base.ready ? fmt(report.rows.length) : "—"} revisões de documentos no escopo · {base.ready ? fmt(new Set(report.rows.map(row => row.documentKey)).size) : "—"} documentos únicos</span>
     <div className="spw-managerial-table-wrap" tabIndex={0} aria-label="Relação operacional do PW"><table>
-      <caption>Cadastro e emissão por revisão. X identifica uma revisão pendente; linhas concluídas ficam sem X.</caption>
+      <caption>Revisão 0 = cadastro; revisão A em diante = emissão, em sequência. X identifica uma revisão pendente; linhas concluídas ficam sem X.</caption>
       <thead><tr><th scope="col">Documento</th><th scope="col">Título</th><th scope="col">Classe</th><th scope="col">Revisão</th><th scope="col">Situação SIGEM</th><th scope="col">Ação</th><th scope="col" title="X = revisão que ainda precisa de trabalho da equipe PW">Falta fazer (X)</th></tr></thead>
       <tbody>{visible.map(row => <tr key={row.key}><td className="spw-managerial-code"><button type="button" className="text-button" onClick={() => setSelectedKey(selectedKey === row.key ? "" : row.key)} aria-label={`Examinar evidências ${row.code} revisão ${row.revision}`}>{row.code}</button></td>
         <td className="spw-managerial-title" title={row.title}>{row.title || "Título não informado"}</td><td>{row.documentClass}</td><td>{row.revision}</td><td>{row.sigemSituation}</td>

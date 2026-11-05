@@ -8,7 +8,7 @@ const TONE_LABEL: Record<RevisionTone, string> = {
   progress: "Em análise",
   bad: "Recusada",
   planned: "Prevista / não postada",
-  registered: "Cadastrada, não emitida",
+  registered: "Prevista no PW, não emitida",
   other: "Outro status",
   none: "Sem status",
 };

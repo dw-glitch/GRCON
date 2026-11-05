@@ -17,10 +17,10 @@ const BAR: Array<{ key: CountKey; label: string; tone: Tone }> = [
 
 const CARDS: Array<{ key: CountKey; label: string; tone: Tone; hint: string }> = [
   { key: "sigem", label: "Constam no SIGEM", tone: "muted", hint: "Revisões que aparecem na Consulta Geral" },
-  { key: "registerSigem", label: "A cadastrar no PW — já constam no SIGEM", tone: "bad", hint: "Já no SIGEM, ainda sem cadastro no PW" },
-  { key: "registerAbsent", label: "A cadastrar no PW — não constam no SIGEM", tone: "info", hint: "Exigidas pelas LDs, fora da Consulta Geral, sem cadastro no PW" },
-  { key: "registered", label: "Cadastradas no PW", tone: "info", hint: "A emitir + emitidas" },
-  { key: "issue", label: "A emitir no PW", tone: "warn", hint: "Cadastradas no PW, falta emitir" },
+  { key: "registerSigem", label: "A cadastrar no PW — já constam no SIGEM", tone: "bad", hint: "Revisão 0 já no SIGEM, ainda sem cadastro no PW" },
+  { key: "registerAbsent", label: "A cadastrar no PW — não constam no SIGEM", tone: "info", hint: "Revisão 0 exigida pelas LDs, fora da Consulta Geral, sem cadastro no PW" },
+  { key: "registered", label: "Cadastradas no PW", tone: "info", hint: "Só a revisão 0 é cadastro" },
+  { key: "issue", label: "A emitir no PW", tone: "warn", hint: "Revisão 0 cadastrada ou revisão A em diante, falta emitir" },
   { key: "issued", label: "Emitidas no PW", tone: "ok", hint: "Emissão comprovada no PW" },
 ];
 
@@ -132,7 +132,7 @@ export function EvolutionOperationsPanel({
           {movement ? (
             <ul className="spw-evo-ops-moves" aria-label="O que mudou entre as duas bases">
               <li><strong>{nf(movement.newInSigem)}</strong> revisões passaram a constar no SIGEM{movement.leftSigem ? <> · <strong>{nf(movement.leftSigem)}</strong> deixaram de constar</> : null}</li>
-              <li><strong>{nf(movement.newlyRegistered)}</strong> revisões foram cadastradas no PW</li>
+              <li><strong>{nf(movement.newlyRegistered)}</strong> revisões 0 foram cadastradas no PW</li>
               <li><strong>{nf(movement.newlyIssued)}</strong> revisões foram emitidas no PW</li>
             </ul>
           ) : null}
