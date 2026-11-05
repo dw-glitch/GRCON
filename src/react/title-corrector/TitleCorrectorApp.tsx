@@ -40,7 +40,7 @@ export function TitleCorrectorApp(){
  [rows,setRows]=useState<TitleRow[]>([]),[selected,setSelected]=useState<Set<string>>(new Set()),[detail,setDetail]=useState<string|null>(null),
  [search,setSearch]=useState(''),[filter,setFilter]=useState('all'),[sheet,setSheet]=useState(''),[busy,setBusy]=useState(false),
  [message,setMessage]=useState(''),[scrollTop,setScrollTop]=useState(0),[history,setHistory]=useState<Array<{id:string;approved_title:string;approved_at:string;actor_id:string;source_reference:string}>>([]);
- const inputRef=useRef<HTMLInputElement>(null),loadSeq=useRef(0);
+ const inputRef=useRef<HTMLInputElement>(null),filesSeq=useRef(0),referenceSeq=useRef(0),reading=useRef(0);
  const cloud=()=> (window as unknown as {GrconCloud?:{state?:any}}).GrconCloud?.state;
  const scope=()=>String(cloud()?.membership?.workspace_id||'');
  const visible=useMemo(()=>rows.filter(row=>{
@@ -55,29 +55,29 @@ export function TitleCorrectorApp(){
  const totalApproved=rows.filter(r=>r.decision==='approved'&&r.proposed.trim()&&r.proposed.trim()!==r.current.trim()&&!r.hasConflict).length;
  const metrics=[['Analisados',rows.length],['Adequados',rows.filter(r=>r.issue==='ok').length],['Revisão pendente',rows.filter(r=>r.decision==='pending'&&r.issue!=='ok').length],['Aprovados',totalApproved]];
  const pickFiles=async(list:FileList|null)=>{
-  const token=++loadSeq.current,picked=Array.from(list||[]);
+  const token=++filesSeq.current,picked=Array.from(list||[]);
   resetResult();
   if(!picked.length){setFiles([]);return;}
-  setBusy(true);
+  reading.current++;setBusy(true);
   try{
    if(picked.length>8||picked.some(file=>file.size>50*1024*1024)||picked.reduce((sum,file)=>sum+file.size,0)>120*1024*1024)throw Error('Máximo: 8 LDs, 50 MB por arquivo e 120 MB no lote.');
    const loaded=await Promise.all(picked.map(snapshotOf));
-   if(token===loadSeq.current)setFiles(loaded);
-  }catch(error){if(token===loadSeq.current){setFiles([]);setMessage(error instanceof Error?error.message:String(error));}}
-  finally{if(token===loadSeq.current)setBusy(false);}
+   if(token===filesSeq.current)setFiles(loaded);
+  }catch(error){if(token===filesSeq.current){setFiles([]);setMessage(error instanceof Error?error.message:String(error));}}
+  finally{if(--reading.current===0)setBusy(false);}
  };
  const pickReference=async(list:FileList|null)=>{
-  const token=++loadSeq.current,file=list?.[0]||null;
+  const token=++referenceSeq.current,file=list?.[0]||null;
   resetResult();
   if(!file){setReference(null);return;}
-  setBusy(true);
-  try{const loaded=await snapshotOf(file);if(token===loadSeq.current)setReference(loaded);}
-  catch(error){if(token===loadSeq.current){setReference(null);setMessage(error instanceof Error?error.message:String(error));}}
-  finally{if(token===loadSeq.current)setBusy(false);}
+  reading.current++;setBusy(true);
+  try{const loaded=await snapshotOf(file);if(token===referenceSeq.current)setReference(loaded);}
+  catch(error){if(token===referenceSeq.current){setReference(null);setMessage(error instanceof Error?error.message:String(error));}}
+  finally{if(--reading.current===0)setBusy(false);}
  };
  const resetResult=()=>{setAnalysis(null);setRows([]);setSelected(new Set());setDetail(null);setHistory([]);setScrollTop(0);setMessage('');};
  useEffect(()=>{
-  const reset=()=>{setFiles([]);resetResult();};
+  const reset=()=>{filesSeq.current++;referenceSeq.current++;setFiles([]);setReference(null);resetResult();};
   window.addEventListener('grcon:contract-context-changed',reset);
   window.addEventListener('grcon:cloud-signed-out',reset);
   return ()=>{window.removeEventListener('grcon:contract-context-changed',reset);window.removeEventListener('grcon:cloud-signed-out',reset);};
