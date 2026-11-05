@@ -83,6 +83,12 @@ let revision = 0;
 let snapshot: SigemPwUiSnapshot = { ...state, revision };
 const subscribers = new Set<Subscriber>();
 let refreshPromise: Promise<void> | null = null;
+let pendingRefresh = "";
+let pwImporting = false;
+function requestRefresh(reason: string): void {
+  if (state.busy || refreshPromise) { pendingRefresh = reason; return; }
+  void refresh(reason);
+}
 let externalListenersInstalled = false;
 let lastModelSources = "";
 // Verdadeiro enquanto ESTE módulo grava a Consulta Geral: os eventos que a
@@ -151,6 +157,10 @@ function setBusy(busy: boolean, label = ""): void {
   state.progressMessage = busy ? (label || "Processando base…") : "";
   dispatchMascot(busy, label);
   emit();
+  if (!busy && pendingRefresh) {
+    const reason = pendingRefresh; pendingRefresh = "";
+    queueMicrotask(() => requestRefresh(reason));
+  }
 }
 /** Progresso por etapa real da importação (sem percentuais inventados). */
 function stage(step: number, total: number, label: string): void {
@@ -242,7 +252,9 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
       reject(error);
       return;
     }
-    const cleanup = () => worker.terminate();
+    const timeout = window.setTimeout(() => { cleanup(); reject(new Error("Tempo excedido no processamento. A operação pode ser repetida.")); }, 120000);
+    const cleanup = () => { window.clearTimeout(timeout); worker.terminate(); };
+    worker.addEventListener("messageerror", () => { cleanup(); reject(new Error("Não foi possível receber o resultado do Worker.")); }, { once: true });
     worker.addEventListener("message", (event: MessageEvent<WorkerModelPayload>) => {
       const payload = event.data || { ok: false };
       cleanup();
@@ -255,7 +267,7 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
     }, { once: true });
     const sentAt = performance.now();
     worker.addEventListener("message", () => { perfLog["worker.roundtrip"] = Math.round(performance.now() - sentAt); }, { once: true });
-    worker.postMessage({
+    try { worker.postMessage({
       type: "model",
       generation,
       // Calcula só o agregado em exibição (+ "all:all", usado na prontidão).
@@ -267,7 +279,7 @@ function modelInWorker(generation: number): Promise<WorkerModelPayload> {
       ldAvailable: Boolean(state.ld.meta && state.ld.records.length),
       sigemAvailable: Boolean(state.sigem.meta),
       pwAvailable: Boolean(state.pw.meta),
-    });
+    }); } catch (error) { cleanup(); reject(error); }
   });
 }
 
@@ -277,6 +289,8 @@ function modelSourcesKey(): string {
 
 async function rebuildModelAsync(): Promise<boolean> {
   const generation = ++state.modelGeneration;
+  const identity = sessionScope();
+  const sources = modelSourcesKey();
   // Bases antigas sem identificação comprovada da coluna C não podem gerar KPI oficial.
   if (state.pw.meta && (state.pw.meta.companyColumn !== "C" || state.pw.meta.scopeCompanyColumnMissing === true)) {
     state.model = null;
@@ -289,6 +303,7 @@ async function rebuildModelAsync(): Promise<boolean> {
     built = await modelInWorker(generation);
   } catch (error) {
     console.warn("[SIGEM×PW] Worker de comparação indisponível; usando modo compatível:", error);
+    if (state.sigem.records.length + state.pw.records.length + state.ld.records.length > 5000) throw new Error("O processamento em segundo plano falhou. Repita a análise. " + messageOf(error, ""));
     await yieldFrame();
     const core = Core();
     const model = core.createModel(state.sigem.records, state.pw.records, state.ld.records, { requireN1710Ld: true, requireDocumentReference: true, ldAvailable: Boolean(state.ld.meta && state.ld.records.length), sigemAvailable: Boolean(state.sigem.meta), pwAvailable: Boolean(state.pw.meta) });
@@ -309,7 +324,7 @@ async function rebuildModelAsync(): Promise<boolean> {
       })(),
     };
   }
-  if (generation !== state.modelGeneration || built.generation !== generation || !built.model || !built.aggregates) return false;
+  if (identity !== sessionScope() || sources !== modelSourcesKey() || generation !== state.modelGeneration || built.generation !== generation || !built.model || !built.aggregates) return false;
   const core = Core();
   state.model = core.hydrateModel ? core.hydrateModel(built.model) : built.model;
   state.aggregates = built.aggregates;
@@ -397,7 +412,7 @@ async function registerHistoryBeforeActivation(
 
 async function parsePwFile(file: File, fileMeta: Record<string, unknown>): Promise<{ meta: SigemPwBaseMeta; records: SigemPwRecord[] }> {
   const core = Core();
-  if (typeof Worker === "undefined") return core.parsePwCsv(await file.text(), fileMeta);
+  if (typeof Worker === "undefined") { if (file.size > 5 * 1024 * 1024) throw new Error("Use um navegador com Worker para importar bases PW grandes."); return core.parsePwCsv(await file.text(), fileMeta); }
   const buffer = await file.arrayBuffer();
   try {
     return await new Promise((resolve, reject) => {
@@ -408,7 +423,9 @@ async function parsePwFile(file: File, fileMeta: Record<string, unknown>): Promi
         reject(error);
         return;
       }
-      const cleanup = () => worker.terminate();
+      const timeout = window.setTimeout(() => { cleanup(); reject(new Error("Tempo excedido no processamento. A operação pode ser repetida.")); }, 120000);
+        const cleanup = () => { window.clearTimeout(timeout); worker.terminate(); };
+      worker.addEventListener("messageerror", () => { cleanup(); reject(new Error("Não foi possível receber o resultado do Worker.")); }, { once: true });
       worker.addEventListener("message", (event: MessageEvent<WorkerModelPayload>) => {
         const payload = event.data || { ok: false };
         cleanup();
@@ -419,10 +436,11 @@ async function parsePwFile(file: File, fileMeta: Record<string, unknown>): Promi
         cleanup();
         reject(event.error || new Error(event.message || "Worker da base ProjectWise falhou."));
       }, { once: true });
-      worker.postMessage({ buffer, meta: fileMeta }, [buffer]);
+      try { worker.postMessage({ buffer, meta: fileMeta }, [buffer]); } catch (error) { cleanup(); reject(error); }
     });
   } catch (error) {
     console.warn("[SIGEM×PW] Worker PW indisponível; usando processamento local:", error);
+    if (file.size > 5 * 1024 * 1024) throw error;
     return core.parsePwCsv(await file.text(), fileMeta);
   }
 }
@@ -499,11 +517,17 @@ async function importSigem(file: File): Promise<void> {
 
 async function importPw(file: File): Promise<void> {
   if (state.busy) return;
+  pwImporting = true;
   const TOTAL = 5;
   let current = "validação do arquivo";
+  let persisted = false;
+  const identity = sessionScope();
+  const assertScope = () => { if (identity !== sessionScope()) throw new Error("A conta ou o contrato mudou. Reabra a comparação no contexto atual."); };
   setBusy(true, `Etapa 1 de ${TOTAL} · Validando o arquivo da base ProjectWise…`);
   await yieldFrame();
   try {
+    await refreshPromise;
+    assertScope();
     if (!/\.(?:csv|txt)$/i.test(file.name || "")) throw new Error("A relação ProjectWise deve ser fornecida em CSV.");
     current = "leitura dos registros";
     stage(2, TOTAL, "Lendo e normalizando os registros…");
@@ -512,8 +536,10 @@ async function importPw(file: File): Promise<void> {
     current = "verificação de consistência";
     stage(3, TOTAL, "Verificando colunas, empresas (CSG/QTM) e consistência…");
     await yieldFrame();
+    assertScope();
     const candidate = Core().sanitizePwBase({ meta: {...parsed.meta,localContext:importContext()}, records: parsed.records }, state.ld);
     if (window.GrconImportReview && !await window.GrconImportReview.review("pw",{...candidate,records:candidate.sourceRecords||candidate.records},{...state.pw,records:state.pw.sourceRecords||state.pw.records})) return;
+    assertScope();
     current = "gravação da base";
     stage(4, TOTAL, "Salvando a nova base e registrando o histórico…");
     const previousHistory = state.history;
@@ -521,9 +547,11 @@ async function importPw(file: File): Promise<void> {
     const historySourceSnapshotId = recorded.pw?.snapshot?.id;
     if (!candidate.meta || !historySourceSnapshotId) throw new Error("Snapshot PW validado não foi confirmado.");
     candidate.meta.historySourceSnapshotId = historySourceSnapshotId;
+    assertScope();
     let saved: SigemPwBase;
     try {
-      saved = await timed("importPw.persist", () => Core().savePwBase(candidate, state.ld));
+      // Candidate was sanitized against the locked LD before review/history; do not sanitize it twice.
+      saved = await timed("importPw.persist", () => Core().saveBase("pw", candidate));
     } catch (error) {
       try {
         await rollbackStagedImport(recorded, [[Core().PW_BASE_KEY, state.pw], [Core().HISTORY_KEY, previousHistory]]);
@@ -532,20 +560,30 @@ async function importPw(file: File): Promise<void> {
       }
       throw new Error(`${messageOf(error, "Falha ao ativar a base ProjectWise.")} A base anterior e o histórico foram restaurados.`);
     }
+    persisted = true;
+    assertScope();
     current = "atualização dos resultados";
     stage(5, TOTAL, "Atualizando indicadores, tabelas e comparações…");
     state.pw = saved;
     state.analysisPwId = window.GrconSharedPwQuery?.current()?.meta ? text(saved.meta?.snapshotId) : "";
+    state.analysisError = "";
     state.history = await Core().loadHistoryIndex();
-    await timed("importPw.model", rebuildModelAsync);
+    const updated = await timed("importPw.model", rebuildModelAsync);
+    assertScope();
+    if (!updated || lastModelSources !== modelSourcesKey()) throw new Error("A comparação da base salva não foi confirmada.");
     renderFromModel(true);
     window.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard" } }));
-    notify(`Base PW atualizada: ${fmt(state.model?.pwEntries?.size || 0)} cadastros por código + revisão. Os resultados foram recalculados.`, "success");
+    notify("Base PW salva e comparação atualizada. Somente a revisão 0 representa cadastro; as demais são emissões.", "success");
   } catch (error) {
     const failure = stageFailure(current, error, "Não foi possível atualizar a base ProjectWise.");
     console.error(`[SIGEM×PW] ProjectWise (${failure.stageLabel}):`, error);
-    notify(`Falha na etapa de ${failure.stageLabel}: ${failure.message} A última base válida foi mantida.`, "error");
+    if (persisted && identity === sessionScope()) {
+      state.analysisError = "Base PW salva; comparação pendente. " + failure.message;
+      state.model = null; state.aggregates = null; state.result = null; state.readiness = null;
+    }
+    notify(`Falha na etapa de ${failure.stageLabel}: ${failure.message} ${persisted ? "A gravação concluiu; repita a análise no contexto da importação." : "A importação não foi concluída."}`, "error");
   } finally {
+    pwImporting = false;
     setBusy(false);
   }
 }
@@ -693,7 +731,10 @@ async function clearPreStage7BasesOnce(): Promise<boolean> {
 }
 
 async function refresh(reason = ""): Promise<void> {
+  if (pwImporting) { pendingRefresh = reason || "atualização pendente"; return; }
   if (refreshPromise) return refreshPromise;
+  const refreshIdentity = sessionScope();
+  const assertRefreshScope = () => { if (refreshIdentity !== sessionScope()) throw new Error("O contexto mudou durante a atualização."); };
   refreshPromise = (async () => {
     try {
       restoreSessionHints();
@@ -701,9 +742,11 @@ async function refresh(reason = ""): Promise<void> {
       ensureSharedSigemHistoryCompatibility();
       await timed("refresh.sharedSigem", async () => { await window.GrconSharedSigemQuery?.refresh(); });
       const bases = await timed("refresh.loadBases", () => Core().loadBases());
+      assertRefreshScope();
       const shared = window.GrconSharedSigemQuery?.current();
       state.officialSigem = shared?.meta || null;
       state.sigemVersions = await timed("refresh.sigemVersions", async () => await window.GrconSharedSigemQuery?.listVersions() || []);
+      assertRefreshScope();
       if (shared?.meta) {
         if (bases.sigem?.meta?.snapshotId !== shared.meta.snapshotId) {
           const recorded = await registerHistoryBeforeActivation("sigem", shared, { pwBase: bases.pw, ldRecords: bases.ld?.records || [], reason: "shared-general-query" });
@@ -727,6 +770,7 @@ async function refresh(reason = ""): Promise<void> {
         await Core().kvSetMany(writes);
         window.dispatchEvent(new CustomEvent("grcon:shared-sigem-updated", { detail: { source: "sigem-pw-dashboard", meta: null } }));
       }
+      assertRefreshScope();
       state.sigem = bases.sigem?.meta ? bases.sigem : EMPTY_BASE();
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();
       state.pwVersions = window.GrconSharedPwQuery?.state.versions || [];
@@ -743,9 +787,10 @@ async function refresh(reason = ""): Promise<void> {
         if (selected) state.pw = selected;
         else state.analysisPwId = ""; // A selected local snapshot may have been removed.
       }
+      assertRefreshScope();
       state.ld = bases.ld?.meta ? bases.ld : EMPTY_BASE();
       state.history = bases.history;
-      state.analysisError = "";
+      state.analysisError = ""; state.syncError = "";
       if (!state.model || modelSourcesKey() !== lastModelSources) {
         // Etapa seguinte, a mais demorada com bases grandes: dizer o que está acontecendo.
         if (state.busy && !state.ready) { state.progressMessage = "Calculando a comparação entre as bases…"; emit(); }
@@ -755,13 +800,24 @@ async function refresh(reason = ""): Promise<void> {
       renderFromModel(true);
       if (resetApplied) notify("Bases anteriores SIGEM, PW e LD removidas. O módulo está pronto para novas importações.", "success");
     } catch (error) {
+      if (refreshIdentity !== sessionScope()) return;
       console.error(`[SIGEM×PW] atualização ${reason}:`, error);
+      if (state.model && state.result) {
+        state.syncError = "Não foi possível sincronizar. A última comparação válida continua em exibição. " + messageOf(error, "");
+        emit(); return;
+      }
       state.analysisError = messageOf(error, "Não foi possível ler as bases persistidas do Dashboard.");
       state.sigem = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; state.readiness = null; state.ready = true;
       notify(state.analysisError, "error");
       emit();
     }
-  })().finally(() => { refreshPromise = null; });
+  })().finally(() => {
+    refreshPromise = null;
+    if (pendingRefresh && !state.busy) {
+      const reason = pendingRefresh; pendingRefresh = "";
+      queueMicrotask(() => requestRefresh(reason));
+    }
+  });
   return refreshPromise;
 }
 
@@ -771,6 +827,22 @@ async function activate(): Promise<void> {
   if (!state.ready) {
     setBusy(true, "Carregando bases vigentes…");
     await yieldFrame();
+    try {
+      const local = await Core().loadBases({ localOnly: true });
+      const workspace = importContext().workspaceId || window.GrconCloud?.state?.membership?.workspace_id || "";
+      const matchesWorkspace = (base: SigemPwBase) => {
+        const meta = base.meta;
+        const owner = (meta?.localContext as { workspaceId?: string } | undefined)?.workspaceId || meta?.sharedWorkspaceId;
+        return Boolean(meta && workspace && owner === workspace);
+      };
+      if ([local.sigem, local.pw, local.ld].every(matchesWorkspace)) {
+        state.sigem = local.sigem; state.pw = local.pw; state.ld = local.ld; state.history = local.history;
+        if (await rebuildModelAsync()) {
+          state.ready = true; renderFromModel(false);
+          state.progressMessage = "Resultado local em exibição. Verificando as bases compartilhadas…"; emit();
+        }
+      }
+    } catch (error) { console.warn("[SIGEM×PW] prévia local indisponível:", error); }
     await refresh("ativação");
     setBusy(false);
   } else {
@@ -1166,19 +1238,19 @@ function installExternalListeners(): () => void {
   setRevisionScope(document.documentElement.dataset.sigemPwRevisionScope === "revision0" ? "revision0" : "all");
   const conference = (event: Event) => {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
-    if (!ownSigemImport && detail?.source !== "sigem-pw-dashboard") void refresh("Consulta Geral atualizada em outro módulo");
+    if (!ownSigemImport && detail?.source !== "sigem-pw-dashboard") requestRefresh("Consulta Geral atualizada em outro módulo");
   };
   const pw = (event: Event) => {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
     // Eventos emitidos por este próprio módulo (importação, referências) já
     // atualizaram o estado; reagir a eles repetia leitura de bases e modelo.
-    if (!String(detail?.source || "").startsWith("sigem-pw-dashboard")) void refresh("base PW atualizada em outro módulo");
+    if (!String(detail?.source || "").startsWith("sigem-pw-dashboard")) requestRefresh("base PW atualizada em outro módulo");
   };
-  const dates = () => { if (!state.busy) void refresh("metadados compartilhados atualizados"); };
+  const dates = () => requestRefresh("metadados compartilhados atualizados");
   // O Proprietário ADM só pode gerenciar versões depois da confirmação assíncrona da permissão.
   // Re-renderizar os controles quando a capacidade mudar, sem alterar dados ou papéis.
   const permissions = () => emit();
-  const context = () => { restoredSessionScope=""; state.filters={documentClass:"",query:"",revision:"",sigemStatus:"",inPw:""}; state.revisionScope="all"; state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.pwVersions = []; state.pwSharedError = ""; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
+  const context = () => { state.modelGeneration++; restoredSessionScope=""; state.filters={documentClass:"",query:"",revision:"",sigemStatus:"",inPw:""}; state.revisionScope="all"; state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.pwVersions = []; state.pwSharedError = ""; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.ld = EMPTY_BASE(); state.history = EMPTY_HISTORY(); state.model = null; state.aggregates = null; state.result = null; emit(); requestRefresh("contrato alterado"); };
   window.addEventListener("grcon:contract-context-changed", context);
   window.addEventListener("grcon:permissions-changed", permissions);
   window.addEventListener("grcon:shared-sigem-date-updated", dates);
@@ -1202,13 +1274,15 @@ function installExternalListeners(): () => void {
 async function exportCoordinatorWorkbook(filters: PwFilters = {}): Promise<void> {
   if (state.busy) return;
   setBusy(true, "Gerando relatório gerencial do GRCON…");
+  const exportState = { ...state, sigem: state.sigem, pw: state.pw, ld: state.ld };
+  const exportFilters = { ...filters };
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos indisponível.");
-    await window.GRCONModuleLoader.ensure("excel");
+    if (typeof Worker === "undefined") await window.GRCONModuleLoader.ensure("excel");
     const runtime = window as unknown as Record<string, import("./sigemPwCoordinatorWorkbook").CoordinatorExcelApi>;
     const excel = runtime[["Excel", "JS"].join("")];
-    if (!excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
-    await downloadCoordinatorWorkbook(state, excel, filters);
+    if (typeof Worker === "undefined" && !excel?.Workbook) throw new Error("Biblioteca de planilhas indisponível para o controle documental.");
+    await downloadCoordinatorWorkbook(exportState, excel, exportFilters, message => { state.progressMessage = message; emit(); });
     notify("Relatório PW exportado com os mesmos indicadores do escopo selecionado, abas por classe e conciliação.", "success");
   } catch (error) {
     console.error("[SIGEM×PW] Exportação do coordenador:", error);
@@ -1216,6 +1290,23 @@ async function exportCoordinatorWorkbook(filters: PwFilters = {}): Promise<void>
   } finally {
     setBusy(false);
   }
+}
+
+async function retryAnalysis(): Promise<void> {
+  if (state.busy) return;
+  setBusy(true, "Recalculando a comparação da base salva…");
+  try {
+    await refreshPromise;
+    state.analysisError = "";
+    if (!await rebuildModelAsync()) throw new Error("Reimporte o PW com a empresa identificada na coluna C.");
+    renderFromModel(true);
+    window.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard-retry" } }));
+    notify("Comparação atualizada.", "success");
+  } catch (error) {
+    state.analysisError = messageOf(error, "Não foi possível recalcular a comparação.");
+    state.model = null; state.aggregates = null; state.result = null; state.readiness = null;
+    notify(state.analysisError, "error");
+  } finally { setBusy(false); }
 }
 
 export const sigemPwDashboardAdapter = {
@@ -1227,6 +1318,7 @@ export const sigemPwDashboardAdapter = {
   clearPreStage7BasesOnce,
   importSigem,
   importPw,
+  retryAnalysis,
   publishPw,
   importLd,
   toggleLdSource,

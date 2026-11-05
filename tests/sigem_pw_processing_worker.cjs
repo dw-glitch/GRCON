@@ -1,0 +1,43 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
+const Core = require('../sigem_pw_dashboard_core.js');
+const ExcelJS = require('../exceljs.min.js');
+const cache = new Map();
+function importTs(file) {
+ const p = path.resolve(__dirname,'..',file); if(cache.has(p)) return cache.get(p).exports;
+ const m={exports:{}};cache.set(p,m);
+ const js=ts.transpileModule(fs.readFileSync(p,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ new Function('require','module','exports',js)(n=>n.startsWith('.')?importTs(path.resolve(path.dirname(p),n+'.ts')):require(n),m,m.exports);return m.exports;
+}
+global.window={GrconSigemPwDashboard:Core};
+const operations=importTs('src/react/sigem-pw/services/sigemPwOperations.ts');
+const workbookApi=importTs('src/react/sigem-pw/services/sigemPwCoordinatorWorkbook.ts');
+const headers=Array.from({length:70},(_,i)=>'Coluna '+i);[headers[0],headers[1],headers[2],headers[3],headers[4]]=['NumeroDocumentoCliente','o_statename','SiglaEmpresa','RevisaoCompleta','Última emissão'];
+const code='CR-5290.00-22313-911-C1O-001';
+const row=Array(70).fill('');[row[0],row[1],row[2],row[3],row[4]]=[code,'Liberado','CSG','0','Sim'];
+const pw=Core.parsePwCsv([headers,row].map(r=>r.join(';')).join('\n'),{});
+const input={sigem:{meta:{snapshotId:'s'},records:[{document:code,revision:'B',status:'Postado'}]},pw,ld:{meta:{snapshotId:'l'},records:[{document:code,revision:'B',documentClass:'N-1710',sheetName:'N-1710',status:'Emitido'}]},model:{normalizedPw:pw.records},analysisError:''};
+const messages=[];
+const context=vm.createContext({console,TextEncoder,TextDecoder,setTimeout,clearTimeout,ArrayBuffer,Uint8Array,Buffer,Date,Intl,URL,Promise});
+context.self=context;context.window=context;
+context.postMessage=(data)=>messages.push(data);
+context.importScripts=(...urls)=>urls.forEach(url=>vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../react-dist',url),'utf8'),context,{filename:url}));
+vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../react-dist/sigem-pw-processing-worker.js'),'utf8'),context);
+(async()=>{
+ await context.onmessage({data:{kind:'operations',state:structuredClone(input)}});
+ const actual=messages.pop();assert.equal(actual.ok,true,actual.error);
+ assert.deepEqual(JSON.parse(JSON.stringify(actual.result)),JSON.parse(JSON.stringify(operations.computePwOperations(input))),'Worker deve preservar identidade, sequência, empresas e contagens');
+ await context.onmessage({data:{kind:'export',state:structuredClone(input),filters:{revision:'A'}}});
+ const exported=messages.pop();assert.equal(exported.ok,true,exported.error);
+ const book=new ExcelJS.Workbook();await book.xlsx.load(Buffer.from(exported.result));
+ const expected=workbookApi.coordinatorPlan(input,{revision:'A'});
+ assert.equal(book.getWorksheet('Conferência Documental').rowCount,expected.sheets['Conferência Documental'].length);
+ assert.equal(book.getWorksheet('Conferência Documental').getCell('B4').value,'A');
+ assert.equal(book.getWorksheet('Conferência Documental').getCell('I4').value,'Emitir no PW');
+ assert.equal(book.getWorksheet('REL. PW').columnCount,70);
+ assert.equal(messages.filter(m=>m.progress).length,2);
+ console.log('Worker real compilado: paridade operacional e XLSX filtrado reaberto com 70 colunas e emissão A OK.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -222,6 +222,7 @@ export interface SigemPwSharedVersion {
 }
 
 export interface SigemPwState {
+  syncError?: string;
   sigemVersions: SigemPwSharedVersion[];
   pwVersions?: SigemPwSharedVersion[];
   pwSharedError?: string;

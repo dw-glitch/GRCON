@@ -22,6 +22,8 @@ export interface PwOperation {
   missingBefore: string[];
   /** Status do código na Consulta Geral do SIGEM nas OUTRAS revisões, ex.: "Rev. B: Postado" (vazio se não há outra revisão no SIGEM). */
   sigemOtherStatus: string;
+  /** Incluído em da própria revisão na Consulta Geral; nunca usa Modificado em ou a data da base. */
+  sigemIncludedAt: string;
 }
 export interface PwTotals {
   sigem: number; registerSigem: number; registerAbsent: number;
@@ -269,6 +271,7 @@ export function computePwOperations(state: PwOperationsInput): PwOperationsRepor
       report.rows.push({ key: pair(key, rev), documentKey: key, code: codeOf(reference), title: text(reference.title), revision: rev,
         documentClass, referenceStatus: text(reference.status), sources, action: isCadastro && !registered ? "Cadastrar no PW" : emitted ? "Concluído" : "Emitir no PW",
         inSigem, sigemSituation: inSigem ? "Consta no SIGEM" : "Não consta na Consulta Geral",
+        sigemIncludedAt: [...new Set(entries.map(row => text(row.includedAt)).filter(Boolean))].join(" | "),
         sigemStatus: [...new Set(entries.map(row => text(row.status || row.sigemStatus)).filter(Boolean))].join("; "),
         pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence, missingBefore: [], sigemOtherStatus: otherSigemStatus(sigem.get(key), rev) });
     }
