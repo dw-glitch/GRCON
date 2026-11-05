@@ -77,6 +77,20 @@ assert.deepEqual(sequence.rows.map(row => [row.revision,row.action,row.inSigem])
 assert.deepEqual(sequence.totals, t(1,0,1,2,0,0));
 // Nenhuma revisão A em diante vira "Cadastrar no PW", mesmo sem nenhuma linha no PW.
 assert.ok(run(state([ref(1,"C")], [sig(1,"C")], [pw(1,"0","Sim")])).rows.filter(row => row.revision !== "0").every(row => row.action === "Emitir no PW"));
+// Fora de sequência: B emitida com A pendente é sinalizada (só informa; as contagens não mudam).
+const outOfOrder = run(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"B","Sim")]));
+assert.deepEqual(outOfOrder.rows.map(row => [row.revision,row.missingBefore]), [["0",[]],["A",[]],["B",["A"]]]);
+// Em sequência (0, A, B emitidas) e nenhuma emitida: nada é sinalizado.
+assert.ok(run(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"A","Sim"), pw(1,"B","Sim")])).rows.every(row => !row.missingBefore.length));
+// O Excel do coordenador acompanha a tela: a coluna Cadastro da linha B informa que falta a A.
+{
+  const planOut = coordinatorPlan(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"B","Sim")]));
+  const master = planOut.sheets[MAIN_SHEET].flat().map(String);
+  assert.ok(master.some(cell => /FORA DE SEQUÊNCIA: falta A/.test(cell)), "Excel marca a revisão emitida fora de sequência");
+  assert.equal(master.filter(cell => /FORA DE SEQUÊNCIA/.test(cell)).length, 1, "só a revisão B é marcada");
+}
+
+assert.ok(sequence.rows.every(row => !row.missingBefore.length));
 // Revisões sem ordem conhecida (numéricas, #1…) não são preenchidas: só existem as informadas.
 assert.deepEqual(run(state([ref(1,"#1")], [sig(1,"#1")], [pw(1,"0","Sim")])).rows.map(row => row.revision), ["#1"]);
 // PR #403: Não = historical emission. Both 0/A are issued; neither needs an X.

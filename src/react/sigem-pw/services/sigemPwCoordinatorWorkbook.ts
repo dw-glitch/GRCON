@@ -151,7 +151,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     };
     formulas.push(info);
     const values = [row.code, row.revision, row.title, row.referenceStatus, row.sigemSituation,
-      ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass,
+      ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" + (row.missingBefore.length ? " · FORA DE SEQUÊNCIA: falta " + row.missingBefore.join(", ") : "") : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass,
       ...revisions.map(rev => row.revision === rev && !row.pwEmitted ? "X" : "")];
     master.push(values);
     const name = classNames.get(row.documentClass)!;
@@ -179,6 +179,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   overview.push(["Regra do PW", "Só a revisão 0 é cadastro; da revisão A em diante cada revisão é uma emissão. Se o SIGEM está em B, o PW precisa emitir 0, A e depois B, nessa ordem"]);
   overview.push(["Ação: Cadastrar no PW", "Revisão 0 ainda sem cadastro no PW"]);
   overview.push(["Ação: Emitir no PW", "Revisão 0 já cadastrada, ou revisão A em diante, com emissão pendente"]);
+  overview.push(["Fora de sequência", "Revisão emitida enquanto uma revisão anterior (0, A, B…) ainda não foi emitida; aparece na coluna Cadastro e na relação, sem alterar as contagens"]);
   overview.push(["Ação: Concluído", "Emissão comprovada da revisão indicada"]);
   overview.push(["X na revisão", "Revisão exata a trabalhar no PW; emitidas não recebem X"]);
   overview.push(["Não constam no SIGEM", "A revisão não aparece na Consulta Geral; isso não comprova que falta postar"]);

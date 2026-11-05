@@ -15,6 +15,11 @@ export interface PwOperation {
   documentClass: string; referenceStatus: string; sources: string[]; action: PwAction;
   inSigem: boolean; sigemSituation: string; sigemStatus: string;
   pwRegistered: boolean; pwEmitted: boolean; pwEvidence?: SigemPwRecord;
+  /**
+   * Revisões anteriores (0, A, B…) ainda não emitidas no PW quando ESTA revisão já foi emitida (ex.: B emitida com A pendente).
+   * Vazio = em sequência. Só informa; não altera nenhuma contagem.
+   */
+  missingBefore: string[];
 }
 export interface PwTotals {
   sigem: number; registerSigem: number; registerAbsent: number;
@@ -70,6 +75,18 @@ function fillRevisionSequence(required: Set<string>): void {
   if (highest === 0) return;
   required.add("0");
   for (let rank = 1; rank <= highest; rank++) required.add(String.fromCharCode(64 + rank));
+}
+/** Emissão fora de ordem: uma revisão emitida enquanto outra, anterior e de ordem conhecida, ainda não foi emitida. */
+function markOutOfSequence(rows: PwOperation[], documentKey: string): void {
+  const own = rows.filter(row => row.documentKey === documentKey);
+  for (const row of own) {
+    const rank = sequenceRank(row.revision);
+    if (!row.pwEmitted || rank === null) continue;
+    row.missingBefore = own
+      .filter(other => { const otherRank = sequenceRank(other.revision); return otherRank !== null && otherRank < rank && !other.pwEmitted; })
+      .sort((a, b) => (sequenceRank(a.revision) as number) - (sequenceRank(b.revision) as number))
+      .map(other => other.revision);
+  }
 }
 const totals = (): PwTotals => ({ sigem: 0, registerSigem: 0, registerAbsent: 0, registered: 0, issue: 0, issued: 0 });
 export const PW_INDICATORS: Array<{ key: Exclude<PwIndicator, "all">; label: string }> = [
@@ -235,8 +252,9 @@ export function computePwOperations(state: PwOperationsInput): PwOperationsRepor
         documentClass, referenceStatus: text(reference.status), sources, action: isCadastro && !registered ? "Cadastrar no PW" : emitted ? "Concluído" : "Emitir no PW",
         inSigem, sigemSituation: inSigem ? "Consta no SIGEM" : "Não consta na Consulta Geral",
         sigemStatus: [...new Set(entries.map(row => text(row.status || row.sigemStatus)).filter(Boolean))].join("; "),
-        pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence });
+        pwRegistered: registered, pwEmitted: emitted, pwEvidence: evidence, missingBefore: [] });
     }
+    markOutOfSequence(report.rows, key);
   }
   report.rows.sort((a, b) => a.code.localeCompare(b.code, "pt-BR") || a.revision.localeCompare(b.revision, "pt-BR", { numeric: true }));
   return filterPwOperations(report);

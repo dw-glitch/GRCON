@@ -1641,6 +1641,7 @@
 .spw-operation-action { display: inline-block; border-radius: 5px; padding: 5px 8px; white-space: nowrap; font-size: .8rem; background: #fff4df; color: #77531a; }
 .spw-operation-action[data-action="Emitir no PW"] { background: #e8f2ff; color: #255e95; }
 .spw-operation-action[data-action="Concluído"] { background: #e6f6ee; color: #246346; }
+.spw-operation-sequence { display: inline-block; margin-left: 6px; border-radius: 5px; padding: 5px 8px; white-space: nowrap; font-size: .8rem; background: #fde8e6; color: #8a2a1f; font-weight: 600; }
 .spw-operation-reconciliation { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .spw-operation-reconciliation div { padding: 10px; background: #f2f6f9; border-radius: 6px; }
 .spw-operation-reconciliation dt { font-size: .8rem; color: #536a7e; }
