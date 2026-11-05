@@ -209,6 +209,8 @@ count(after,t(1,0,0,0,1)); assert.equal(prior.rows[0].action,"Cadastrar no PW");
   const mount=createRoot(document.getElementById("root")); let exportFilters;
   await React.act(async()=>mount.render(React.createElement(SigemPwManagerialOverview,{state:mixed,onExport:value=>exportFilters=value})));
   assert.ok([...document.querySelectorAll('[aria-label="Relação operacional do PW"] thead th')].some(th=>th.textContent==="Status SIGEM"), "tabela da tela mostra o status do SIGEM");
+  assert.ok([...document.querySelectorAll('[aria-label="Relação operacional do PW"] thead th')].some(th=>th.textContent==="Incluído no SIGEM em"), "tabela da tela mostra a data de inclusão no SIGEM");
+  assert.ok([...document.querySelectorAll('[aria-label="Relação operacional do PW"] tbody tr')].every(tr=>tr.querySelector(".spw-sigem-included")?.textContent), "toda linha tem data ou travessão");
   assert.ok([...document.querySelectorAll('[aria-label="Relação operacional do PW"] tbody tr')].every(tr=>tr.querySelector(".spw-sigem-status")?.textContent), "toda linha tem o texto de status SIGEM");
   assert.equal(document.querySelectorAll(".spw-operation-kpi").length,6,"cinco indicadores originais + Cadastradas no PW");
   const registration=document.querySelector('[data-indicator="registerAbsent"]');
