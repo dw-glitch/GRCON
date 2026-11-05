@@ -56,7 +56,7 @@ assert.match(worker, /`\$\{scope\}:\$\{label\}`/, "worker monta as chaves escopo
 assert.match(worker, /\["all", "revision0"\]/);
 assert.match(adapter, /"all:all"/, "a prontidão sempre usa o agregado all:all");
 assert.ok(adapter.indexOf("registerHistoryBeforeActivation(\"sigem\"") < adapter.indexOf("saveSigemBase(candidate)"));
-assert.ok(adapter.indexOf("registerHistoryBeforeActivation(\"pw\"") < adapter.indexOf("savePwBase(candidate, state.ld)"));
+assert.ok(adapter.indexOf("registerHistoryBeforeActivation(\"pw\"") < adapter.indexOf("saveBase(\"pw\", candidate)"));
 assert.ok(adapter.indexOf('registerHistoryBeforeActivation("pw", candidatePw') < adapter.indexOf("saveLdAndReprocessPw(candidateLd, state.pw)"));
 
 assert.match(types, /SIGEM_PW_PAGE_SIZE = 100/);
