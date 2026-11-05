@@ -38,6 +38,8 @@
   }
   function shell(){
     const module=$("#sigem-module");if(!module)return false;
+    // A faixa de abas do Histórico (eGRDTs emitidas | Conferir GRDT) mora neste painel e sobrevive à renderização.
+    const subnav=module.querySelector(".history-subnav");
     module.innerHTML=
       '<section class="scc scc-grdt-review" id="sigem-central-workspace">'+
       '<header class="scc-heading"><div><span>CONFERÊNCIA DOCUMENTAL</span>'+
@@ -110,6 +112,7 @@
       '<aside class="scc-detail" id="sigem-central-detail" role="dialog" aria-label="Detalhes do documento" hidden>'+
       '<button type="button" class="scc-close" aria-label="Fechar detalhes">×</button>'+
       '<div id="sigem-central-detail-body"></div></aside>';
+    if(subnav)module.prepend(subnav);
     return true;
   }
   function syncFilterControls(){
