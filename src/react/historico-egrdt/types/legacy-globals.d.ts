@@ -42,7 +42,6 @@ interface GrconTeamsNotificationApi {
 
 declare global {
   interface Window {
-    GrconDocumentMaster?: { open(code?: string): void; openFile(id: string): Promise<void> };
     GrconHistory?: GrconHistoryApi;
     GrconHistoryUi?: GrconHistoryUiApi;
     GrconHistoryReport?: GrconHistoryReportApi;

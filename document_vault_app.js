@@ -644,7 +644,7 @@
         '<td><input class="vault-revision-input" data-vault-meta="revision" data-task-id="' + esc(task.id) + '" value="' + esc(task.revision) + '" ' + (editable ? "" : "disabled") + ' aria-label="Revisão"></td>' +
         '<td><span class="vault-status">' + esc(taskStatusLabel(task)) + '</span><small>' + esc(task.error || task.phase) + '</small></td>' +
         '<td><div class="vault-progress"><i style="width:' + Math.max(0, Math.min(100, Number(task.progress) || 0)) + '%"></i></div><small>' + Math.round(Number(task.progress) || 0) + '%</small></td>' +
-        '<td><div class="vault-row-actions">' + (id ? '<button type="button" data-vault-detail="' + esc(id) + '">Detalhes</button>' : '') + actions.join("") + '</div></td>' +
+        '<td><div class="vault-row-actions">' + actions.join("") + '</div></td>' +
         '</tr>';
     }).join("");
     if (state.queue.length > visible.length) {
@@ -742,7 +742,7 @@
           '<td>' + esc(bytes(file.size_bytes)) + '</td>' +
           '<td>' + esc(dateLabel(file.created_at)) + '</td>' +
           '<td><span class="vault-allocation ' + allocationClass(file) + '" title="Fonte: ' + esc(file.allocation_source || "Controle de Solicitações — Central de alocação") + '">' + esc(allocationLabel(file)) + '</span></td>' +
-          '<td><div class="vault-row-actions"><button type="button" data-vault-detail="' + esc(id) + '">Detalhes</button>' + (file.status === 'ready' ? '<button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button>' : '<span>Exclusão pendente</span>') + (canDelete() ? '<button type="button" data-vault-delete="' + esc(id) + '">' + (file.status === 'ready' ? 'Excluir' : 'Tentar excluir novamente') + '</button>' : '') + '</div></td>' +
+          '<td><div class="vault-row-actions">' + (file.status === 'ready' ? '<button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button>' : '<span>Exclusão pendente</span>') + (canDelete() ? '<button type="button" data-vault-delete="' + esc(id) + '">' + (file.status === 'ready' ? 'Excluir' : 'Tentar excluir novamente') + '</button>' : '') + '</div></td>' +
           '</tr>';
       }).join("");
     }
@@ -1528,8 +1528,6 @@
       const remove = event.target.closest?.("[data-vault-remove-task]");
       if (remove) removeTask(remove.dataset.vaultRemoveTask);
       const open = event.target.closest?.("[data-vault-open-file]");
-      const detail = event.target.closest?.("[data-vault-detail]");
-      if (detail) void root.GrconDocumentMaster?.openFile(detail.dataset.vaultDetail);
       if (open) void downloadAction(open.dataset.vaultOpenFile, true);
       const download = event.target.closest?.("[data-vault-download]");
       if (download) void downloadAction(download.dataset.vaultDownload, false);

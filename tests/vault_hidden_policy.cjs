@@ -9,7 +9,6 @@ const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 const html = read("index.html");
 const app = read("app.js");
 const vault = read("document_vault_app.js");
-const master = read("document_master_app.js");
 const worker = read("cloudflare/worker-entry.mjs");
 const sw = read("sw.js");
 const policySource = read("grcon_storage_policy.js");
@@ -34,8 +33,11 @@ assert.match(vault, /if \(storageFeatures\.enableAutomaticUpload !== true\) retu
 assert.match(vault, /if \(storageFeatures\.enableManualUpload !== true\) return;/);
 assert.match(app, /GrconStorageFeatures\?\.enableAutomaticLookup === true/);
 assert.match(app, /GrconStorageFeatures\?\.enableAutomaticUpload !== true/);
-assert.doesNotMatch(master, /data-master-target="vault"/);
-assert.doesNotMatch(master, /\['vault','Arquivos no Cofre'\]/);
+// Registro Mestre foi retirado do GRCON: sem módulo, sem item de menu e sem ligação a partir do Cofre.
+assert.equal(fs.existsSync(path.join(__dirname, "..", "document_master_app.js")), false);
+assert.doesNotMatch(html, /document_master_app\.js/);
+assert.doesNotMatch(sw, /document_master_app\.js/);
+assert.doesNotMatch(vault, /GrconDocumentMaster|data-vault-detail/);
 for (const action of ["init", "upload", "multipart/start", "multipart/part", "multipart/complete", "restart", "delete", "metadata"]) {
   assert.ok(worker.includes('"' + action + '"'), "missing guarded storage route: " + action);
 }
