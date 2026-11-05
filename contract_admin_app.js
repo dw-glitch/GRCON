@@ -8,6 +8,26 @@
   const escape = value => String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
   const notify = (message, kind) => root.GrconNotify?.(message, kind || "info");
 
+  // Quem pode o quê. Só entram ações cujas regras o GRCON aplica de forma explícita (grcon_cloud_app.js); o servidor continua
+  // sendo a palavra final. tests/admin_access_matrix.cjs confere esta tabela contra as regras do código.
+  const ACCESS_ROLES = Object.freeze(["owner", "admin", "operator", "viewer"]);
+  const ACCESS_RULES = Object.freeze([
+    { action: "Gravar no histórico e reservar número de eGRDT", roles: ["owner", "admin", "operator"], rule: "canWriteHistory" },
+    { action: "Atualizar Documentos Previstos e salvar ou excluir modelos da equipe", roles: ["owner"], rule: "canManageWorkspace" },
+    { action: "Excluir ou alterar registros do histórico compartilhado", masterOnly: true, rule: "canManageHistory" },
+    { action: "Gerenciar usuários, convites e senhas", masterOnly: true, rule: "canManageMembers" },
+  ]);
+  function accessMatrixHtml() {
+    const rows = ACCESS_RULES.map(rule => rule.masterOnly
+      ? '<tr><th scope="row">' + escape(rule.action) + '</th><td colspan="' + ACCESS_ROLES.length + '"><span class="grcon-access-master">Somente o Proprietário ADM (conta principal do contrato), qualquer que seja a função</span></td></tr>'
+      : '<tr><th scope="row">' + escape(rule.action) + '</th>' + ACCESS_ROLES.map(role => rule.roles.includes(role)
+        ? '<td><span class="grcon-access-yes"><b aria-hidden="true">✓</b> Pode</span></td>'
+        : '<td><span class="grcon-access-no"><b aria-hidden="true">–</b> Não pode</span></td>').join("") + '</tr>').join("");
+    return '<details class="grcon-admin-matrix" id="grcon-admin-matrix" open><summary>Quem pode o quê</summary>'
+      + '<p>Resumo das regras de cada função para as ações abaixo. O servidor continua sendo a palavra final; outras telas podem ter regras próprias.</p>'
+      + '<div class="grcon-admin-table-wrap"><table><thead><tr><th scope="col">Ação</th>' + ACCESS_ROLES.map(role => '<th scope="col">' + escape(labels[role]) + '</th>').join("") + '</tr></thead><tbody>' + rows + '</tbody></table></div></details>';
+  }
+
   async function usersApi(operation, input = {}) {
     if (!master()) throw new Error("Acesso restrito ao Proprietário ADM.");
     const response = await cloud().state.client.functions.invoke("owner-manage-users", { body: { ...input, operation, workspaceId: state.workspace } });
@@ -35,6 +55,7 @@
       <p id="grcon-admin-feedback" role="status" aria-live="polite"></p>
       <section data-admin-panel="users" aria-labelledby="grcon-admin-users-title"><h3 id="grcon-admin-users-title" tabindex="-1">Usuários e acessos</h3><div class="grcon-admin-toolbar"><label>Buscar colaborador<input id="grcon-admin-search" type="search" placeholder="Nome ou e-mail"></label><button id="admin-user-new" type="button">Novo usuário</button></div>
       <div id="grcon-admin-users" aria-live="polite"></div>
+      ${accessMatrixHtml()}
       <section id="grcon-admin-editor" hidden><h3 id="grcon-admin-editor-title">Novo usuário</h3><form id="grcon-admin-user-form"><input id="admin-user-id" type="hidden"><div class="grcon-admin-grid"><label>Nome<input id="admin-user-name" required maxlength="160"></label><label>E-mail<input id="admin-user-email" type="email" required></label><label>Função<select id="admin-user-role"><option value="operator">Operador</option><option value="admin">Administrador</option><option value="owner">Proprietário</option></select></label><label><input id="admin-user-active" type="checkbox" checked> Acesso ativo</label></div><div class="egrdt-email-actions"><button type="submit">Salvar usuário</button><button id="admin-user-cancel" type="button">Cancelar</button></div><p id="admin-user-password" hidden></p></form></section>
       <details id="grcon-cloud-invitations-panel"><summary>Convites pendentes</summary><div id="grcon-cloud-invitations"></div></details>
       </section><section data-admin-panel="activity" hidden aria-labelledby="grcon-admin-activity-title"><h3 id="grcon-admin-activity-title" tabindex="-1">Registro de atividades</h3><details id="grcon-cloud-audit-panel" open><summary>Registro de atividades</summary><div id="grcon-cloud-audit"></div></details>
