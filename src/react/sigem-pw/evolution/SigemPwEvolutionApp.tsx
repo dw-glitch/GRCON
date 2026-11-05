@@ -102,7 +102,74 @@ function SourceSelector({
   );
 }
 
+type TimelineForm = "bars" | "lines";
+const TIMELINE_FORM_KEY = "grcon.spw.evolution.timelineForm";
+function readTimelineForm(): TimelineForm {
+  try { return window.localStorage.getItem(TIMELINE_FORM_KEY) === "lines" ? "lines" : "bars"; } catch { return "bars"; }
+}
+
+/** Mesmas cinco séries das barras, em linhas (as de "saíram" tracejadas). */
+const LINE_SERIES: Array<{ key: "sigemAdded" | "sigemRemoved" | "pwAdded" | "pwRemoved" | "pwEmitted"; label: string; cls: string; dashed: boolean }> = [
+  { key: "sigemAdded", label: "SIGEM", cls: "sigem", dashed: false },
+  { key: "sigemRemoved", label: "Saíram SIGEM", cls: "sigem-removed", dashed: true },
+  { key: "pwAdded", label: "PW", cls: "pw", dashed: false },
+  { key: "pwRemoved", label: "Saíram PW", cls: "pw-removed", dashed: true },
+  { key: "pwEmitted", label: "Emitidas no PW", cls: "emitted", dashed: false },
+];
+
+function TimelineLines({ visible, dayLabel }: { visible: EvolutionUiState["timeline"]; dayLabel(value: string): string }) {
+  const W = 760, H = 230, left = 46, right = 18, top = 16, bottom = 30;
+  const max = Math.max(1, ...visible.flatMap((row) => LINE_SERIES.map((series) => Number(row[series.key] || 0))));
+  const x = (index: number) => left + (visible.length === 1 ? (W - left - right) / 2 : (index / (visible.length - 1)) * (W - left - right));
+  const y = (value: number) => top + (1 - value / max) * (H - top - bottom);
+  const ticks = [0, 0.5, 1].map((fraction) => Math.round(max * fraction)).filter((value, index, all) => all.indexOf(value) === index);
+  const summary = visible.map((row) => `${dayLabel(row.date)}: SIGEM +${row.sigemAdded}, PW +${row.pwAdded}, emitidas ${row.pwEmitted}`).join("; ");
+  return (
+    <div className="spw-evo-lines">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Histórico diário em linhas. ${summary}`} preserveAspectRatio="xMidYMid meet">
+        {ticks.map((value) => (
+          <g key={value}>
+            <line className="spw-evo-line-grid" x1={left} x2={W - right} y1={y(value)} y2={y(value)} />
+            <text className="spw-evo-line-axis" x={left - 8} y={y(value) + 4} textAnchor="end">{fmt(value)}</text>
+          </g>
+        ))}
+        {visible.map((row, index) => (
+          <text key={row.date} className="spw-evo-line-axis" x={x(index)} y={H - 8} textAnchor="middle">{dayLabel(row.date)}</text>
+        ))}
+        {LINE_SERIES.map((series) => (
+          <g key={series.key} className={`spw-evo-line ${series.cls}`}>
+            {visible.length > 1 ? (
+              <polyline points={visible.map((row, index) => `${x(index)},${y(Number(row[series.key] || 0))}`).join(" ")} fill="none" strokeDasharray={series.dashed ? "6 4" : undefined} />
+            ) : null}
+            {visible.map((row, index) => (
+              <circle key={row.date} cx={x(index)} cy={y(Number(row[series.key] || 0))} r={3.6}>
+                <title>{`${row.date} · ${series.label}: ${fmt(row[series.key])}`}</title>
+              </circle>
+            ))}
+          </g>
+        ))}
+      </svg>
+      <details className="spw-evo-line-table">
+        <summary>Ver como tabela</summary>
+        <table>
+          <thead><tr><th scope="col">Data</th><th scope="col">SIGEM</th><th scope="col">Saíram SIGEM</th><th scope="col">PW</th><th scope="col">Saíram PW</th><th scope="col">Emitidas no PW</th></tr></thead>
+          <tbody>
+            {visible.map((row) => (
+              <tr key={row.date}><th scope="row">{dayLabel(row.date)}</th><td>{fmt(row.sigemAdded)}</td><td>{fmt(row.sigemRemoved)}</td><td>{fmt(row.pwAdded)}</td><td>{fmt(row.pwRemoved)}</td><td>{fmt(row.pwEmitted)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </div>
+  );
+}
+
 function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
+  const [form, setFormState] = useState<TimelineForm>(readTimelineForm);
+  const setForm = (next: TimelineForm) => {
+    setFormState(next);
+    try { window.localStorage.setItem(TIMELINE_FORM_KEY, next); } catch { /* preferência só deste navegador */ }
+  };
   const visible = rows.slice(-14);
   if (!visible.length) {
     return (
@@ -127,8 +194,13 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
       <header>
         <div>
           <strong>Histórico diário · últimas {fmt(visible.length)} datas</strong><br />
-          <small>Eixo = data do snapshot (importação/data operacional editada). Cada barra soma movimentações entre snapshots consecutivos; não é a data individual de cadastro/emissão.</small>
+          <small>Eixo = data do snapshot (importação/data operacional editada). Cada {form === "lines" ? "ponto" : "barra"} soma movimentações entre snapshots consecutivos; não é a data individual de cadastro/emissão.</small>
         </div>
+        <div className="spw-evo-timeline-tools">
+          <div className="spw-evo-form-toggle" role="group" aria-label="Forma do gráfico">
+            <button type="button" aria-pressed={form === "bars"} data-evo-chart-form="bars" onClick={() => setForm("bars")}>Barras</button>
+            <button type="button" aria-pressed={form === "lines"} data-evo-chart-form="lines" onClick={() => setForm("lines")}>Linhas</button>
+          </div>
         <div className="spw-evo-legend">
           <span><i className="sigem"></i>SIGEM</span>
           <span><i className="sigem-removed"></i>Saíram SIGEM</span>
@@ -136,8 +208,9 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
           <span><i className="pw-removed"></i>Saíram PW</span>
           <span><i className="emitted"></i>Emitidas no PW</span>
         </div>
+        </div>
       </header>
-      <div className="spw-evo-days">
+      {form === "lines" ? <TimelineLines visible={visible} dayLabel={dayLabel} /> : <div className="spw-evo-days">
         {visible.map((row) => (
           <div
             className="spw-evo-day"
@@ -156,7 +229,7 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
             <span>{dayLabel(row.date)}</span>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

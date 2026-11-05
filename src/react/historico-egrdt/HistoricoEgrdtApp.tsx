@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
 import { DocumentClassBadge } from "../core/ui/DocumentClassBadge";
 import { historicoEgrdtAdapter as Adapter } from "./services/historicoEgrdtAdapter";
 import { useHistoricoEgrdt, LIST_PAGE_SIZE } from "./hooks/useHistoricoEgrdt";
+import { EgrdtTable } from "./EgrdtTable";
 import type { EgrdtHistoryFile } from "./types/domain";
 
 function FileProvenance({ file }: { file: EgrdtHistoryFile }) {
@@ -533,8 +534,20 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
   );
 }
 
+const VIEW_MODE_KEY = "grcon.history.viewMode";
+type ViewMode = "list" | "table";
+function readViewMode(): ViewMode {
+  try { return window.localStorage.getItem(VIEW_MODE_KEY) === "table" ? "table" : "list"; } catch { return "list"; }
+}
+
 export function HistoricoEgrdtApp() {
   const h = useHistoricoEgrdt();
+  // Forma de exibição: "Lista e detalhe" (padrão, como sempre foi) ou "Tabela por eGRDT". A escolha fica neste navegador.
+  const [viewMode, setViewModeState] = useState<ViewMode>(readViewMode);
+  const setViewMode = (next: ViewMode) => {
+    setViewModeState(next);
+    try { window.localStorage.setItem(VIEW_MODE_KEY, next); } catch { /* preferência só deste navegador */ }
+  };
 
   if (h.loading) {
     return (
@@ -581,10 +594,28 @@ export function HistoricoEgrdtApp() {
       <Toolbar h={h} />
       <Summary h={h} />
 
-      <div className="history-workspace">
-        <RecordList h={h} />
-        <Detail h={h} />
+      <div className="history-view-toggle" role="group" aria-label="Forma de exibição do histórico">
+        <span>Forma de exibição</span>
+        <div>
+          <button type="button" aria-pressed={viewMode === "list"} data-history-view="list" onClick={() => setViewMode("list")}>Lista e detalhe</button>
+          <button type="button" aria-pressed={viewMode === "table"} data-history-view="table" onClick={() => setViewMode("table")}>Tabela por eGRDT</button>
+        </div>
       </div>
+
+      {viewMode === "table" && !h.showRemovedOnly ? (
+        <EgrdtTable
+          records={h.filtered}
+          visibleLimit={h.visibleLimit}
+          pageSize={LIST_PAGE_SIZE}
+          onShowMore={h.showMore}
+          onOpenDetail={(id) => { h.select(id); setViewMode("list"); }}
+        />
+      ) : (
+        <div className="history-workspace">
+          <RecordList h={h} />
+          <Detail h={h} />
+        </div>
+      )}
     </div>
   );
 }

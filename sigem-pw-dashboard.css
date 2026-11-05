@@ -1656,3 +1656,12 @@
 #sigem-pw-dashboard-module .spw-glossary dt{font-weight:800;font-size:.84rem;color:var(--spw-text,#17324a)}
 #sigem-pw-dashboard-module .spw-glossary dd{margin:2px 0 0;font-size:.8rem;line-height:1.45;color:var(--spw-muted,#5b7083)}
 #sigem-pw-dashboard-module .spw-operation-unit{line-height:1.5}
+
+/* Abas por revisão da relação de trabalho do PW (filtro a mais; as regras de contagem não mudam). */
+#sigem-pw-dashboard-module .spw-revision-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0 4px}
+#sigem-pw-dashboard-module .spw-revision-tabs>span{font-size:.78rem;font-weight:700;color:var(--text-muted,#52667a);margin-right:2px}
+#sigem-pw-dashboard-module .spw-revision-tabs button{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1px solid var(--border,#c5d2de);border-radius:999px;background:var(--surface,#fff);color:var(--text-strong,#334e68);font:inherit;font-size:.82rem;font-weight:500;cursor:pointer}
+#sigem-pw-dashboard-module .spw-revision-tabs button b{min-width:1.6rem;padding:1px 8px;border-radius:999px;background:#eef2f6;color:#334e68;font-size:.74rem;font-variant-numeric:tabular-nums;text-align:center}
+#sigem-pw-dashboard-module .spw-revision-tabs button[aria-pressed="true"]{background:#155c8a;border-color:#155c8a;color:#fff;font-weight:600}
+#sigem-pw-dashboard-module .spw-revision-tabs button[aria-pressed="true"] b{background:rgba(255,255,255,.22);color:#fff}
+#sigem-pw-dashboard-module .spw-revision-tabs button:focus-visible{outline:2px solid #316b9c;outline-offset:2px}
