@@ -353,6 +353,23 @@ function teamsPresentation(record: EgrdtHistoryRecord): {
   };
 }
 
+export type DeliveryStage = 0 | 1 | 2 | 3;
+export const DELIVERY_STAGE_LABELS: Readonly<Record<DeliveryStage, string>> = Object.freeze({
+  0: "Ainda não avisada",
+  1: "Aguardando confirmação",
+  2: "Postagem parcial",
+  3: "Postagem confirmada",
+});
+
+/** Andamento da eGRDT: 0 gerada · 1 avisada no Teams · 2 postagem parcial · 3 postagem confirmada. Usa só o que o Teams já registra. */
+function deliveryStage(record: EgrdtHistoryRecord): DeliveryStage {
+  const trace = window.GrconTeamsTrace?.latest?.(record);
+  const confirmation = String(trace?.confirmation_type || "");
+  if (trace?.confirmed_at && confirmation === "total") return 3;
+  if (trace?.confirmed_at && confirmation === "partial") return 2;
+  return teamsPresentation(record)?.sent ? 1 : 0;
+}
+
 function syncSequence(number: string): void {
   window.GrconEgrdtSequence?.syncFromNumber?.(number);
 }
@@ -481,6 +498,7 @@ export const historicoEgrdtAdapter = {
   openEmailReply,
   openTeams,
   teamsPresentation,
+  deliveryStage,
   syncSequence,
   dispatchUpdated,
   subscribeUpdates,
