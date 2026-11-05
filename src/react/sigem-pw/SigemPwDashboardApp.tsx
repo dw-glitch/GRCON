@@ -89,6 +89,10 @@ export function SigemPwDashboardApp() {
         <span>{state.progressMessage || "Processando base…"}</span>
       </div>
 
+      {state.busy && state.result ? <p role="status">Resultado anterior em exibição até concluir a operação.</p> : null}
+      {state.syncError ? <p role="status">{state.syncError}</p> : null}
+      {state.analysisError ? <div role="alert"><p>{state.analysisError}</p><button type="button" disabled={state.busy} onClick={() => void adapter.retryAnalysis()}>Repetir análise</button></div> : null}
+      {state.pw.meta && Number(state.pw.meta.pwRawColumnCount) !== 70 ? <p role="status">Esta base pode ser comparada, mas a exportação do coordenador exige a consulta PW original com 70 colunas.</p> : null}
       <SigemPwReadiness readiness={state.readiness} />
       {state.pw.meta && (state.pw.meta.companyColumn !== "C" || state.pw.meta.scopeCompanyColumnMissing === true) ? (
         <div className="spw-empty" role="alert"><strong>Reimportação do PW necessária</strong><span>A base atual não comprova a leitura da sigla da empresa pela coluna C. Os indicadores foram suspensos até importar uma consulta PW com essa coluna, evitando contagens incorretas.</span></div>

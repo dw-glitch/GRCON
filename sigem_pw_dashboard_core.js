@@ -1865,12 +1865,12 @@
     return (await saveLdAndReprocessPw(base)).ld;
   }
 
-  async function loadBases() {
+  async function loadBases(options) {
     const migrated = await migrateLegacyBases();
     // O PW compartilhado pode regravar a base PW local durante o refresh: ela é
     // sempre relida. SIGEM e LD só mudam por gravações deste módulo e reaproveitam
     // a leitura da migração.
-    await (typeof globalThis !== "undefined" ? globalThis.GrconSharedPwQuery?.refresh?.() : null);
+    if (!options?.localOnly) await (typeof globalThis !== "undefined" ? globalThis.GrconSharedPwQuery?.refresh?.() : null);
     const [sigem, pw, ld, history] = await Promise.all([
       migrated ? migrated.sigem : loadSigemBase(),
       loadPwBase(),

@@ -3,6 +3,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const BUILDS = {
+  "sigem-pw-processing": {
+    entry: "src/react/sigem-pw/services/sigemPwProcessing.worker.ts",
+    fileName: "sigem-pw-processing-worker.js",
+    bundleName: "GrconSigemPwProcessing",
+    emptyOutDir: false,
+  },
   "allocation-auditor": {
     entry: "src/react/allocation-auditor/index.tsx",
     fileName: "allocation-auditor-app.js",

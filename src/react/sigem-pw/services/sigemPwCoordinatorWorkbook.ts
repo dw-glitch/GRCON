@@ -1,3 +1,4 @@
+import { runPwProcessing } from "./sigemPwProcessingClient";
 import type { SigemPwState } from "../types/domain";
 import { filterPwOperations, PW_INDICATORS, reconcilePwOperations, sigemStatusText, type PwFilters, type PwOperationsReport } from "./sigemPwOperations";
 import { getPwOriginalMatrix } from "./sigemPwRawPw";
@@ -63,10 +64,11 @@ const LOGO_WIDTH = 150;
 const LOGO_HEIGHT = 42;
 
 const REVISIONS = Object.freeze(["0", "A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U"]);
+export const SIGEM_INCLUDED_DATE_HEADER = "DATA DE INCLUSÃO NO SIGEM";
 export const COORDINATOR_HEADERS = Object.freeze([
   "DOCUMENTO", "REVISÃO", "TÍTULO", "STATUS LD", "SITUAÇÃO SIGEM", "REVISÃO PW",
   "STATE", "Última emissão", "AÇÃO", "Cadastro", "ABA", "STATUS SIGEM",
-  ...REVISIONS.map(revision => "Rev. " + revision),
+  ...REVISIONS.map(revision => "Rev. " + revision), SIGEM_INCLUDED_DATE_HEADER,
 ]);
 const GRCON = Object.freeze({
   navy: "FF153A5C", ink: "FF253A50", slate: "FF657C90",
@@ -107,7 +109,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     pending: report.totals.registerSigem + report.totals.registerAbsent + report.totals.issue,
   };
   const revisions = [...new Set([...REVISIONS, ...report.rows.map(row => row.revision)])];
-  const headers = [...COORDINATOR_HEADERS.slice(0, 12), ...revisions.map(rev => "Rev. " + rev)];
+  const headers = [...COORDINATOR_HEADERS.slice(0, 12), ...revisions.map(rev => "Rev. " + rev), SIGEM_INCLUDED_DATE_HEADER];
   const header1: CellValue[] = Array(headers.length).fill("");
   const header2: CellValue[] = Array(headers.length).fill("");
   [header1[0], header1[1], header1[2], header1[3], header1[4], header1[5], header1[6], header1[7], header1[8], header1[9]] =
@@ -152,7 +154,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     formulas.push(info);
     const values = [row.code, row.revision, row.title, row.referenceStatus, row.sigemSituation,
       ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" + (row.missingBefore.length ? " · FORA DE SEQUÊNCIA: falta " + row.missingBefore.join(", ") : "") : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass, sigemStatusText(row),
-      ...revisions.map(rev => row.revision === rev && !row.pwEmitted ? "X" : "")];
+      ...revisions.map(rev => row.revision === rev && !row.pwEmitted ? "X" : ""), row.sigemIncludedAt];
     master.push(values);
     const name = classNames.get(row.documentClass)!;
     classFormulas[name].push({ ...info, excelRow: sheets[name].length + 1 }); sheets[name].push([...values]);
@@ -170,7 +172,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   section("VISÃO GERAL");
   for (const indicator of PW_INDICATORS) overview.push([indicator.label, report.totals[indicator.key]]);
   overview.push(["Como contar", "Cada revisão de cada documento conta uma vez (exemplo: o documento X nas revisões 0 e A são 2 revisões de documentos)"]);
-  overview.push(["Escopo exportado", Object.values(filters).some(v => v && v !== "all") ? "Filtros da relação operacional: " + JSON.stringify(filters) : "Completo: todas as classes e revisões das bases ativas"]);
+  overview.push(["Escopo exportado", Object.values(filters).some(v => v && v !== "all") ? "Filtros da relação operacional: " + Object.entries(filters).filter(([, value]) => value && value !== "all").map(([key, value]) => ({ query: "Pesquisa", documentClass: "Classe", action: "Ação", sigem: "Situação SIGEM", revisionScope: "Revisões", indicator: "Indicador", revision: "Revisão" }[key] || key) + ": " + (key === "indicator" ? PW_INDICATORS.find(item => item.key === value)?.label || value : value === "revision0" ? "Somente revisão 0" : value)).join("; ") : "Completo: todas as classes e revisões das bases ativas"]);
   section("PENDÊNCIAS POR CLASSE");
   overview.push(["Classe", "A cadastrar — já constam no SIGEM", "A cadastrar — não constam no SIGEM", "A emitir no PW"]);
   for (const row of report.byClass) overview.push([row.documentClass, row.registerSigem, row.registerAbsent, row.issue]);
@@ -179,6 +181,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
   overview.push(["Regra do PW", "Só a revisão 0 é cadastro; da revisão A em diante cada revisão é uma emissão. Se o SIGEM está em B, o PW precisa emitir 0, A e depois B, nessa ordem"]);
   overview.push(["Ação: Cadastrar no PW", "Revisão 0 ainda sem cadastro no PW"]);
   overview.push(["Ação: Emitir no PW", "Revisão 0 já cadastrada, ou revisão A em diante, com emissão pendente"]);
+  overview.push(["Data de inclusão no SIGEM", "Campo Incluído em da Consulta Geral, do mesmo documento e revisão. Vazio quando não informado; não usa a data de modificação, da base ou de outra revisão. Datas distintas da mesma revisão são preservadas, separadas por |"]);
   overview.push(["Coluna STATUS SIGEM", "Status do código na Consulta Geral do SIGEM (ex.: Postado, Não Postado). Se a revisão da linha não consta no SIGEM, mostra o status das outras revisões do código"]);
   overview.push(["Fora de sequência", "Revisão emitida enquanto uma revisão anterior (0, A, B…) ainda não foi emitida; aparece na coluna Cadastro e na relação, sem alterar as contagens"]);
   overview.push(["Ação: Concluído", "Emissão comprovada da revisão indicada"]);
@@ -225,7 +228,7 @@ function placeLogo(workbook: ExcelWorkbook, sheet: ExcelSheet, logo: Coordinator
 }
 function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.views = [{ state: "frozen", xSplit: 2, ySplit: 3, topLeftCell: "C4" }];
-  sheet.autoFilter = `A3:${columnLetter(11 + plan.revisions.length)}${Math.max(3, plan.sheets[MAIN_SHEET].length)}`;
+  sheet.autoFilter = `A3:${columnLetter(12 + plan.revisions.length)}${Math.max(3, plan.sheets[MAIN_SHEET].length)}`;
   sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "1:3" };
   sheet.headerFooter = { oddFooter: "&LGRCON · SIGEM × PW&CPágina &P de &N&R&D" };
   sheet.getRow(1).height = 28;
@@ -244,9 +247,11 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.getColumn(11).width = 14;
   sheet.getColumn(12).width = 30;
   for (let index = 13; index <= 12 + plan.revisions.length; index++) sheet.getColumn(index).width = 10;
+  sheet.getColumn(13 + plan.revisions.length).width = 25;
+  sheet.getColumn(13 + plan.revisions.length).numFmt = "@";
   // Excel rows 4+ are actual data, never inject unrelated title rows.
   [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].forEach(index => sheet.getColumn(index).numFmt = "@");
-  for (let column = 0; column < 12 + plan.revisions.length; column++) {
+  for (let column = 0; column < 13 + plan.revisions.length; column++) {
     formatHeader(sheet.getCell(`${columnLetter(column)}3`));
     const top = sheet.getCell(`${columnLetter(column)}1`);
     formatHeader(top, column >= 12 ? GRCON.teal : GRCON.navy);
@@ -272,7 +277,10 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
     const info = plan.formulas[idx];
     const excelRow = info.excelRow;
     const row = sheet.getRow(excelRow);
-    row.height = 32;
+    const includedDate = sheet.getCell(`${columnLetter(12 + plan.revisions.length)}${excelRow}`);
+    includedDate.alignment = { vertical: "middle", wrapText: true };
+    includedDate.font = { name: "Aptos", size: 9, color: { argb: GRCON.ink } };
+    row.height = text(plan.sheets[MAIN_SHEET][excelRow - 1][12 + plan.revisions.length]).includes(" | ") ? 48 : 32;
     sheet.getCell(`C${excelRow}`).alignment = { vertical: "middle", wrapText: true };
     sheet.getCell(`E${excelRow}`).alignment = { vertical: "middle", wrapText: true };
     // Style only operational cells: avoid huge per-cell styles on data sources.
@@ -420,24 +428,35 @@ export function buildCoordinatorWorkbook(state: SigemPwState, excel: Coordinator
   return { workbook, plan };
 }
 async function loadLogo(): Promise<CoordinatorLogo | undefined> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
   try {
     const brand = (window as unknown as { GRCONBrandAssets?: { reportLogoFile?: string } }).GRCONBrandAssets;
-    const response = await fetch(brand?.reportLogoFile || "grcon-logo-report.png");
+    const response = await fetch(brand?.reportLogoFile || "grcon-logo-report.png", { signal: controller.signal });
     if (!response.ok) return undefined;
     return { buffer: await response.arrayBuffer() };
   } catch {
     return undefined; // a marca é opcional: nunca impede o relatório
-  }
+  } finally { clearTimeout(timer); }
 }
-export async function downloadCoordinatorWorkbook(state: SigemPwState, excel: CoordinatorExcelApi, filters: PwFilters = {}): Promise<void> {
-  const { workbook } = buildCoordinatorWorkbook(state, excel, await loadLogo(), filters);
-  const data = await workbook.xlsx.writeBuffer();
+export async function downloadCoordinatorWorkbook(state: SigemPwState, excel: CoordinatorExcelApi | undefined, filters: PwFilters = {}, onProgress?: (message: string) => void): Promise<void> {
+  const logo = await loadLogo();
+  const frozen = { sigem: state.sigem, pw: state.pw, ld: state.ld, analysisError: state.analysisError, model: state.model ? { normalizedPw: state.model.normalizedPw } : null };
+  let data: ArrayBuffer | Uint8Array;
+  if (typeof Worker !== "undefined") {
+    data = await runPwProcessing<ArrayBuffer>({ kind: "export", state: frozen, filters, logo }, undefined, onProgress);
+  } else {
+    if (state.pw.records.length + state.sigem.records.length > 5000) throw new Error("Use um navegador com Worker para exportar bases grandes.");
+    if (!excel) throw new Error("Biblioteca de planilhas indisponível.");
+    const { workbook } = buildCoordinatorWorkbook(state, excel, logo, filters);
+    data = await workbook.xlsx.writeBuffer();
+  }
   const file = new Blob([data as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(file);
   try {
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "GRCON_SIGEM_PW_" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + ".xlsx";
+    anchor.download = "GRCON_SIGEM_PW_" + new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "") + (Object.values(filters).some(value => value && value !== "all") ? "_Filtrado" : "_Completo") + ".xlsx";
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();

@@ -85,7 +85,7 @@ assert.deepEqual(Object.keys(plan.sheets),["Resumo","Conferência Documental","N
 assert.ok(operational.rows.length>DOCUMENTS-50,"a sequência 0, A, B acrescenta revisões");
 assert.equal(operational.rows.length,(DOCUMENTS-50)*3,"cada documento em revisão B vira 3 revisões a conferir");
 assert.equal(plan.sheets["Conferência Documental"].length,operational.rows.length+3);
-assert.equal(plan.sheets["Conferência Documental"][2].length,33);
+assert.equal(plan.sheets["Conferência Documental"][2].length,34);
 assert.equal(plan.sheets["REL. PW"].length,PW_ROWS+1);
 assert.equal(plan.sheets["REL. PW"][0].length,70);
 assert.equal(plan.sheets["REL. PW"][PW_ROWS].length,70);

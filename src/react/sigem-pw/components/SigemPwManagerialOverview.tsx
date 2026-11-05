@@ -1,7 +1,8 @@
+import { usePwOperations } from "../hooks/usePwOperations";
 import { useEffect, useMemo, useState } from "react";
 import type { SigemPwState } from "../types/domain";
 import { SigemPwKpiCharts } from "./SigemPwKpiCharts";
-import { filterPwOperations, PW_ACTIONS, PW_INDICATORS, reconcilePwOperations, sigemStatusText, type PwFilters, type PwIndicator } from "../services/sigemPwOperations";
+import { filterPwOperations, PW_ACTIONS, PW_INDICATORS, sigemStatusText, type PwFilters, type PwIndicator } from "../services/sigemPwOperations";
 
 const PAGE_SIZE = 25;
 const fmt = (value: number) => value.toLocaleString("pt-BR");
@@ -18,7 +19,7 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
   const [filters, setFilters] = useState<PwFilters>(() => ({ revisionScope: globalRevisionScope(), indicator: "all" }));
   const [page, setPage] = useState(1);
   const [selectedKey, setSelectedKey] = useState("");
-  const base = useMemo(() => reconcilePwOperations(state), [state.ld, state.pw, state.sigem, state.model, state.analysisError]);
+  const base = usePwOperations(state);
   const report = useMemo(() => filterPwOperations(base, filters), [base, filters]);
   useEffect(() => {
     const onScope = (event: Event) => {

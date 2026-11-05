@@ -60,11 +60,12 @@ interface SigemPwDashboardCoreApi {
   hydrateModel?(model: SigemPwModel): SigemPwModel;
   createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[], settings?: { requireN1710Ld?: boolean; requireDocumentReference?: boolean; ldAvailable?: boolean; sigemAvailable?: boolean; pwAvailable?: boolean }): SigemPwModel;
   aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }, options?: { revisionScope?: SigemPwRevisionScope }): SigemPwResult;
-  loadBases(): Promise<{ sigem: SigemPwBase; pw: SigemPwBase; ld: SigemPwBase; history: SigemPwHistory }>;
+  loadBases(options?: { localOnly?: boolean }): Promise<{ sigem: SigemPwBase; pw: SigemPwBase; ld: SigemPwBase; history: SigemPwHistory }>;
   loadHistory(): Promise<SigemPwHistory>;
   loadHistoryIndex(): Promise<SigemPwHistory>;
   loadHistorySnapshot(id: string): Promise<SigemPwSnapshot | null>;
   saveSigemBase(base: SigemPwBase): Promise<SigemPwBase>;
+  saveBase(kind: SigemPwEditableBaseKind, base: SigemPwBase): Promise<SigemPwBase>;
   savePwBase(base: SigemPwBase, ld?: SigemPwBase | SigemPwRecord[]): Promise<SigemPwBase>;
   saveLdAndReprocessPw(ld: SigemPwBase, pw: SigemPwBase): Promise<{ ld: SigemPwBase; pw: SigemPwBase | null }>;
   updateSnapshotDate(kind: SigemPwEditableBaseKind, snapshotId: string, importedAt: string): Promise<{ current?: SigemPwBase; importedAt: string }>;
