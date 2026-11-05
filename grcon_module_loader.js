@@ -257,7 +257,10 @@
       const nestedToolView = view === "allocation-auditor" || view === "allocation-generator" || view === "title-corrector" || view === "grdt-reissue" || view === "pdf-tools" || view === "docx-to-pdf" || view === "allocation-dashboard";
       const additionalToolsNav = button.dataset.grconView === "additional-tools"
         && (button.classList.contains("ops-nav-button") || button.id === "tab-additional-tools");
-      const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav);
+      // "Conferir GRDT" agora é uma aba do Histórico de eGRDTs: o menu continua marcando o Histórico.
+      const historyAreaNav = view === "sigem" && button.dataset.grconView === "history"
+        && (button.classList.contains("ops-nav-button") || button.id === "tab-history");
+      const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav) || historyAreaNav;
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     });
@@ -274,7 +277,7 @@
     "additional-tools": "Ferramentas adicionais",
     history: "Histórico de eGRDTs",
     dashboard: "Dashboard de emissões",
-    sigem: "Conferir GRDT",
+    sigem: "Histórico de eGRDTs · Conferir GRDT",
     "pdf-tools": "Combinar PDFs",
     "docx-to-pdf": "Converter PDF em DOCX",
     "allocation-generator": "Gerador de Alocação",

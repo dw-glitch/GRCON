@@ -44,7 +44,8 @@
   function installNavigation() {
     if (document.querySelector("[data-pc-open]")) return;
     const sidebar = document.querySelector(".ops-sidebar");
-    const sidebarBefore = sidebar?.querySelector('[data-grcon-view="sigem"]');
+    // "Conferir GRDT" virou aba do Histórico; o novo item entra antes de Configurações gerais.
+    const sidebarBefore = sidebar?.querySelector('[data-ops-open-settings]');
     if (sidebar) {
       const button = document.createElement("button");
       button.className = "ops-nav-button";
