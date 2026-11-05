@@ -2066,3 +2066,13 @@ html[data-app="GRCON"] .grcon-menu-scrim {
 }
 html[data-app="GRCON"] .grcon-menu-scrim[hidden] { display: none; }
 @media print { html[data-app="GRCON"] .grcon-menu-toggle, html[data-app="GRCON"] .grcon-menu-scrim { display: none !important; } }
+
+/* Fixar menu: só o símbolo, pequeno, na mesma linha do título "Operação" (quase não ocupa espaço). Fixada = barra como antes; o hambúrguer some. */
+html[data-app="GRCON"] .ops-sidebar-pin { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; margin: 8px 10px -34px auto; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #52667a; cursor: pointer; }
+html[data-app="GRCON"] .ops-sidebar-pin svg { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html[data-app="GRCON"] .ops-sidebar-pin:hover { background: #eef3f8; color: #243b53; }
+html[data-app="GRCON"] .ops-sidebar-pin:focus-visible { outline: 2px solid #316b9c; outline-offset: 1px; }
+html[data-app="GRCON"] .ops-sidebar-pin[aria-pressed="true"] { background: #e6f0f8; border-color: #b9d3e8; color: #155c8a; }
+html[data-app="GRCON"] .ops-sidebar-pin[aria-pressed="true"] svg { fill: currentColor; fill-opacity: .25; }
+html[data-app="GRCON"][data-sidebar-drawer="off"] .grcon-menu-toggle { display: none; }
+@media (max-width: 58rem) { html[data-app="GRCON"][data-sidebar-drawer="off"] .ops-sidebar-pin { margin: 8px auto 6px; } }
