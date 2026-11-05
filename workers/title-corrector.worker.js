@@ -103,6 +103,27 @@ function isCovered(keys,token){
   if(!key)return true;
   return keys.some(other=>other===key||(key.length>=3&&other.length>=3&&(other.startsWith(key)||key.startsWith(other))));
 }
+// Trecho do título atual que CONTRADIZ as bases não é informação adicional: "VALVULA AUTOMATICA" onde a lista confirma "VALVULA MANUAL".
+// Contradição = o trecho (só palavras, sem número) vem colado a uma palavra já coberta (no máximo com "DE" entre elas) e as bases
+// trazem OUTRA palavra nesse mesmo lugar. Com outra preposição (DA, EM, NA…) ou com números/identificadores é complemento (onde, quando, linha…).
+function contradictsProposal(tokens,spanStart,proposal){
+  const span=tokens.slice(spanStart).filter(Boolean);
+  const first=stemKey(tokenKey(span[0]||''));
+  if(!first||span.some(token=>/\d/.test(token)))return false;
+  let at=spanStart-1,between=[];
+  while(at>=0&&STOPWORDS.has(tokenKey(tokens[at]))){between.unshift(tokenKey(tokens[at]));at--;}
+  if(at<0||between.some(word=>word!=='DE'))return false;
+  const anchor=stemKey(tokenKey(tokens[at]));
+  if(!anchor)return false;
+  const list=clean(proposal).split(/\s+/).map(token=>stemKey(tokenKey(token))).filter(Boolean);
+  for(let i=0;i<list.length-1;i++){
+    if(list[i]!==anchor)continue;
+    let next=i+1;
+    while(next<list.length&&STOPWORDS.has(list[next]))next++;
+    if(next<list.length&&list[next]!==first&&!(list[next].startsWith(first)||first.startsWith(list[next])))return true;
+  }
+  return false;
+}
 function mergeCurrentInfo(row,base){
   const current=clean(row.current),proposal=clean(base);
   if(!current||!proposal||normal(current)===normal(proposal))return null;
@@ -116,6 +137,7 @@ function mergeCurrentInfo(row,base){
     if(!meaningful.length)continue;
     const span=tokens.slice(meaningful[0].index,meaningful[meaningful.length-1].index+1).join(' ').replace(/^[\s,;:()\[\]-]+|[\s,;:()\[\]-]+$/g,'');
     if(!span)continue;
+    if(contradictsProposal(tokens,meaningful[0].index,proposal)){skipped.push(span);continue;}
     if(span.split(/\s+/).some(token=>{const bare=token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,'').toUpperCase();return TECH_ID.test(bare)&&!/^NT-/.test(bare)&&bare!==clean(tag).toUpperCase();})){skipped.push(span);continue;}
     if(!extras.some(item=>normal(item)===normal(span)))extras.push(span);
   }
@@ -160,7 +182,7 @@ function shape(source,refs){
   if(gathered?.extras.length)tagged.reason=(tagged.reason?tagged.reason+'; ':'')+'informação adicional do título atual da LD mantida: '+gathered.extras.join(' · ');
   if(gathered?.skipped.length)tagged.reason=(tagged.reason?tagged.reason+'; ':'')+'trecho com identificador diferente da TAG do código não foi incorporado: '+gathered.skipped.join(' · ');
   return {id:String(row.id),document:row.document,sheet:row.sheet,row:row.row,discipline:row.discipline||'',
-    current:clean(row.current),proposed:suggested,originalProposed:clean(row.proposed),issue:tagged.issue,
+    current:clean(row.current),proposed:suggested,originalProposed:suggested,issue:tagged.issue,
     reason:tagged.reason||'',confidence:unsafe?'baixa':row.confidence||'nenhuma',
     classification:unsafe?'manual_review':tagged.classification||'suggestion',tag:row.tag||'',endTag:clean(row.titleTag),
     descriptionSource:row.descriptionSource||'',facts,hasConflict:unsafe,

@@ -101,6 +101,15 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  const foreign=(await request(41,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO DA VALVULA XV-9999 LINHA 4']]),name:'LD_FOREIGN.xlsx',codes:[],sourceMode:'auto'})).rows[0];
  assert.doesNotMatch(foreign.proposed,/XV-9999/,'identificador diferente da TAG do código não cruza para o título');
  assert.match(foreign.proposed,/ - VM-320003$/);
+ // Contradição com as bases não é informação adicional (válvula confirmada como MANUAL na lista).
+ const contradicted=(await request(43,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO - VALVULA AUTOMATICA - VM-320003']]),name:'LD_CONTRA.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.doesNotMatch(contradicted.proposed,/AUTOMATICA/,'descrição contraditória às bases não é reincorporada');
+ assert.match(contradicted.proposed,/VALVULA MANUAL - VM-320003$/);
+ assert.match(contradicted.reason,/AUTOMATICA/,'o trecho não incorporado é dito na justificativa');
+ const location=(await request(44,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO DA VALVULA DA CASA DE BOMBAS']]),name:'LD_ONDE.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.match(location.proposed,/CASA DE BOMBAS - VM-320003$/,'complemento de local (com preposição) continua sendo informação adicional');
+ // O botão "Restaurar recomendação técnica" volta para a recomendação FINAL (com a TAG no final e as informações recolhidas).
+ assert.equal(gathered.originalProposed,gathered.proposed);
  // "nt-" não é TAG: nada de TAG no final nem de identificador NT- tratado como TAG.
  const nt=(await request(42,'analyze',{bytes:ldWith([['C1O_RNEST_U32_6.21.1.1_CVL_MTAND_nt-EMT-AND-FEV-26','RELATORIO DE MONTAGEM DE ANDAIMES APLICADOS FEV 2026']]),name:'LD_NT.xlsx',codes:[],sourceMode:'auto'})).rows[0];
  assert.equal(nt.endTag,'','documento nt- não tem TAG no final');
