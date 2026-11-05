@@ -208,6 +208,8 @@
     try {
       const ui = await evolutionRuntime;
       const section = document.getElementById("spw-evolution-section");
+      // A Evolução fica dentro de "Auditoria avançada": abrir as seções recolhidas, senão o botão não mostra nada.
+      for (let details = section && section.closest("details"); details; details = details.parentElement && details.parentElement.closest("details")) details.open = true;
       section?.scrollIntoView({ behavior: "smooth", block: "start" });
       return ui;
     } catch (error) {

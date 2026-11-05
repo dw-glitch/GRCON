@@ -52,8 +52,8 @@ assert.match(domain, /interface EvolutionUiState/);
 assert.match(domain, /interface EvolutionComparison/);
 assert.ok(domain.includes('export type EvolutionRevisionScope = "revision0" | "all";'));
 assert.ok(domain.includes("revisionScope: EvolutionRevisionScope;"));
-assert.match(domain, /Cadastrados no SIGEM/);
-assert.match(domain, /Encontrados no ProjectWise/);
+assert.match(domain, /Novos na Consulta Geral do SIGEM/);
+assert.match(domain, /Novos cadastros no PW/);
 
 assert.match(adapter, /Core\(\)\.buildLdUniverse/);
 assert.match(adapter, /Core\(\)\.buildSnapshot/);
@@ -76,7 +76,7 @@ assert.ok(adapter.includes('fieldValue("spw-evo-filter-query", filters.query)'),
 assert.ok(adapter.includes('fieldValue("spw-evo-filter-tag", filters.tag)'));
 assert.ok(adapter.includes('fieldValue("spw-evo-filter-eap", filters.eap)'));
 
-for (const label of ["Entraram no SIGEM", "Entraram no PW", "Emitidas no PW", "SIGEM novo sem PW", "Gerenciar histórico"]) {
+for (const label of ["Entraram no SIGEM", "Entraram no PW", "Emitidas no PW", "Novos no SIGEM sem cadastro no PW", "Gerenciar histórico"]) {
   assert.ok(app.includes(label), "texto funcional ausente: " + label);
 }
 for (const id of ["spw-evo-date-start", "spw-evo-date-end", "spw-evo-filter-query", "spw-evo-filter-document-type", "spw-evo-filter-source", "spw-evo-table"]) {

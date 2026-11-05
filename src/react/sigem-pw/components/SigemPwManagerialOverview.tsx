@@ -1,17 +1,38 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SigemPwState } from "../types/domain";
 import { SigemPwKpiCharts } from "./SigemPwKpiCharts";
 import { filterPwOperations, PW_ACTIONS, PW_INDICATORS, reconcilePwOperations, type PwFilters, type PwIndicator } from "../services/sigemPwOperations";
 
 const PAGE_SIZE = 25;
 const fmt = (value: number) => value.toLocaleString("pt-BR");
+const REVISION_SCOPE_EVENT = "grcon:sigem-pw-revision-scope-changed";
+const globalRevisionScope = (): "all" | "revision0" =>
+  typeof document !== "undefined" && document.documentElement.dataset.sigemPwRevisionScope === "revision0" ? "revision0" : "all";
+/** Revisão 0 / Todas as revisões é uma escolha única do módulo: a Evolução e os demais painéis escutam este evento. */
+function broadcastRevisionScope(scope: "all" | "revision0") {
+  if (typeof document === "undefined" || globalRevisionScope() === scope) return;
+  document.documentElement.dataset.sigemPwRevisionScope = scope;
+  window.dispatchEvent(new CustomEvent(REVISION_SCOPE_EVENT, { detail: { scope } }));
+}
 export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwState; onExport(filters: PwFilters): void }) {
-  const [filters, setFilters] = useState<PwFilters>({ revisionScope: "all", indicator: "all" });
+  const [filters, setFilters] = useState<PwFilters>(() => ({ revisionScope: globalRevisionScope(), indicator: "all" }));
   const [page, setPage] = useState(1);
   const [selectedKey, setSelectedKey] = useState("");
   const base = useMemo(() => reconcilePwOperations(state), [state.ld, state.pw, state.sigem, state.model, state.analysisError]);
   const report = useMemo(() => filterPwOperations(base, filters), [base, filters]);
-  const change = (value: Partial<PwFilters>) => { setFilters(current => ({ ...current, ...value })); setPage(1); };
+  useEffect(() => {
+    const onScope = (event: Event) => {
+      const scope = (event as CustomEvent<{ scope?: string }>).detail?.scope === "revision0" ? "revision0" : "all";
+      setFilters(current => current.revisionScope === scope ? current : { ...current, revisionScope: scope });
+      setPage(1);
+    };
+    window.addEventListener(REVISION_SCOPE_EVENT, onScope);
+    return () => window.removeEventListener(REVISION_SCOPE_EVENT, onScope);
+  }, []);
+  const change = (value: Partial<PwFilters>) => {
+    setFilters(current => ({ ...current, ...value })); setPage(1);
+    if (value.revisionScope) broadcastRevisionScope(value.revisionScope);
+  };
   const pages = Math.max(1, Math.ceil(report.rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const visible = report.rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -49,7 +70,7 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
       <label><span>Situação SIGEM</span><select value={filters.sigem || ""} onChange={event => change({ sigem: event.target.value })}><option value="">Todas</option><option>Consta no SIGEM</option><option>Não consta na Consulta Geral</option></select></label>
       <label><span>Revisões</span><select value={filters.revisionScope || "all"} onChange={event => change({ revisionScope: event.target.value as "all" | "revision0" })}><option value="all">Todas as revisões</option><option value="revision0">Somente revisão 0</option></select></label>
       <label><span>Mostrar apenas</span><select value={filters.indicator || "all"} onChange={event => change({ indicator: event.target.value as PwIndicator })}><option value="all">Todos</option>{PW_INDICATORS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-      <button type="button" className="secondary-button" onClick={() => { setFilters({ revisionScope: "all", indicator: "all" }); setPage(1); }}>Limpar filtros</button>
+      <button type="button" className="secondary-button" onClick={() => { setFilters({ revisionScope: "all", indicator: "all" }); setPage(1); broadcastRevisionScope("all"); }}>Limpar filtros</button>
     </div>
     <div className="spw-managerial-list-heading"><div><h3>Relação de trabalho do PW</h3><p>Uma linha por revisão de documento. “Não constam no SIGEM” significa que a revisão não aparece na Consulta Geral; isso não comprova que falta postar.</p></div>
       <button type="button" className="primary-button" disabled={state.busy || !base.ready || !report.rows.length} onClick={() => onExport(filters)}>Exportar este escopo</button>

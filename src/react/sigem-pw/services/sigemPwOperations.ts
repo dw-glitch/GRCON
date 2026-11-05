@@ -97,11 +97,20 @@ export function filterPwOperations(report: PwOperationsReport, filters: PwFilter
   return { ...report, rows, totals: total, byClass: [...classes.values()].sort((a, b) => a.documentClass.localeCompare(b.documentClass, "pt-BR")) };
 }
 
+/** Entradas que o motor lê; a Evolução monta o mesmo formato a partir de duas bases salvas. */
+export type PwOperationsInput = Pick<SigemPwState, "ld" | "sigem" | "pw" | "model" | "analysisError">;
 /** Cached by the immutable base/model identities; searching never rebuilds the base indexes. */
 let cached: { ld: SigemPwState["ld"]; pw: SigemPwState["pw"]; sigem: SigemPwState["sigem"]; model: SigemPwState["model"]; error: string; report: PwOperationsReport } | undefined;
 export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
   const error = text(state.analysisError);
   if (cached && cached.ld === state.ld && cached.pw === state.pw && cached.sigem === state.sigem && cached.model === state.model && cached.error === error) return cached.report;
+  const result = computePwOperations(state);
+  cached = { ld: state.ld, pw: state.pw, sigem: state.sigem, model: state.model, error, report: result };
+  return result;
+}
+/** Mesma regra do painel gerencial, sem cache: a Evolução a aplica à base anterior e à atual. */
+export function computePwOperations(state: PwOperationsInput): PwOperationsReport {
+  const error = text(state.analysisError);
   const reason = error || (!state.ld.meta || !state.ld.records.length ? "Carregue as referências documentais ativas."
     : !state.sigem.meta ? "Carregue a Consulta Geral."
     : !state.pw.meta || state.pw.meta.companyColumn !== "C" || state.pw.meta.scopeCompanyColumnMissing === true ? "Reimporte o PW com as empresas identificadas na coluna C."
@@ -208,7 +217,5 @@ export function reconcilePwOperations(state: SigemPwState): PwOperationsReport {
     }
   }
   report.rows.sort((a, b) => a.code.localeCompare(b.code, "pt-BR") || a.revision.localeCompare(b.revision, "pt-BR", { numeric: true }));
-  const result = filterPwOperations(report);
-  cached = { ld: state.ld, pw: state.pw, sigem: state.sigem, model: state.model, error, report: result };
-  return result;
+  return filterPwOperations(report);
 }
