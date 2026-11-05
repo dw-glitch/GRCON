@@ -166,7 +166,6 @@ const ASSETS = [
   "document_vault_core.js",
   "document_vault_app.js",
   "document_explanations.js",
-  "document_master_app.js",
   "history_report.js",
   "history_report_worker.js",
   "pending_allocation_history_core.js",
