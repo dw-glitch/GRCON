@@ -11,7 +11,8 @@
   // Preferência do menu lateral: "fixado" = barra sempre visível como antes; senão, menu de hambúrguer.
   // Lida aqui (script síncrono do head) para a tela já nascer no formato escolhido, sem piscar.
   try {
-    if (localStorage.getItem("grcon.sidebar.pinned") === "true") document.documentElement.dataset.sidebarDrawer = "off";
+    // Em janelas estreitas (mesmo ponto de grcon-responsive.css) a barra não cabe: segue o hambúrguer.
+    if (localStorage.getItem("grcon.sidebar.pinned") === "true" && !(window.matchMedia && window.matchMedia("(max-width: 58rem)").matches)) document.documentElement.dataset.sidebarDrawer = "off";
   } catch (_) { /* sem armazenamento: fica no menu de hambúrguer */ }
 
   // A persistência durável só é carregada após os scripts defer de Histórico

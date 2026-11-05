@@ -31,10 +31,12 @@ assert.match(ui, /installSidebarDrawer\(\);\s*installRenamerUx\(\)/, "instalado 
 // Fixar menu: volta ao formato de antes (barra sempre visível); a escolha é lembrada e aplicada antes da tela aparecer.
 assert.match(html, /<button aria-label="Fixar a barra lateral" aria-pressed="false" class="ops-sidebar-pin" id="grcon-sidebar-pin"[^>]*type="button">/);
 const head = read("grcon_bootstrap_head.js");
-assert.match(head, /localStorage\.getItem\("grcon\.sidebar\.pinned"\) === "true"\) document\.documentElement\.dataset\.sidebarDrawer = "off"/, "preferência lida no head (sem piscar)");
-assert.match(ui, /const applyPinned = \(pinned, persist\)/);
+assert.match(head, /localStorage\.getItem\("grcon\.sidebar\.pinned"\) === "true" && !\(window\.matchMedia && window\.matchMedia\("\(max-width: 58rem\)"\)\.matches\)\) document\.documentElement\.dataset\.sidebarDrawer = "off"/, "preferência lida no head (sem piscar), só em janela larga");
+assert.match(ui, /const applyMode = \(\) =>/);
+assert.match(ui, /const pinned = wantsPinned && !\(narrow && narrow\.matches\)/, "janela estreita: fixada vira hambúrguer (a barra fica escondida pelo CSS responsivo)");
 assert.match(ui, /root\.dataset\.sidebarDrawer = pinned \? "off" : "on"/);
-assert.match(ui, /setItem\("grcon\.sidebar\.pinned", String\(pinned\)\)/);
+assert.match(ui, /setItem\("grcon\.sidebar\.pinned", String\(value\)\)/);
+assert.match(ui, /matchMedia\("\(max-width: 58rem\)"\)/);
 assert.match(ui, /toggle\.addEventListener\("click", \(\) => \{ if \(!isPinned\(\)\) set\(!isOpen\(\), true\); \}\)/, "hambúrguer não age quando fixada");
 assert.match(ui, /!isPinned\(\) && event\.target\?\.closest\?\.\("button, a"\) && !event\.target\.closest\("#grcon-sidebar-pin"\)/, "fixada: escolher módulo não fecha nem torna inerte");
 assert.match(ui, /event\.key === "Escape" && !isPinned\(\)/);

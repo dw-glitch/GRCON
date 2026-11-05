@@ -519,8 +519,17 @@
         const isOpen = () => root.dataset.sidebarOpen === "true";
         const isPinned = () => root.dataset.sidebarDrawer === "off";
         // Fixar: a barra volta a ficar sempre visível, como antes. Soltar: volta ao menu de hambúrguer. A escolha fica neste navegador.
+        // Em janelas estreitas (mesmo ponto em que grcon-responsive.css esconde a barra) a barra fixada não cabe: vale o hambúrguer,
+        // sem perder a preferência; ao alargar a janela a barra volta a ficar fixa.
         const pin = $("#grcon-sidebar-pin");
-        const applyPinned = (pinned, persist) => {
+        const narrow = window.matchMedia ? window.matchMedia("(max-width: 58rem)") : null;
+        let wantsPinned = false;
+        try {
+            wantsPinned = window.localStorage.getItem("grcon.sidebar.pinned") === "true";
+        }
+        catch (_) { /* sem armazenamento */ }
+        const applyMode = () => {
+            const pinned = wantsPinned && !(narrow && narrow.matches);
             root.dataset.sidebarDrawer = pinned ? "off" : "on";
             if (pinned) {
                 root.dataset.sidebarOpen = "false";
@@ -530,20 +539,28 @@
             else
                 set(false, false);
             if (pin) {
-                pin.setAttribute("aria-pressed", String(pinned));
-                pin.title = pinned ? "Soltar a barra lateral e usar o menu de hambúrguer" : "Fixar a barra lateral, como era antes";
-                pin.setAttribute("aria-label", pinned ? "Soltar a barra lateral" : "Fixar a barra lateral");
-            }
-            if (persist) {
-                try {
-                    window.localStorage.setItem("grcon.sidebar.pinned", String(pinned));
-                }
-                catch (_) { /* preferência só deste navegador */ }
+                pin.setAttribute("aria-pressed", String(wantsPinned));
+                pin.title = wantsPinned ? "Soltar a barra lateral e usar o menu de hambúrguer" : "Fixar a barra lateral, como era antes";
+                pin.setAttribute("aria-label", wantsPinned ? "Soltar a barra lateral" : "Fixar a barra lateral");
             }
         };
+        const setPinned = (value) => {
+            wantsPinned = value;
+            applyMode();
+            try {
+                window.localStorage.setItem("grcon.sidebar.pinned", String(value));
+            }
+            catch (_) { /* preferência só deste navegador */ }
+        };
+        if (narrow) {
+            if (narrow.addEventListener)
+                narrow.addEventListener("change", applyMode);
+            else if (narrow.addListener)
+                narrow.addListener(applyMode);
+        }
         toggle.addEventListener("click", () => { if (!isPinned()) set(!isOpen(), true); });
         scrim.addEventListener("click", () => set(false, true));
-        pin?.addEventListener("click", () => applyPinned(!isPinned(), true));
+        pin?.addEventListener("click", () => setPinned(!wantsPinned));
         // Escolher um módulo (ou abrir as configurações) fecha o menu depois que a navegação aconteceu.
         sidebar.addEventListener("click", (event) => {
             if (!isPinned() && event.target?.closest?.("button, a") && !event.target.closest("#grcon-sidebar-pin"))
@@ -557,7 +574,7 @@
         });
         window.addEventListener("resize", () => { if (isOpen()) place(); });
         window.addEventListener("scroll", () => { if (isOpen()) place(); }, { passive: true });
-        applyPinned(isPinned(), false);
+        applyMode();
     }
 
     function syncGrconSidebar() {
