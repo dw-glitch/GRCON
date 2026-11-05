@@ -38,7 +38,7 @@ function functionBody(source, name, nextName) {
   const ld = functionBody(dashboardApp, "persistReferenceBase", "importLd");
   const ldImport = functionBody(dashboardApp, "importLd", "toggleLdSource");
   assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core().saveSigemBase"));
-  assert.ok(pw.indexOf("registerHistoryBeforeActivation") < pw.indexOf("Core().savePwBase"));
+  assert.ok(pw.indexOf("registerHistoryBeforeActivation") < pw.indexOf('Core().saveBase("pw", candidate)'));
   assert.ok(ld.indexOf("registerHistoryBeforeActivation") >= 0
     && ld.indexOf("registerHistoryBeforeActivation") < ld.indexOf("Core().saveLdAndReprocessPw"),
     "toda LD deve ter histórico confirmado antes da substituição de sua base ativa");
