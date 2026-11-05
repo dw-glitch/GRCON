@@ -2027,3 +2027,42 @@ html[data-app="GRCON"] .history-subnav-tab:hover { background: #eef3f8; }
 html[data-app="GRCON"] .history-subnav-tab[aria-selected="true"] { background: #155c8a; color: #fff; font-weight: 600; }
 html[data-app="GRCON"] .history-subnav-tab:focus-visible { outline: 2px solid #316b9c; outline-offset: 2px; }
 html[data-app="GRCON"] .history-subnav-tab b { min-width: 1.25rem; padding: 0 .35rem; border-radius: 999px; background: #c74b43; color: #fff; font-size: .7rem; line-height: 1.25rem; text-align: center; }
+
+/* Menu lateral recolhível: gaveta aberta pelo botão de hambúrguer (data-sidebar-drawer), sem ocupar largura fixa. */
+html[data-app="GRCON"] .grcon-menu-toggle {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; min-width: 44px; padding: 0; margin-right: .6rem;
+  border: 1px solid var(--border, #c5d2de); border-radius: 10px; background: var(--surface, #fff); color: #243b53; cursor: pointer;
+}
+html[data-app="GRCON"] .grcon-menu-toggle:hover { background: #eef3f8; }
+html[data-app="GRCON"] .grcon-menu-toggle:focus-visible { outline: 2px solid #316b9c; outline-offset: 2px; }
+html[data-app="GRCON"] .grcon-menu-toggle svg { flex: none; width: 24px !important; height: 24px !important; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+html[data-app="GRCON"] .grcon-menu-toggle[aria-expanded="true"] { background: #e6f0f8; border-color: #155c8a; color: #155c8a; }
+
+/* A camada grcon-drawer é declarada ANTES de todas as outras (index.html): em declarações !important a camada mais antiga vence,
+   então estas regras ganham das regras antigas da barra, que usam !important dentro de @layer (shell, utilities...). */
+@layer grcon-drawer {
+  html[data-app="GRCON"][data-sidebar-drawer="on"] .app-shell { grid-template-columns: minmax(0, 1fr) !important; }
+  html[data-app="GRCON"][data-sidebar-drawer="on"] .app-shell > .ops-sidebar {
+    position: fixed !important; top: var(--grcon-topbar-h, 86px) !important; bottom: 0 !important; left: 0 !important;
+    width: min(300px, 86vw) !important; min-width: 0 !important; height: auto !important; max-height: none !important;
+    z-index: 1200 !important; overflow-y: auto !important; display: flex !important; flex-direction: column !important;
+    transform: translateX(-104%) !important; visibility: hidden !important;
+    transition: transform .18s ease, visibility 0s linear .18s !important;
+    border-right: 1px solid #d5dfe9 !important; box-shadow: 0 18px 48px rgba(15, 45, 74, .28) !important;
+  }
+  html[data-app="GRCON"][data-sidebar-drawer="on"][data-sidebar-open="true"] .app-shell > .ops-sidebar {
+    transform: none !important; visibility: visible !important; transition: transform .18s ease !important;
+  }
+  /* Na gaveta o menu sempre mostra o nome por extenso (nas telas estreitas ele virava só ícones). */
+  html[data-app="GRCON"][data-sidebar-drawer="on"] .app-shell > .ops-sidebar .ops-sidebar-label,
+  html[data-app="GRCON"][data-sidebar-drawer="on"] .app-shell > .ops-sidebar .ops-nav-button span { display: block !important; }
+  html[data-app="GRCON"][data-sidebar-drawer="on"] .app-shell > .ops-sidebar .ops-nav-button b:not([hidden]) { display: inline-flex !important; }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-app="GRCON"][data-sidebar-drawer="on"] .app-shell > .ops-sidebar { transition: none !important; }
+  }
+}
+html[data-app="GRCON"] .grcon-menu-scrim {
+  position: fixed; left: 0; right: 0; bottom: 0; top: var(--grcon-topbar-h, 86px); z-index: 1100; background: rgba(15, 45, 74, .32);
+}
+html[data-app="GRCON"] .grcon-menu-scrim[hidden] { display: none; }
+@media print { html[data-app="GRCON"] .grcon-menu-toggle, html[data-app="GRCON"] .grcon-menu-scrim { display: none !important; } }
