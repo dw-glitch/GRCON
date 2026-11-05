@@ -475,6 +475,66 @@
         document.addEventListener("keydown", (event) => { if (event.key === "Escape" && inspector.drawer?.classList.contains("open"))
             closeInspector(); });
     }
+    // Menu lateral recolhido: o botão de hambúrguer abre a barra por cima do conteúdo, que ocupa a tela inteira.
+    // Fecha ao escolher um módulo, ao clicar fora ou com Esc. Clique (e não passar o mouse): funciona com teclado e toque
+    // e não abre sem querer quando o cursor vai para a borda da janela.
+    function installSidebarDrawer() {
+        if (APP !== "GRCON")
+            return;
+        const root = document.documentElement;
+        const sidebar = $(".ops-sidebar");
+        const header = $(".topbar");
+        const toggle = $("#grcon-menu-toggle");
+        if (!sidebar || !toggle)
+            return;
+        let scrim = $("#grcon-menu-scrim");
+        if (!scrim) {
+            scrim = document.createElement("div");
+            scrim.id = "grcon-menu-scrim";
+            scrim.className = "grcon-menu-scrim";
+            scrim.hidden = true;
+            // Dentro do mesmo contêiner da barra: assim os dois dividem a camada de empilhamento (a barra fica acima do fundo).
+            (sidebar.parentElement || document.body).insertBefore(scrim, sidebar);
+        }
+        const place = () => {
+            const top = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
+            root.style.setProperty("--grcon-topbar-h", `${top}px`);
+        };
+        const set = (open, restoreFocus) => {
+            root.dataset.sidebarOpen = open ? "true" : "false";
+            toggle.setAttribute("aria-expanded", String(open));
+            toggle.setAttribute("aria-label", open ? "Fechar menu de módulos" : "Abrir menu de módulos");
+            scrim.hidden = !open;
+            if (open)
+                sidebar.removeAttribute("inert");
+            else
+                sidebar.setAttribute("inert", "");
+            if (open) {
+                place();
+                ($(".ops-nav-button.active", sidebar) || $("button, a", sidebar))?.focus();
+            }
+            else if (restoreFocus)
+                toggle.focus();
+        };
+        const isOpen = () => root.dataset.sidebarOpen === "true";
+        toggle.addEventListener("click", () => set(!isOpen(), true));
+        scrim.addEventListener("click", () => set(false, true));
+        // Escolher um módulo (ou abrir as configurações) fecha o menu depois que a navegação aconteceu.
+        sidebar.addEventListener("click", (event) => {
+            if (event.target?.closest?.("button, a"))
+                window.setTimeout(() => set(false, false), 0);
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && isOpen() && !document.querySelector("dialog[open]")) {
+                event.preventDefault();
+                set(false, true);
+            }
+        });
+        window.addEventListener("resize", () => { if (isOpen()) place(); });
+        window.addEventListener("scroll", () => { if (isOpen()) place(); }, { passive: true });
+        set(false, false);
+    }
+
     function syncGrconSidebar() {
         if (APP !== "GRCON")
             return;
@@ -604,6 +664,7 @@
             installInspector();
             installTableInspector();
             syncGrconSidebar();
+            installSidebarDrawer();
             installRenamerUx();
             enrichNavigationNames();
             // Módulos carregados depois (Dashboard, SIGEM × PW, Conferência) inserem
