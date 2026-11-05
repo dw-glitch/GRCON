@@ -10,7 +10,7 @@
   "dependencies": {
     "@neondatabase/serverless": "1.2.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",
