@@ -26,7 +26,12 @@ assert.match(table, /role="img" aria-label=\{labels\.join\("; "\)\}/);
 
 // Tabela: uma linha por eGRDT, documentos na própria linha, filtros pelos cartões, sem rolagem presa (região rolável com foco).
 for (const header of ["eGRDT", "Saída", "Documentos", "Arquivos", "Alocação", "Andamento", "Gerado por"]) assert.ok(table.includes(`>${header}</th>`), `coluna ${header}`);
-for (const header of ["Documento", "Rev. na GRDT", "Formato", "Classificação", "Status SIGEM", "Alocação"]) assert.ok(table.includes(`>${header}</th>`), `coluna de documentos ${header}`);
+for (const header of ["Documento", "Rev. na GRDT", "Formato", "Classificação", "Alocação"]) assert.ok(table.includes(`>${header}</th>`), `coluna de documentos ${header}`);
+assert.ok(table.includes(">Situação na geração</th>"), "o valor salvo na emissão não é apresentado como status SIGEM atual");
+assert.doesNotMatch(table, />Status SIGEM<\/th>/);
+// "Avisada" exige entrega: tarefa só registrada ou recibo do fluxo não avança o andamento.
+assert.match(adapter, /saved && !saved\.queued && !saved\.receiptOnly/);
+assert.match(adapter, /Boolean\(trace\?\.delivered_at\)/);
 assert.match(table, /data-egrdt-tile=\{key\}/);
 assert.match(table, /aria-expanded=\{open\}/);
 assert.match(table, /role="region" tabIndex=\{0\}/);

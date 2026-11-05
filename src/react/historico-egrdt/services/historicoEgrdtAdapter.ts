@@ -367,7 +367,10 @@ function deliveryStage(record: EgrdtHistoryRecord): DeliveryStage {
   const confirmation = String(trace?.confirmation_type || "");
   if (trace?.confirmed_at && confirmation === "total") return 3;
   if (trace?.confirmed_at && confirmation === "partial") return 2;
-  return teamsPresentation(record)?.sent ? 1 : 0;
+  // "Avisada" exige entrega: uma tarefa só registrada ("queued") ou recebida pelo fluxo ("receiptOnly") ainda pode falhar.
+  const saved = window.GrconEgrdtTeamsNotification?.status?.(record) as { queued?: boolean; receiptOnly?: boolean } | null | undefined;
+  const delivered = Boolean(trace?.delivered_at) || Boolean(saved && !saved.queued && !saved.receiptOnly);
+  return delivered ? 1 : 0;
 }
 
 function syncSequence(number: string): void {

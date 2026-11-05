@@ -56,6 +56,8 @@ assert.equal(tabA.totals.registered, tabA.totals.issue + tabA.totals.issued, "Ca
 // Tela: abas com contagem, filtro por clique, escopo e limpar filtros voltam para "Todas".
 const overview = fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/components/SigemPwManagerialOverview.tsx"), "utf8");
 assert.match(overview, /className="spw-revision-tabs" role="group" aria-label="Revisão de documento"/);
+assert.match(overview, /revisionTabs\.items\.length > 1 \|\| filters\.revision/, "com aba ativa o grupo não some");
+assert.match(overview, /if \(filters\.revision && !counts\.has\(filters\.revision\)\) counts\.set\(filters\.revision, 0\)/, "aba ativa continua listada mesmo com 0");
 assert.match(overview, /data-revision-tab=\{item\.key\} aria-pressed=\{filters\.revision === item\.key\}/);
 assert.match(overview, /filterPwOperations\(base, \{ \.\.\.filters, revision: "" \}\)/, "contagem respeita os demais filtros");
 assert.match(overview, /value\.revisionScope !== undefined && value\.revision === undefined/, "trocar o escopo limpa a aba");
