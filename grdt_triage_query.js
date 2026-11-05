@@ -83,6 +83,65 @@
         : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
     };
   }
+  /**
+   * Por que a linha está nesta situação (Bloqueado, Excluído, Não incluir, Conferir…).
+   * Função pura: lê só o que a triagem já calculou e devolve { code, short, detail } ou null quando
+   * a linha entra normalmente. A ordem é a mesma de decisionGroupKey/selectionPolicy: a primeira
+   * causa que se aplica é a que manda.
+   * contexto: { included, manual, compositionErrors }
+   */
+  function situationReason(row, context) {
+    if (!row) return null;
+    const ctx = context || {};
+    const policy = selectionPolicy(row);
+    const status = policy.status || "não informado";
+    const text = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    let found = null;
+    if (row.revisionSequenceBlock) {
+      found = { code: "sequence", short: `Aguarda a revisão ${row.revisionSequenceBlock.revision}`,
+        detail: text(row.revisionSequenceBlock.message) || `A revisão ${row.revisionSequenceBlock.revision} ainda não foi concluída no SIGEM; esta só entra depois, em sequência.` };
+    } else if (policy.allocation === "not_allocated") {
+      found = { code: "not_allocated", short: "Não alocado na LD",
+        detail: "A LD / base de alocação marca este documento como Não Alocado: não entra automaticamente na GRDT." };
+    } else if (policy.allocation === "conflict") {
+      found = { code: "allocation_conflict", short: "Conflito de alocação",
+        detail: "A LD tem duas respostas de alocação para este documento. Confira e decida antes de incluir." };
+    } else if (policy.unresolved) {
+      const notFound = row.documentLookup && row.documentLookup.matched === false;
+      found = { code: "status_unresolved", short: row.hardBlock && text(row.status) ? text(row.status) : policy.label,
+        detail: row.hardBlock && text(row.reason) ? text(row.reason)
+          : row.blockCode === "document_identity_mismatch" ? "O arquivo não corresponde ao código do documento."
+          : notFound ? "O documento não foi localizado na Consulta Geral do SIGEM / LD, então não há status para decidir."
+          : `O status SIGEM “${status}” não foi reconhecido pelo GRCON.` };
+    } else if (policy.previousAnalysis) {
+      found = { code: "previous_in_analysis", short: `Revisão ${row.blockingRevision} em análise`,
+        detail: `A revisão ${row.blockingRevision} ainda está em análise no SIGEM; a revisão ${row.revision || "atual"} só deve ser enviada depois da conclusão.` };
+    } else if (policy.kind === "analysis") {
+      found = { code: "in_analysis", short: "Em análise no SIGEM",
+        detail: "O documento está em análise no SIGEM; novo envio só em exceção operacional confirmada." };
+    } else if (row.hardBlock) {
+      found = { code: "triage_block", short: text(row.status) || "Alerta da triagem",
+        detail: text(row.reason) || "A triagem encontrou um impedimento para incluir este documento." };
+    } else if (row.decision === Core.DISCARD) {
+      found = { code: "triage_discard", short: "Não será enviado novamente",
+        detail: text(row.reason) || "A triagem indicou que não há o que enviar nesta revisão." };
+    } else if (policy.manualOnly) {
+      found = { code: "manual_only", short: `Status SIGEM: ${status}`,
+        detail: `O status SIGEM “${status}” não permite inclusão automática. Marque o documento apenas para exceção operacional.` };
+    } else if (ctx.compositionErrors && ctx.compositionErrors.length) {
+      found = { code: "composition", short: "Arquivos fora da regra",
+        detail: text(ctx.compositionErrors.join(" ")) };
+    } else if (!ctx.included) {
+      found = { code: "not_selected", short: "Não marcado para a GRDT",
+        detail: "Nada impede a inclusão: o documento está desmarcado. Marque a caixa para incluí-lo." };
+    }
+    if (!found) return null;
+    // Entrada manual: o impedimento continua valendo e precisa aparecer.
+    if (ctx.included && ctx.manual) found = { ...found, short: `${found.short} · incluído manualmente` };
+    // Sem impedimento e já incluído: não há o que explicar.
+    if (ctx.included && !ctx.manual && found.code === "manual_only") return null;
+    return found;
+  }
   function manualStatusApprovalValid(row) {
     const policy = selectionPolicy(row);
     if (!policy.manualOnly) return true;
@@ -101,5 +160,5 @@
     return !policy.manualOnly || Boolean(manualIndices && manualIndices.has(index) && manualStatusApprovalValid(row));
   }
   return Object.freeze({ origin, extensions, historyKind, matches, searchText,
-    allocationAlert, unresolvedStatus, selectionPolicy, manualStatusApprovalValid, selectionAuthorized });
+    allocationAlert, unresolvedStatus, selectionPolicy, situationReason, manualStatusApprovalValid, selectionAuthorized });
 });

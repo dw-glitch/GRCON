@@ -55,6 +55,8 @@
     { header: "ARQUIVO ORIGINAL", key: "originalFile", width: 38 },
     { header: "ARQUIVO FINAL", key: "finalFile", width: 38 },
     { header: "AJUSTE DE CÓDIGO (nt-)", key: "ntAdjustment", width: 88 },
+    { header: "SITUAÇÃO NA TELA", key: "screenSituation", width: 22 },
+    { header: "POR QUE ESTÁ NESTA SITUAÇÃO", key: "screenReason", width: 70 },
   ]);
 
   // Colunas de decisão que aparecem primeiro na aba Resumo. A partir da 5.32.6
@@ -79,6 +81,8 @@
     { header: "SITUAÇÃO", key: "decision", width: 24 },
     { header: "DOCUMENTO INFORMADO", key: "requestedDocument", width: 44 },
     { header: "ENTRA NA EGRDT?", key: "included", width: 20 },
+    // Bloqueado/Excluído/Não incluir: o motivo fica ao lado da decisão, igual ao que a tela mostra.
+    { header: "POR QUE ESTÁ NESTA SITUAÇÃO", key: "screenReason", width: 70 },
     { header: "O QUE FAZER", key: "executiveAction", width: 76 },
     { header: "ALOCADO?", key: "allocated", width: 22 },
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
@@ -415,6 +419,8 @@
       const disciplineEvidence = disciplineResolution.evidence || {};
       return {
         decision: decisionLabel(row),
+        screenSituation: text(row && row.situationLabel),
+        screenReason: row && row.situationWhy ? `${text(row.situationWhy.short)} — ${text(row.situationWhy.detail)}` : "Sem impedimento: entra na GRDT.",
         requestedDocument: text(row && row.documentLookup && row.documentLookup.inputDocument || row && row.name),
         document: exactDocument,
         ldCode: apendiceValue(row).ldCode,
