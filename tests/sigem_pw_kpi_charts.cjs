@@ -20,7 +20,7 @@ for (const key of ["issued", "issue", "registerSigem", "registerAbsent"]) assert
 assert.match(charts, /<SegmentedBar title="Trabalho da equipe PW" segments=\{pwSegments\} total=\{pairs\}/, "o total da barra é o número de pares do escopo");
 assert.match(charts, /<Meter label="Constam nas LDs ativas" value=\{inLd\} total=\{consulted\}/);
 assert.match(charts, /revisionScope === "revision0" \? reconciliation\.revision0 : reconciliation/, "conferência da Consulta Geral acompanha o filtro de revisão");
-assert.match(charts, /<Meter label="Cadastradas no PW" value=\{totals\.registered\} total=\{pairs\}/, "quantidade cadastrada no PW no gráfico");
+assert.match(charts, /<Meter label="Revisões 0 cadastradas no PW" value=\{totals\.registered\} total=\{totals\.registered \+ totals\.registerSigem \+ totals\.registerAbsent\}/, "cadastro é só revisão 0: o total do medidor são as revisões 0");
 assert.doesNotMatch(charts, /reconcileManagerial|breakdownManagerial|ManagerialSummary/, "o gráfico não recalcula nada: só exibe os totais recebidos");
 // Cor nunca é o único sinal: ícone, número e porcentagem por parte, mais tabela alternativa.
 assert.match(charts, /ToneIcon/);
@@ -49,6 +49,6 @@ for (const label of ["Constam no SIGEM", "A cadastrar no PW — já constam no S
   const offenders = walk("src/react/sigem-pw").filter((file) => /doc\+rev|doc\. \+ revis|[Dd]ocumento \+ [Rr]evis/.test(read(file)));
   assert.deepEqual(offenders, [], "nenhuma tela do SIGEM × PW volta a usar 'documento + revisão' ou 'doc+rev'");
   const evolution = read("src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx");
-  for (const label of ["Emitidas no PW", "Cadastradas no PW atual", "Não emitidas no PW atual", "Revisões de documentos novas"]) assert.ok(evolution.includes(label), `Evolução: ${label}`);
+  for (const label of ["Emitidas no PW", "Registros no PW atual", "Não emitidas no PW atual", "Revisões de documentos novas"]) assert.ok(evolution.includes(label), `Evolução: ${label}`);
 }
 console.log("sigem_pw_kpi_charts: OK");

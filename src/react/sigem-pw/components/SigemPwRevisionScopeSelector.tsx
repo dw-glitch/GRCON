@@ -1,7 +1,7 @@
 import type { SigemPwRevisionScope } from "../types/domain";
 
 const OPTIONS: ReadonlyArray<{ value: SigemPwRevisionScope; label: string; short: string }> = [
-  { value: "revision0", label: "Revisão 0", short: "Cadastro inicial" },
+  { value: "revision0", label: "Revisão 0", short: "Cadastro (revisão 0)" },
   { value: "all", label: "Todas as revisões", short: "Movimentação documental" },
 ];
 

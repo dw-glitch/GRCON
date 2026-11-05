@@ -341,8 +341,8 @@ function MetricAuditDrawer({
       ],
     },
     "pw-current": {
-      title: "Cadastradas no PW atual",
-      formula: "Toda revisão de documento válida presente na base PW atual conta como cadastrada, independentemente de estar emitida.",
+      title: "Registros no PW atual",
+      formula: "Toda revisão de documento válida presente na base PW atual, emitida ou não. Só a revisão 0 é cadastro; da revisão A em diante cada revisão é uma emissão (prevista ou realizada). O indicador “Cadastradas no PW” do painel acima conta só as revisões 0.",
       rows: [
         ["Linhas brutas", pwAudit.rawRecords || 0],
         ["Registros técnicos aceitos", pwAudit.acceptedRecords || 0],
@@ -642,7 +642,7 @@ export function SigemPwEvolutionApp() {
             onClick={() => adapter.setRevisionScope("revision0")}
           >
             <strong>Somente revisão 0</strong>
-            <span>Cadastro inicial</span>
+            <span>Cadastro (revisão 0)</span>
           </button>
           <button
             type="button"
@@ -718,7 +718,7 @@ export function SigemPwEvolutionApp() {
         </div>
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi pw" data-evo-list="pw-new" aria-pressed={state.listMode === "pw-new"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-new")}>
-            <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Cadastros novos na revisão 0" : "Cadastros novos"} · {fmt(comparison?.pw?.documentRevision?.added.length)} revisões de documentos</small>
+            <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Registros novos na revisão 0" : "Registros novos"} · {fmt(comparison?.pw?.documentRevision?.added.length)} revisões de documentos</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.pw} onClick={() => setAuditMetric("pw-new")}>Como foi calculado?</button>
         </div>
@@ -766,9 +766,9 @@ export function SigemPwEvolutionApp() {
         </header>
         <div className="spw-evo-current-grid">
           <article>
-            <span>Cadastradas no PW</span>
+            <span>Registros no PW</span>
             <strong>{hasValidatedLd ? fmt(selectedPw?.audit?.documentRevisionRecords) : "—"}</strong>
-            <small>{fmt(selectedPw?.audit?.uniqueDocuments)} documentos únicos</small>
+            <small>{fmt(selectedPw?.audit?.uniqueDocuments)} documentos únicos · revisão 0 = cadastro; A em diante = emissão</small>
             <div><button type="button" data-evo-current-list="pw-current" onClick={() => adapter.setListMode("pw-current")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("pw-current")}>Como calculado?</button></div>
           </article>
           <article>

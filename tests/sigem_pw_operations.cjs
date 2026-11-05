@@ -30,7 +30,9 @@ function state(refs, sigem, pwRows) {
   return { ld: { meta: { fileName: "LDs ativas" }, records: refs }, sigem: { meta: { fileName: "Consulta Geral", sourceRowCount: sigem.length }, records: sigem }, pw: base, model: { normalizedPw: base.records, normalizedSigem: sigem }, analysisError: "", busy: false };
 }
 const count = (s, expected) => assert.deepEqual(run(s).totals, expected);
-const t = (sigem=0, registerSigem=0, registerAbsent=0, issue=0, issued=0) => ({ sigem, registerSigem, registerAbsent, registered: issue + issued, issue, issued });
+// Só a revisão 0 é cadastro: "registered" = revisões 0 já cadastradas no PW (a emitir + emitidas DA REVISÃO 0).
+// Sem o 6º argumento, o teste só tem revisão 0 e portanto registered = issue + issued.
+const t = (sigem=0, registerSigem=0, registerAbsent=0, issue=0, issued=0, registered=issue + issued) => ({ sigem, registerSigem, registerAbsent, registered, issue, issued });
 // 1/2: mutually exclusive registration groups, faithfully based on the active query.
 count(state([ref(1)], [sig(1)], []), t(1,1));
 count(state([ref(1)], [], []), t(0,0,1));
@@ -46,28 +48,40 @@ const outside = run(state([ref(1)], [sig(1),sig(99)], []));
 assert.deepEqual(outside.totals,t(1,1));
 assert.deepEqual(outside.reconciliation,{ records:2,documents:2,pairs:2,inScopePairs:1,outsidePairs:1,duplicates:0,invalid:0,omitted:0,revision0:{ pairs:2,inScopePairs:1,outsidePairs:1 } });
 assert.equal(outside.outside.length,1);
-// Cadastrados no PW (= emitir + emitidos) e a conferência da Consulta Geral seguem o filtro de revisão 0.
+// Cadastradas no PW (= só revisões 0, a emitir + emitidas) e a conferência da Consulta Geral seguem o filtro de revisão 0.
 {
   const mixedRev = state([ref(1,"0"),ref(2,"A")], [sig(1,"0"),sig(1,"A"),sig(2,"A"),sig(77,"0")], [pw(1,"0","Sim"),pw(2,"A","Previsto")]);
   const all = run(mixedRev), rev0 = filter(all,{ revisionScope:"revision0" });
-  assert.equal(all.totals.registered, all.totals.issue + all.totals.issued);
+  // Sequência: LD pede A no doc 2 → o PW precisa de 0 e A; SIGEM 0/A no doc 1 → 0 e A. Revisão A nunca é "cadastrar".
+  assert.deepEqual(all.rows.map(row => [row.code.slice(-3), row.revision, row.action]), [["001","0","Concluído"],["001","A","Emitir no PW"],["002","0","Cadastrar no PW"],["002","A","Emitir no PW"]]);
+  const rev0Registered = all.rows.filter(row => row.revision === "0" && row.action !== "Cadastrar no PW").length;
+  assert.equal(all.totals.registered, rev0Registered, "Cadastradas = só revisões 0 com cadastro no PW");
   assert.equal(filter(all,{ indicator:"registered" }).rows.length, all.totals.registered);
+  assert.ok(filter(all,{ indicator:"registered" }).rows.every(row => row.revision === "0"), "revisão A nunca conta como cadastro");
   assert.equal(rev0.rows.every(row=>row.revision==="0"), true);
   assert.equal(rev0.totals.registered, rev0.totals.issue + rev0.totals.issued);
-  assert.ok(rev0.totals.registered < all.totals.registered || all.totals.registered === 0, "revisão 0 mostra só o que é da revisão 0");
+  assert.equal(rev0.totals.registered, all.totals.registered, "cadastro é só revisão 0: o número é o mesmo nos dois escopos");
   // pares da Consulta Geral: integral x revisão 0
   assert.equal(all.reconciliation.pairs, 4);
   assert.equal(all.reconciliation.revision0.pairs, 2);
   assert.equal(all.reconciliation.revision0.inScopePairs, 1);
   assert.equal(all.reconciliation.revision0.outsidePairs, 1);
 }
-// 7/12: LD B, SIGEM 0/A/B, PW 0 emitted + A planned. Three independent revisions.
+// 7/12: LD B, SIGEM 0/A/B, PW 0 emitted + A planned. Só a revisão 0 é cadastro; A e B são emissões, em sequência.
 const revisions = state([ref(1,"B")], [sig(1,"0"),sig(1,"A"),sig(1,"B")], [pw(1,"0","Sim"),pw(1,"A")]);
-count(revisions,t(3,1,0,1,1));
-assert.deepEqual(run(revisions).rows.map(row => [row.revision,row.action]), [["0","Concluído"],["A","Emitir no PW"],["B","Cadastrar no PW"]]);
+count(revisions,t(3,0,0,2,1,1));
+assert.deepEqual(run(revisions).rows.map(row => [row.revision,row.action]), [["0","Concluído"],["A","Emitir no PW"],["B","Emitir no PW"]]);
+// Sequência: SIGEM em B, PW sem nada → o PW cadastra a 0 e emite 0, A e B (a revisão A não consta no SIGEM, mas precisa ser emitida).
+const sequence = run(state([ref(1,"B")], [sig(1,"B")], []));
+assert.deepEqual(sequence.rows.map(row => [row.revision,row.action,row.inSigem]), [["0","Cadastrar no PW",false],["A","Emitir no PW",false],["B","Emitir no PW",true]]);
+assert.deepEqual(sequence.totals, t(1,0,1,2,0,0));
+// Nenhuma revisão A em diante vira "Cadastrar no PW", mesmo sem nenhuma linha no PW.
+assert.ok(run(state([ref(1,"C")], [sig(1,"C")], [pw(1,"0","Sim")])).rows.filter(row => row.revision !== "0").every(row => row.action === "Emitir no PW"));
+// Revisões sem ordem conhecida (numéricas, #1…) não são preenchidas: só existem as informadas.
+assert.deepEqual(run(state([ref(1,"#1")], [sig(1,"#1")], [pw(1,"0","Sim")])).rows.map(row => row.revision), ["#1"]);
 // PR #403: Não = historical emission. Both 0/A are issued; neither needs an X.
 const historical = state([ref(1,"A")], [sig(1,"0"),sig(1,"A")], [pw(1,"0","Não"),pw(1,"A","Sim")]);
-count(historical,t(2,0,0,0,2));
+count(historical,t(2,0,0,0,2,1));
 assert.ok(run(historical).rows.every(row=>row.action==="Concluído"));
 for (const flag of ["Não","Nao","NAO"," não "]) count(state([ref(1)],[sig(1)],[pw(1,"0",flag)]),t(1,0,0,0,1));
 const historicalChoice=state([ref(1)],[sig(1)],[pw(1),pw(1,"0","Não")]);

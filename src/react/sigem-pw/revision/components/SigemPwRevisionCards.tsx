@@ -40,7 +40,7 @@ export function SigemPwRevisionCards({ analysis, situation, onSelect }: {
       <Card value={c.updated} title="Atualizados" note="Mesma revisão aplicável e emitida no PW." css="updated" filter="updated" active={situation === "updated"} onSelect={onSelect} />
       <Card value={c.previous} title="PW em revisão anterior" note="PW ainda não alcançou a revisão SIGEM." css="previous" filter="pw-previous" active={situation === "pw-previous"} onSelect={onSelect} />
       <Card value={c.notFound} title="Não localizados no PW" note="Sem correspondência documental válida." css="missing" filter="pw-not-found" active={situation === "pw-not-found"} onSelect={onSelect} />
-      <Card value={c.awaitingEmission} title="Aguardando emissão no PW" note="Revisão correta já está cadastrada." css="pending" filter="pw-awaiting-emission" active={situation === "pw-awaiting-emission"} onSelect={onSelect} />
+      <Card value={c.awaitingEmission} title="Aguardando emissão no PW" note="Revisão correta já consta no PW (prevista); falta emitir." css="pending" filter="pw-awaiting-emission" active={situation === "pw-awaiting-emission"} onSelect={onSelect} />
       <Card value={c.pwAhead + c.review} title="Outras divergências" note="PW posterior ou caso que requer análise." css="other" filter="other" active={situation === "other"} onSelect={onSelect} />
     </section>
   );

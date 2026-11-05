@@ -82,3 +82,14 @@ A unidade deixou de ser chamada de "par documento + revisão" e passou a ser **r
 | Trabalhar (coluna X) | Falta fazer (X) |
 
 A tela tem a linha "Como ler os números" e o quadro "Entenda os números", e o Resumo do Excel traz a mesma explicação ("Como contar"). Os valores da coluna Ação (Cadastrar no PW, Emitir no PW, Concluído) continuam iguais.
+
+## Regra do PW: só a revisão 0 é cadastro (05/11/2026)
+
+Correção de regra pedida pela operação, aplicada ao motor operacional (`sigemPwOperations.ts`), ao painel, ao Excel do coordenador e à Evolução:
+
+- **Só a revisão 0 é cadastro no PW.** Da revisão A em diante cada revisão é uma **emissão**. Não existe "cadastrar" a revisão A, B…
+- **Emissão em sequência.** Se o SIGEM está na revisão B, o PW precisa emitir a 0, a A e depois a B. O motor completa a sequência `0 … maior revisão exigida` (revisões `A`–`Z`; grafias sem ordem conhecida, como `#1`, não são preenchidas).
+- **Ações:** `Cadastrar no PW` só existe para a revisão 0 sem cadastro. Revisão 0 cadastrada e não emitida, e qualquer revisão A em diante não emitida, são `Emitir no PW`. Emissão comprovada é `Concluído`.
+- **Indicadores:** `Cadastradas no PW` = revisões 0 com cadastro comprovado (CSG/QTM). Vale: Cadastradas = revisões 0 a emitir + revisões 0 emitidas. `A cadastrar` (nas duas variantes) conta só revisões 0. `A emitir` e `Emitidas` contam todas as revisões.
+- **Excel:** `PW CAD.` usa o total de revisões 0 cadastradas; a coluna Cadastro mostra "Emissão (não é cadastro)" nas revisões A em diante; o Resumo traz a "Regra do PW".
+- **Evolução:** os mesmos seis indicadores e a mesma regra; o cartão "Cadastradas no PW atual" da leitura técnica passou a "Registros no PW" (todas as revisões presentes no PW), para não chamar de cadastro o que é emissão.

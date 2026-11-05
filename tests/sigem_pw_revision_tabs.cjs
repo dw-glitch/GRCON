@@ -51,7 +51,10 @@ assert.deepEqual(filterPwOperations(base, { revisionScope: "revision0", revision
 assert.equal(filterPwOperations(base, { revisionScope: "revision0", revision: "A" }).rows.length, 0, "Revisão 0 + aba A não tem linhas");
 // Os totais da aba são os do motor, restritos às linhas da revisão.
 const tabA = filterPwOperations(base, { revision: "A" });
-assert.equal(tabA.totals.registered, tabA.totals.issue + tabA.totals.issued, "Cadastradas = a emitir + emitidas também por aba");
+assert.equal(tabA.totals.registered, 0, "revisão A nunca é cadastro");
+assert.equal(tabA.totals.registerSigem + tabA.totals.registerAbsent, 0, "da revisão A em diante não existe 'a cadastrar'");
+const tab0 = filterPwOperations(base, { revision: "0" });
+assert.equal(tab0.totals.registered, tab0.totals.issue + tab0.totals.issued, "Cadastradas = revisões 0 a emitir + emitidas, na aba 0");
 
 // Tela: abas com contagem, filtro por clique, escopo e limpar filtros voltam para "Todas".
 const overview = fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/components/SigemPwManagerialOverview.tsx"), "utf8");

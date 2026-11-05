@@ -62,14 +62,17 @@ for (const scope of ["all", "revision0"]) {
   }
   assert.equal(view.current.revisions, gerencialAtual.rows.length, `${scope}: revisões no escopo`);
   assert.equal(view.previous.revisions, gerencialAnterior.rows.length);
-  assert.equal(view.current.registered, view.current.issue + view.current.issued, "Cadastradas = a emitir + emitidas");
+  // Só a revisão 0 é cadastro: no escopo "revisão 0" vale Cadastradas = a emitir + emitidas; no escopo "todas" as revisões A em diante só entram em a emitir/emitidas.
+  if (scope === "revision0") assert.equal(view.current.registered, view.current.issue + view.current.issued, "Cadastradas = a emitir + emitidas (revisão 0)");
+  else assert.ok(view.current.registered <= view.current.issue + view.current.issued, "revisões A em diante não são cadastro");
+  assert.equal(view.current.registerSigem + view.current.registerAbsent + view.current.registered, view.current.revisions - (view.current.issue + view.current.issued - view.current.registered), "as revisões 0 se dividem entre a cadastrar e cadastradas");
 }
 
 // Valores esperados (regras do #403): previsto sem revisão cadastra o código; outra empresa não comprova cadastro.
 {
   const all = buildEvolutionOperations({ ld, scope: "all", sigemCurrent: sigemCur, pwCurrent: pwCur, sigemPrevious: sigemPrev, pwPrevious: pwPrev });
   assert.equal(all.current.issued, 2, "emitidas: 1 rev 0 e 3 rev 0");
-  assert.ok(all.current.registered >= all.current.issued);
+  assert.ok(all.current.registered <= all.current.issue + all.current.issued);
   assert.ok(all.movement.newlyIssued >= 2, "as duas emissões novas aparecem como movimento");
   assert.ok(all.movement.newInSigem >= 1);
   const rev0 = buildEvolutionOperations({ ld, scope: "revision0", sigemCurrent: sigemCur, pwCurrent: pwCur, sigemPrevious: sigemPrev, pwPrevious: pwPrev });
