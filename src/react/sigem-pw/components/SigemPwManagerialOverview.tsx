@@ -23,13 +23,22 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
   useEffect(() => {
     const onScope = (event: Event) => {
       const scope = (event as CustomEvent<{ scope?: string }>).detail?.scope === "revision0" ? "revision0" : "all";
-      setFilters(current => current.revisionScope === scope ? current : { ...current, revisionScope: scope });
+      setFilters(current => current.revisionScope === scope ? current : { ...current, revisionScope: scope, revision: "" });
       setPage(1);
     };
     window.addEventListener(REVISION_SCOPE_EVENT, onScope);
     return () => window.removeEventListener(REVISION_SCOPE_EVENT, onScope);
   }, []);
+  // Abas por revisão: contagem de cada revisão dentro dos demais filtros (sem o próprio filtro de revisão).
+  const revisionTabs = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of filterPwOperations(base, { ...filters, revision: "" }).rows) counts.set(row.revision, (counts.get(row.revision) || 0) + 1);
+    const keys = [...counts.keys()].sort((a, b) => (a === "0" ? -1 : b === "0" ? 1 : a.localeCompare(b, "pt-BR", { numeric: true })));
+    return { total: [...counts.values()].reduce((sum, value) => sum + value, 0), items: keys.map(key => ({ key, count: counts.get(key) || 0 })) };
+  }, [base, filters]);
   const change = (value: Partial<PwFilters>) => {
+    // Trocar o escopo (todas / só revisão 0) volta para "todas as abas": a revisão escolhida pode nem existir no novo escopo.
+    if (value.revisionScope !== undefined && value.revision === undefined) value = { ...value, revision: "" };
     setFilters(current => ({ ...current, ...value })); setPage(1);
     if (value.revisionScope) broadcastRevisionScope(value.revisionScope);
   };
@@ -70,8 +79,14 @@ export function SigemPwManagerialOverview({ state, onExport }: { state: SigemPwS
       <label><span>Situação SIGEM</span><select value={filters.sigem || ""} onChange={event => change({ sigem: event.target.value })}><option value="">Todas</option><option>Consta no SIGEM</option><option>Não consta na Consulta Geral</option></select></label>
       <label><span>Revisões</span><select value={filters.revisionScope || "all"} onChange={event => change({ revisionScope: event.target.value as "all" | "revision0" })}><option value="all">Todas as revisões</option><option value="revision0">Somente revisão 0</option></select></label>
       <label><span>Mostrar apenas</span><select value={filters.indicator || "all"} onChange={event => change({ indicator: event.target.value as PwIndicator })}><option value="all">Todos</option>{PW_INDICATORS.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-      <button type="button" className="secondary-button" onClick={() => { setFilters({ revisionScope: "all", indicator: "all" }); setPage(1); broadcastRevisionScope("all"); }}>Limpar filtros</button>
+      <button type="button" className="secondary-button" onClick={() => { setFilters({ revisionScope: "all", indicator: "all", revision: "" }); setPage(1); broadcastRevisionScope("all"); }}>Limpar filtros</button>
     </div>
+    {base.ready && revisionTabs.items.length > 1 ? <div className="spw-revision-tabs" role="group" aria-label="Revisão de documento">
+      <span>Revisão</span>
+      <button type="button" data-revision-tab="" aria-pressed={!filters.revision} onClick={() => change({ revision: "" })}>Todas <b>{fmt(revisionTabs.total)}</b></button>
+      {revisionTabs.items.map(item => <button type="button" key={item.key} data-revision-tab={item.key} aria-pressed={filters.revision === item.key}
+        onClick={() => change({ revision: filters.revision === item.key ? "" : item.key })}>Revisão {item.key} <b>{fmt(item.count)}</b></button>)}
+    </div> : null}
     <div className="spw-managerial-list-heading"><div><h3>Relação de trabalho do PW</h3><p>Uma linha por revisão de documento. “Não constam no SIGEM” significa que a revisão não aparece na Consulta Geral; isso não comprova que falta postar.</p></div>
       <button type="button" className="primary-button" disabled={state.busy || !base.ready || !report.rows.length} onClick={() => onExport(filters)}>Exportar este escopo</button>
     </div>

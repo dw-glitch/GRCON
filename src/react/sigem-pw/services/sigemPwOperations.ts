@@ -7,6 +7,8 @@ export type PwIndicator = "all" | "sigem" | "registerSigem" | "registerAbsent" |
 export interface PwFilters {
   query?: string; documentClass?: string; action?: string; sigem?: string;
   revisionScope?: "all" | "revision0"; indicator?: PwIndicator;
+  /** Aba por revisão (0, A, B…): "" = todas. Só recorta as linhas; não muda nenhuma regra de contagem. */
+  revision?: string;
 }
 export interface PwOperation {
   key: string; documentKey: string; code: string; title: string; revision: string;
@@ -71,6 +73,7 @@ function count(target: PwTotals, row: PwOperation) {
 }
 function matches(row: PwOperation, filters: PwFilters): boolean {
   if (filters.revisionScope === "revision0" && row.revision !== "0") return false;
+  if (filters.revision && row.revision !== filters.revision) return false;
   if (filters.documentClass && row.documentClass !== filters.documentClass) return false;
   if (filters.action && row.action !== filters.action) return false;
   if (filters.sigem && row.sigemSituation !== filters.sigem) return false;
