@@ -283,3 +283,32 @@
   #spw-evolution-section .spw-evo-ops-bar-title{grid-column:1/-1}
   #spw-evolution-section .spw-evo-ops-legend{margin-left:0}}
 @media (forced-colors:active){#spw-evolution-section .spw-evo-ops-bar>span{border:1px solid CanvasText}}
+
+/* Histórico diário: alternância Barras | Linhas (o gráfico de barras continua o padrão). */
+#spw-evolution-section .spw-evo-timeline-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 14px}
+#spw-evolution-section .spw-evo-form-toggle{display:inline-flex;border:1px solid var(--border,#c5d2de);border-radius:9px;overflow:hidden;background:var(--surface,#fff)}
+#spw-evolution-section .spw-evo-form-toggle button{min-height:32px;padding:0 12px;border:0;background:transparent;color:var(--text-strong,#334e68);font:inherit;font-size:.72rem;font-weight:600;cursor:pointer}
+#spw-evolution-section .spw-evo-form-toggle button+button{border-left:1px solid var(--border,#c5d2de)}
+#spw-evolution-section .spw-evo-form-toggle button[aria-pressed="true"]{background:var(--brand-700,#155c8a);color:#fff}
+#spw-evolution-section .spw-evo-form-toggle button:focus-visible{outline:2px solid #316b9c;outline-offset:-2px}
+#spw-evolution-section .spw-evo-lines{margin-top:10px}
+#spw-evolution-section .spw-evo-lines svg{display:block;width:100%;height:auto;max-height:280px;overflow:visible}
+#spw-evolution-section .spw-evo-line-grid{stroke:currentColor;stroke-opacity:.14;stroke-width:1}
+#spw-evolution-section .spw-evo-line-axis{fill:currentColor;fill-opacity:.7;font-size:11px}
+#spw-evolution-section .spw-evo-line polyline{stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+#spw-evolution-section .spw-evo-line.sigem polyline{stroke:var(--spw-sigem,#0b7895)}
+#spw-evolution-section .spw-evo-line.sigem circle{fill:var(--spw-sigem,#0b7895)}
+#spw-evolution-section .spw-evo-line.pw polyline{stroke:var(--spw-pw,#6d4ac7)}
+#spw-evolution-section .spw-evo-line.pw circle{fill:var(--spw-pw,#6d4ac7)}
+#spw-evolution-section .spw-evo-line.emitted polyline{stroke:var(--success-500,#3f8f68)}
+#spw-evolution-section .spw-evo-line.emitted circle{fill:var(--success-500,#3f8f68)}
+#spw-evolution-section .spw-evo-line.sigem-removed polyline{stroke:var(--spw-sigem,#0b7895);stroke-opacity:.6}
+#spw-evolution-section .spw-evo-line.sigem-removed circle{fill:var(--spw-sigem,#0b7895);fill-opacity:.6}
+#spw-evolution-section .spw-evo-line.pw-removed polyline{stroke:var(--spw-pw,#6d4ac7);stroke-opacity:.6}
+#spw-evolution-section .spw-evo-line.pw-removed circle{fill:var(--spw-pw,#6d4ac7);fill-opacity:.6}
+#spw-evolution-section .spw-evo-line-table{margin-top:8px;font-size:.72rem}
+#spw-evolution-section .spw-evo-line-table summary{cursor:pointer;color:var(--brand-700,#155c8a);font-weight:600}
+#spw-evolution-section .spw-evo-line-table table{width:100%;margin-top:6px;border-collapse:collapse}
+#spw-evolution-section .spw-evo-line-table th,#spw-evolution-section .spw-evo-line-table td{padding:5px 8px;border-top:1px solid var(--border,#e4ebf1);text-align:right}
+#spw-evolution-section .spw-evo-line-table th:first-child,#spw-evolution-section .spw-evo-line-table thead th{text-align:left}
+#spw-evolution-section .spw-evo-line.sigem polyline{stroke-width:5;stroke-opacity:.55}
