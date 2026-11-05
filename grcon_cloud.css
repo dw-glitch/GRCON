@@ -1090,3 +1090,18 @@ html[data-app="GRCON"][data-ui-generation="3"] section.grcon-cloud-auth {
   max-width: none;
   width: auto;
 }
+
+/* Administração › Usuários e acessos: tabela "Quem pode o quê". */
+.grcon-admin-matrix { margin: 1rem 0; padding: .75rem 1rem; border: 1px solid var(--border, #d5dfe9); border-radius: 12px; background: var(--surface, #fff); }
+.grcon-admin-matrix > summary { cursor: pointer; font-weight: 700; color: var(--text-strong, #243b53); min-height: 44px; display: flex; align-items: center; }
+.grcon-admin-matrix > p { margin: .25rem 0 .75rem; font-size: .8rem; color: var(--text-muted, #52667a); }
+.grcon-admin-matrix table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.grcon-admin-matrix th, .grcon-admin-matrix td { padding: .6rem .7rem; text-align: left; border-top: 1px solid var(--border, #e4ebf1); vertical-align: middle; }
+.grcon-admin-matrix thead th { font-size: .74rem; color: var(--text-muted, #486581); border-top: 0; }
+.grcon-admin-matrix tbody th { font-weight: 600; min-width: 18rem; }
+.grcon-access-yes, .grcon-access-no, .grcon-access-master { display: inline-flex; align-items: center; gap: .4rem; font-weight: 600; white-space: nowrap; }
+.grcon-access-yes { color: #14532d; }
+.grcon-access-no { color: #52667a; font-weight: 500; }
+.grcon-access-master { color: #7a4f0d; white-space: normal; }
+.grcon-access-yes b { display: inline-flex; width: 1.3rem; height: 1.3rem; align-items: center; justify-content: center; border-radius: 50%; background: #e3f4ea; }
+.grcon-access-no b { display: inline-flex; width: 1.3rem; height: 1.3rem; align-items: center; justify-content: center; border-radius: 50%; background: #eef1f4; }
