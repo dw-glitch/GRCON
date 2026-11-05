@@ -69,7 +69,98 @@ function titleWithArea(row,where){
   if(tag&&title.endsWith(' - '+tag))return title.slice(0,-(' - '+tag).length)+' - '+area+' - '+tag;
   return title+' - '+area;
 }
-function shape(row,refs){
+// Regra: a TAG do código fica SEMPRE no final do título, no modelo "TÍTULO - TAG". Só muda a posição da TAG (copiada literalmente do código);
+// o restante do texto não é reescrito. Documentos sem TAG (nt-, CV) não entram.
+const escapeRegex=x=>String(x).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function endsWithTag(title,tag){
+  const text=clean(title),needle=clean(tag);
+  if(!needle)return true;
+  return new RegExp('(?:^|\\s)[-–—]\\s+'+escapeRegex(needle)+'$','i').test(text);
+}
+function tagAtEnd(title,tag){
+  const text=clean(title),needle=clean(tag);
+  if(!text||!needle||endsWithTag(text,needle))return text;
+  const found=new RegExp('(^|[^A-Za-z0-9])(?:TAG\\s*[:\\-]?\\s*)?'+escapeRegex(needle)+'(?![A-Za-z0-9])','gi');
+  const body=text.replace(found,(match,before)=>/[(\[]/.test(before)?before:' ')
+    .replace(/\(\s*\)|\[\s*\]/g,' ')
+    .replace(/\s+/g,' ')
+    .replace(/(?:\s[-–—]\s*){2,}/g,' - ')
+    .replace(/^\s*[-–—:]\s*|\s*[-–—:]\s*$/g,'')
+    .trim();
+  return body?body+' - '+needle:text;
+}
+// Recolhedor de informações: o título atual da LD muitas vezes traz dados que as bases não têm (o que é, onde, fase, linha…).
+// O título sugerido nasce das bases (norma, SCON, LI de válvulas, Apêndice…) e, em seguida, o que o título atual diz a mais é
+// identificado e anexado antes da TAG. O que as bases já cobrem não é repetido; identificadores técnicos diferentes da TAG do código
+// nunca são incorporados (não cruza TAGs).
+const STOPWORDS=new Set(['DE','DA','DO','DAS','DOS','E','EM','NA','NO','NAS','NOS','A','O','AS','OS','PARA','POR','COM','SEM','AO','AOS']);
+const TECH_ID=/^[A-Z0-9]{1,4}(?:-[A-Z])?-[A-Z0-9][A-Z0-9._/-]{2,}$/;
+const tokenKey=token=>normal(token).replace(/[^A-Z0-9]/g,'');
+const stemKey=key=>key.length>3&&key.endsWith('S')?key.slice(0,-1):key;
+function coverageIndex(text){return clean(text).split(/\s+/).map(token=>stemKey(tokenKey(token))).filter(Boolean);}
+function isCovered(keys,token){
+  const key=stemKey(tokenKey(token));
+  if(!key)return true;
+  return keys.some(other=>other===key||(key.length>=3&&other.length>=3&&(other.startsWith(key)||key.startsWith(other))));
+}
+// Trecho do título atual que CONTRADIZ as bases não é informação adicional: "VALVULA AUTOMATICA" onde a lista confirma "VALVULA MANUAL".
+// Contradição = o trecho (só palavras, sem número) vem colado a uma palavra já coberta (no máximo com "DE" entre elas) e as bases
+// trazem OUTRA palavra nesse mesmo lugar. Com outra preposição (DA, EM, NA…) ou com números/identificadores é complemento (onde, quando, linha…).
+function contradictsProposal(tokens,spanStart,proposal){
+  const span=tokens.slice(spanStart).filter(Boolean);
+  const first=stemKey(tokenKey(span[0]||''));
+  if(!first||span.some(token=>/\d/.test(token)))return false;
+  let at=spanStart-1,between=[];
+  while(at>=0&&STOPWORDS.has(tokenKey(tokens[at]))){between.unshift(tokenKey(tokens[at]));at--;}
+  if(at<0||between.some(word=>word!=='DE'))return false;
+  const anchor=stemKey(tokenKey(tokens[at]));
+  if(!anchor)return false;
+  const list=clean(proposal).split(/\s+/).map(token=>stemKey(tokenKey(token))).filter(Boolean);
+  for(let i=0;i<list.length-1;i++){
+    if(list[i]!==anchor)continue;
+    let next=i+1;
+    while(next<list.length&&STOPWORDS.has(list[next]))next++;
+    if(next<list.length&&list[next]!==first&&!(list[next].startsWith(first)||first.startsWith(list[next])))return true;
+  }
+  return false;
+}
+function mergeCurrentInfo(row,base){
+  const current=clean(row.current),proposal=clean(base);
+  if(!current||!proposal||normal(current)===normal(proposal))return null;
+  const tag=clean(row.titleTag),tagKey=value=>tokenKey(value);
+  const keys=coverageIndex(proposal),extras=[],skipped=[];
+  const segments=current.split(/\s+[-–—]\s+/);
+  for(const segment of segments){
+    const tokens=segment.replace(/\bTAG\b\s*[:\-]?\s*/gi,' ').split(/\s+/).filter(Boolean);
+    const meaningful=tokens.map((token,index)=>({token,index,key:tokenKey(token)}))
+      .filter(item=>item.key&&!STOPWORDS.has(item.key)&&!(tag&&item.key===tagKey(tag))&&!isCovered(keys,item.token));
+    if(!meaningful.length)continue;
+    const span=tokens.slice(meaningful[0].index,meaningful[meaningful.length-1].index+1).join(' ').replace(/^[\s,;:()\[\]-]+|[\s,;:()\[\]-]+$/g,'');
+    if(!span)continue;
+    if(contradictsProposal(tokens,meaningful[0].index,proposal)){skipped.push(span);continue;}
+    if(span.split(/\s+/).some(token=>{const bare=token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,'').toUpperCase();return TECH_ID.test(bare)&&!/^NT-/.test(bare)&&bare!==clean(tag).toUpperCase();})){skipped.push(span);continue;}
+    if(!extras.some(item=>normal(item)===normal(span)))extras.push(span);
+  }
+  if(!extras.length)return skipped.length?{title:base,extras:[],skipped}:null;
+  let body=proposal;
+  if(tag&&endsWithTag(body,tag))body=body.replace(new RegExp('\\s*[-–—]\\s+'+escapeRegex(tag)+'$','i'),'');
+  return {title:body+' - '+extras.join(' - '),extras,skipped};
+}
+function enforceTagAtEnd(row,suggested){
+  const tag=clean(row.titleTag);
+  const isCv=normal(row.sheet)==='CV'||/-C1O-CV-/.test(normal(row.document));
+  const base=clean(suggested)||(row.issue==='ok'?clean(row.current):'');
+  if(!tag||isCv||!base||endsWithTag(base,tag))return {title:suggested,issue:row.issue,reason:row.reason,classification:row.classification};
+  const fixed=tagAtEnd(base,tag);
+  if(!fixed||fixed===base)return {title:suggested,issue:row.issue,reason:row.reason,classification:row.classification};
+  return row.issue==='ok'
+    ?{title:fixed,issue:'tag_position',reason:'A TAG '+tag+' deve ficar no final do título, no modelo "TÍTULO - '+tag+'"',classification:'suggestion'}
+    :{title:fixed,issue:row.issue,reason:(row.reason?row.reason+'; ':'')+'a TAG '+tag+' foi colocada no final do título',classification:row.classification};
+}
+// Documento "nt-" (Grupo 7 = NT-…) não tem TAG: nenhuma regra de TAG no final se aplica a ele.
+const declaresNonTag=document=>/(?:^|[_-])NT(?:[-/_.]|$)/.test(normal(document));
+function shape(source,refs){
+  const row=declaresNonTag(source.document)?{...source,titleTag:''}:source;
   const area=areaFor(row,refs);
   const facts=[];
   if(row.titleStandard)facts.push({field:'tipo',value:row.titleStandard,source:row.titleStandardSource||'ET Rev. R',verified:true});
@@ -84,11 +175,16 @@ function shape(row,refs){
     row.globalTagConflict||row.sconMatch==='AMBÍGUO'||row.sconEscopoMatch==='AMBÍGUO'||row.titleStandardAmbiguous||
     row.sconEscopoEapFallback||row.sconEscopoTagFallback);
   const safeArea=area&&!unsafe?area:null;
-  const suggested=safeArea?titleWithArea(row,safeArea):clean(row.proposed);
+  const withArea=safeArea?titleWithArea(row,safeArea):clean(row.proposed);
+  const gathered=unsafe?null:mergeCurrentInfo(row,withArea);
+  if(gathered?.extras.length)facts.push({field:'informacao_adicional',value:gathered.extras.join(' · '),source:'Título atual da LD (informação que as bases não trazem)',verified:false});
+  const tagged=enforceTagAtEnd(row,gathered?.extras.length?gathered.title:withArea),suggested=tagged.title;
+  if(gathered?.extras.length)tagged.reason=(tagged.reason?tagged.reason+'; ':'')+'informação adicional do título atual da LD mantida: '+gathered.extras.join(' · ');
+  if(gathered?.skipped.length)tagged.reason=(tagged.reason?tagged.reason+'; ':'')+'trecho com identificador diferente da TAG do código não foi incorporado: '+gathered.skipped.join(' · ');
   return {id:String(row.id),document:row.document,sheet:row.sheet,row:row.row,discipline:row.discipline||'',
-    current:clean(row.current),proposed:suggested,originalProposed:clean(row.proposed),issue:row.issue,
-    reason:row.reason||'',confidence:unsafe?'baixa':row.confidence||'nenhuma',
-    classification:unsafe?'manual_review':row.classification||'suggestion',tag:row.tag||'',
+    current:clean(row.current),proposed:suggested,originalProposed:suggested,issue:tagged.issue,
+    reason:tagged.reason||'',confidence:unsafe?'baixa':row.confidence||'nenhuma',
+    classification:unsafe?'manual_review':tagged.classification||'suggestion',tag:row.tag||'',endTag:clean(row.titleTag),
     descriptionSource:row.descriptionSource||'',facts,hasConflict:unsafe,
     sourceRows:{valve:row.valveSourcePages||[],scon:row.sconSourceRows||[],appendix:row.appendixSourceRows||[],escopo:row.sconEscopoSourceRows||[]},
     evidenceSummary:row.descriptionSource||'Sem descrição confirmada',reviewRequired:unsafe||!suggested||row.confidence==='baixa',
@@ -137,6 +233,7 @@ async function exportLd(rows){
   if(row?.decision!=='approved')continue;
   const controlled=originalMap.get(String(row.id));
   if(controlled?.tag&&!hasExactTitleTag(row.proposed,controlled.tag))throw Error('A TAG documental '+controlled.tag+' está ausente ou alterada no título de '+controlled.document+'. Corrija antes de exportar.');
+  if(controlled?.endTag&&!endsWithTag(row.proposed,controlled.endTag))throw Error('A TAG '+controlled.endTag+' deve ficar no final do título de '+controlled.document+' ("TÍTULO - '+controlled.endTag+'"). Corrija antes de exportar.');
  }
  const authorized=(rows||[]).filter(row=>{
    const from=originalMap.get(String(row.id));

@@ -51,6 +51,69 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  assert.equal(outputRows[2][1],originalRows[2][1],'outra linha foi alterada');
  await assert.rejects(request(3,'export',{rows:[{...first,id:'forjado',decision:'approved'}]}),/Selecione e aprove/);
  if(first.tag)await assert.rejects(request(31,'export',{rows:[{...first,decision:'approved',proposed:'RELATORIO DE INSPECAO - TAG INCORRETA'}]}),/TAG documental/);
+ // Regra: a TAG do código fica sempre no final do título ("TÍTULO - TAG"); exportar com a TAG fora do final é recusado.
+ assert.equal(first.endTag,'VM-320003');
+ assert.match(first.proposed,/ - VM-320003$/,'a TAG termina o título proposto');
+ await assert.rejects(request(32,'export',{rows:[{...first,decision:'approved',proposed:'VM-320003 - RELATORIO DE INSPECAO DE RECEBIMENTO'}]}),/final do título/);
+ await assert.rejects(request(33,'export',{rows:[{...first,decision:'approved',proposed:first.proposed+' - TESTE'}]}),/final do título/);
+ // Título atual já "adequado" mas com a TAG no meio/ausente: a regra gera a sugestão e marca "TAG fora do final".
+ const midTag=run(`(()=>{
+  const book=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([
+  ['DOCUMENTO','TÍTULO','REVISÃO','STATUS'],
+  ['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO - VM-320003 - VALVULA MANUAL','0','PREVISTO']
+  ]),'TUB');
+  return XLSX.write(book,{type:'array',bookType:'xlsx'});
+ })()`);
+ const mid=(await request(34,'analyze',{bytes:midTag,name:'LD_MEIO.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.match(mid.proposed,/ - VM-320003$/,'TAG no meio vai para o final');
+ assert.equal((mid.proposed.match(/VM-320003/g)||[]).length,1,'a TAG não é duplicada');
+ // Unidade: mover a TAG para o final sem reescrever o resto do título.
+ const move=(title,tag)=>{context.__t=title;context.__g=tag;return run('tagAtEnd(__t,__g)','tag-at-end');};
+ assert.equal(move('BOMBA CENTRIFUGA P-101 DE AGUA','P-101'),'BOMBA CENTRIFUGA DE AGUA - P-101');
+ assert.equal(move('TUBULACAO - P-101 - SUPORTES','P-101'),'TUBULACAO - SUPORTES - P-101');
+ assert.equal(move('P-101 - BOMBA CENTRIFUGA','P-101'),'BOMBA CENTRIFUGA - P-101');
+ assert.equal(move('BOMBA CENTRIFUGA TAG: P-101 DE AGUA','P-101'),'BOMBA CENTRIFUGA DE AGUA - P-101');
+ assert.equal(move('BOMBA CENTRIFUGA - P-101','P-101'),'BOMBA CENTRIFUGA - P-101','já no final: não muda');
+ assert.equal(move('BOMBA CENTRIFUGA','P-101'),'BOMBA CENTRIFUGA - P-101','TAG ausente: acrescenta no final');
+ assert.equal(move('BOMBA P-1010 DE AGUA','P-101'),'BOMBA P-1010 DE AGUA - P-101','outra TAG parecida não é removida');
+ assert.equal(move('BOMBA CENTRIFUGA','') ,'BOMBA CENTRIFUGA','sem TAG: não mexe');
+ context.__row={issue:'ok',reason:'Título claro e sem divergência identificada',classification:'ok',current:'BOMBA CENTRIFUGA P-101 DE AGUA',titleTag:'P-101',sheet:'TUB',document:'C1O_RNEST_U32_3.1.1.1_TUB_RIR_P-101'};
+ const ruled=run('enforceTagAtEnd(__row,"")','enforce-ok');
+ assert.equal(ruled.issue,'tag_position','título "adequado" com a TAG fora do final vira pendência');
+ assert.equal(ruled.title,'BOMBA CENTRIFUGA DE AGUA - P-101');
+ context.__row={...context.__row,current:'BOMBA CENTRIFUGA DE AGUA - P-101'};
+ assert.equal(run('enforceTagAtEnd(__row,"")','enforce-ok-2').issue,'ok','já em conformidade: continua adequado');
+ context.__row={...context.__row,sheet:'CV',current:'CURRICULO P-101 JOAO'};
+ assert.equal(run('enforceTagAtEnd(__row,"")','enforce-cv').issue,'ok','CV não recebe TAG');
+ context.__row={issue:'empty',reason:'Título vazio',classification:'confirmed_error',current:'',titleTag:'P-101',sheet:'TUB',document:'X'};
+ assert.equal(run('enforceTagAtEnd(__row,"")','enforce-empty').title,'','título vazio sem sugestão não vira só a TAG');
+ // Recolhedor: o que o título atual da LD diz a mais (e as bases não têm) é mantido antes da TAG; o já coberto não se repete.
+ const ldWith=(rows)=>{context.__rows=rows;return run(`(()=>{
+  const book=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['DOCUMENTO','TÍTULO','REVISÃO','STATUS'],...__rows.map(r=>[r[0],r[1],'0','PREVISTO'])]),'TUB');
+  return XLSX.write(book,{type:'array',bookType:'xlsx'});
+ })()`,'ld-with');};
+ const gathered=(await request(40,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO DA VALVULA LINHA 4 FASE 2']]),name:'LD_INFO.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.match(gathered.proposed,/LINHA 4 FASE 2 - VM-320003$/,'informação adicional do título atual entra antes da TAG');
+ assert.equal((gathered.proposed.match(/RELATORIO|RELATÓRIO/gi)||[]).length,1,'o que as bases já cobrem não é repetido');
+ assert.ok(gathered.facts.some(f=>f.field==='informacao_adicional'&&/LINHA 4 FASE 2/.test(f.value)&&f.verified===false),'a informação adicional aparece nas evidências como não verificada');
+ const foreign=(await request(41,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO DA VALVULA XV-9999 LINHA 4']]),name:'LD_FOREIGN.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.doesNotMatch(foreign.proposed,/XV-9999/,'identificador diferente da TAG do código não cruza para o título');
+ assert.match(foreign.proposed,/ - VM-320003$/);
+ // Contradição com as bases não é informação adicional (válvula confirmada como MANUAL na lista).
+ const contradicted=(await request(43,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO - VALVULA AUTOMATICA - VM-320003']]),name:'LD_CONTRA.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.doesNotMatch(contradicted.proposed,/AUTOMATICA/,'descrição contraditória às bases não é reincorporada');
+ assert.match(contradicted.proposed,/VALVULA MANUAL - VM-320003$/);
+ assert.match(contradicted.reason,/AUTOMATICA/,'o trecho não incorporado é dito na justificativa');
+ const location=(await request(44,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.1.1.1_TUB_RIR_VM-320003','RELATORIO DE INSPECAO DE RECEBIMENTO DA VALVULA DA CASA DE BOMBAS']]),name:'LD_ONDE.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.match(location.proposed,/CASA DE BOMBAS - VM-320003$/,'complemento de local (com preposição) continua sendo informação adicional');
+ // O botão "Restaurar recomendação técnica" volta para a recomendação FINAL (com a TAG no final e as informações recolhidas).
+ assert.equal(gathered.originalProposed,gathered.proposed);
+ // "nt-" não é TAG: nada de TAG no final nem de identificador NT- tratado como TAG.
+ const nt=(await request(42,'analyze',{bytes:ldWith([['C1O_RNEST_U32_6.21.1.1_CVL_MTAND_nt-EMT-AND-FEV-26','RELATORIO DE MONTAGEM DE ANDAIMES APLICADOS FEV 2026']]),name:'LD_NT.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.equal(nt.endTag,'','documento nt- não tem TAG no final');
+ assert.doesNotMatch(nt.proposed||'',/NT-EMT-AND-FEV-26\s*$/i,'nt- não vira TAG no final do título');
  // Duas LDs com códigos repetidos: linhas e saídas devem permanecer isoladas.
  const batch=await request(4,'analyzeBatch',{files:[
   {name:'LD_A.xlsx',bytes:fixture},{name:'LD_B.xlsx',bytes:fixture}],codes:[],sourceMode:'auto'});
@@ -59,8 +122,8 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  assert.equal(batch.rows[0].sourceFile,'LD_A.xlsx');
  assert.equal(batch.rows[2].sourceFile,'LD_B.xlsx');
  const outputs=await request(5,'exportBatch',{rows:[
-  {...batch.rows[0],decision:'approved',proposed:batch.rows[0].proposed+' - A'},
-  {...batch.rows[2],decision:'approved',proposed:batch.rows[2].proposed+' - B'}]});
+  {...batch.rows[0],decision:'approved',proposed:batch.rows[0].proposed.replace(/ - VM-320003$/,' - A - VM-320003')},
+  {...batch.rows[2],decision:'approved',proposed:batch.rows[2].proposed.replace(/ - VM-320003$/,' - B - VM-320003')}]});
  assert.equal(outputs.preservation.valid,true);
  assert.equal(outputs.files,2);
  assert.ok(outputs.name.endsWith('.zip'));
