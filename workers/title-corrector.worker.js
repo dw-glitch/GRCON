@@ -205,6 +205,52 @@ function enforceTagAtEnd(row,suggested){
     ?{title:fixed,issue:'tag_position',reason:'A TAG '+tag+' deve ficar no final do título, no modelo "TÍTULO - '+tag+'"',classification:'suggestion'}
     :{title:fixed,issue:row.issue,reason:endsWithTag(row.current,tag)?row.reason:(row.reason?row.reason+'; ':'')+'a TAG '+tag+' foi colocada no final do título',classification:row.classification};
 }
+// NOME DO RELATÓRIO (Grupo 6) conforme a ET, Tabela 13: o título SEMPRE começa com o nome oficial do relatório (com acentos, em caixa alta),
+// consultado pelo código do documento. Se o título da LD traz uma variante (singular/plural, truncado, com erro de digitação) ela é identificada,
+// dita na justificativa e corrigida; se não traz, o nome oficial é colocado na frente. Sigla do Grupo 6 ("RIR - ") antes do nome é redundante e sai.
+const editDistance=(a,b)=>{const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let prev=Array.from({length:n+1},(_,i)=>i);for(let i=1;i<=m;i++){const cur=[i];for(let j=1;j<=n;j++)cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=cur;}return prev[n];};
+function sameWord(a,b){
+  const x=stemKey(tokenKey(a)),y=stemKey(tokenKey(b));
+  if(!x||!y)return false;
+  if(x===y)return true;
+  const limit=Math.max(x.length,y.length)>=9?2:Math.max(x.length,y.length)>=5?1:0;
+  return limit>0&&editDistance(x,y)<=limit;
+}
+const SEPARATOR_TOKEN=/^[-–—\\/:|]+$/;
+function reportNameParts(title,standard,sigla){
+  const tokens=clean(title).split(/\s+/).filter(Boolean);
+  let dropped='';
+  if(sigla&&tokens.length>2&&tokenKey(tokens[0])===tokenKey(sigla)&&SEPARATOR_TOKEN.test(tokens[1])){dropped=tokens[0];tokens.splice(0,2);}
+  const std=clean(standard).toLocaleUpperCase('pt-BR').split(/\s+/).filter(Boolean);
+  const significant=std.filter(token=>!STOPWORDS.has(tokenKey(token))).length;
+  let at=0,matched=0;
+  for(const word of std){
+    const stop=STOPWORDS.has(tokenKey(word));
+    if(at<tokens.length&&sameWord(tokens[at],word)){at++;if(!stop)matched++;}
+    else if(stop)continue;
+    else break;
+  }
+  // Variante do nome: quase todas as palavras casam, ou o nome está TRUNCADO (casou o começo e o título passa a outro trecho/separador).
+  const truncated=matched>=2&&(at>=tokens.length||SEPARATOR_TOKEN.test(tokens[at]));
+  const found=significant>0&&(matched>=Math.ceil(significant*0.75)||truncated);
+  return {tokens,dropped,std,significant,matched,found,consumed:found?tokens.slice(0,at):[]};
+}
+function reportNameFix(row,title){
+  const standard=clean(row.titleStandard),text=clean(title);
+  const isCv=normal(row.sheet)==='CV'||/-C1O-CV-/.test(normal(row.document));
+  if(!standard||!text||isCv||row.titleStandardAmbiguous)return null;
+  const official=standard.toLocaleUpperCase('pt-BR');
+  const parts=reportNameParts(text,standard,row.titleStandardCode);
+  if(parts.found){
+    const phrase=parts.consumed.join(' ');
+    const rest=parts.tokens.slice(parts.consumed.length);
+    const exact=phrase===official;
+    const sameWords=normal(phrase)===normal(official);
+    const tail=rest.length?(SEPARATOR_TOKEN.test(rest[0])?' ':' - ')+rest.join(' '):'';
+    return {title:exact&&!parts.dropped?text:official+tail,official,found:phrase,wrong:!sameWords,exact,dropped:parts.dropped};
+  }
+  return {title:official+' - '+parts.tokens.join(' '),official,found:'',wrong:true,exact:false,missing:true,dropped:parts.dropped};
+}
 // Documento "nt-" (Grupo 7 = NT-…) não tem TAG: nenhuma regra de TAG no final se aplica a ele.
 const declaresNonTag=document=>/(?:^|[_-])NT(?:[-/_.]|$)/.test(normal(document));
 // Em documento "nt-", o "nt-" não faz parte da TAG: a TAG do final do título é o Grupo 7 SEM o prefixo (…_nt-EMT-R-32003 → "EMT-R-32003").
@@ -234,7 +280,20 @@ function shape(source,refs){
   const gathered=mergeCurrentInfo(row,withArea,unsafe);
   if(gathered?.mode==='bases'&&gathered.extras.length)facts.push({field:'informacao_adicional',value:gathered.extras.join(' · '),source:'Título atual da LD (informação que as bases não trazem)',verified:false});
   if(gathered?.mode==='atual'&&gathered.extras.length)facts.push({field:'informacao_bases',value:gathered.extras.join(' · '),source:row.descriptionSource||row.nonTaggedSource||'Bases oficiais',verified:!unsafe});
-  const tagged=enforceTagAtEnd(row,gathered?gathered.title:withArea),suggested=tagged.title;
+  const merged=gathered?gathered.title:withArea;
+  // O nome do relatório da LD é conferido SEMPRE contra a ET; a recomendação começa com o nome oficial.
+  const currentReport=reportNameFix(row,clean(row.current));
+  const reportBase=merged||(currentReport&&currentReport.wrong?clean(row.current):'');
+  const reported=reportBase?reportNameFix(row,reportBase):null;
+  const withReport=reported&&(reported.wrong||merged)?reported.title:merged;
+  const tagged=enforceTagAtEnd(row,withReport),suggested=tagged.title;
+  if(currentReport&&currentReport.wrong){
+    const was=currentReport.missing?'o título da LD não começa com o nome do relatório':'o nome do relatório no título da LD ("'+currentReport.found+'") não segue a ET';
+    tagged.reason=(tagged.reason?tagged.reason+'; ':'')+was+': deve começar com "'+currentReport.official+'" (ET, Tabela 13)';
+    if(['ok','description_mismatch','generic','format','tag_position'].includes(tagged.issue))tagged.issue='document_type';
+    if(tagged.classification==='ok'||!tagged.classification)tagged.classification='confirmed_error';
+  }
+  if(reported?.dropped)tagged.reason=(tagged.reason?tagged.reason+'; ':'')+'a sigla "'+reported.dropped+'" antes do nome do relatório foi retirada (o nome oficial já a representa)';
   const note=text=>{tagged.reason=(tagged.reason?tagged.reason+'; ':'')+text;};
   if(gathered?.mode==='atual')note(gathered.extras.length?'título atual da LD mantido por inteiro e informação das bases acrescentada: '+gathered.extras.join(' · '):'título atual da LD mantido por inteiro');
   if(gathered?.mode==='bases'&&gathered.extras.length)note('informação adicional do título atual da LD mantida: '+gathered.extras.join(' · '));

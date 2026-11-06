@@ -125,6 +125,28 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  assert.ok(owner.facts.some(f=>f.field==='informacao_bases'&&/POLYSHIFT/.test(f.value)),'a informação das bases aparece nas evidências');
  assert.ok(owner.reviewRequired,'bases em conflito: segue para revisão mesmo com o título reunido');
  assert.equal(owner.originalProposed,owner.proposed);
+ // NOME DO RELATÓRIO pela ET (Tabela 13): sempre no começo, exatamente como na norma; variante errada na LD é identificada e corrigida.
+ const fixReport=(document,title,extra={})=>{context.__r={document,sheet:'CVL',titleStandard:'Relatório de Montagem de Estruturas Metálicas',titleStandardCode:'MTEM',...extra};context.__t=title;return run('reportNameFix(__r,__t)','report-name');};
+ const MTEM='C1O_RNEST_U32_6.21.1.1_CVL_MTEM_nt-EMT-FOO-01',OFFICIAL='RELATÓRIO DE MONTAGEM DE ESTRUTURAS METÁLICAS';
+ let fx=fixReport(MTEM,'RELATÓRIO DE MONTAGEM DE ESTRUTURA METÁLICA \\ 130 - REATORES');
+ assert.equal(fx.title,OFFICIAL+' \\ 130 - REATORES','singular/plural errado: corrigido para a redação da ET, o resto do título fica');assert.equal(fx.wrong,true);assert.equal(fx.found,'RELATÓRIO DE MONTAGEM DE ESTRUTURA METÁLICA');
+ fx=fixReport(MTEM,OFFICIAL+' \\ 130 - REATORES');assert.equal(fx.wrong,false);assert.equal(fx.title,OFFICIAL+' \\ 130 - REATORES','já correto: não muda');
+ fx=fixReport(MTEM,'RELATORIO DE MONTAGEM DE ESTRUTURAS METALICAS - 130');assert.equal(fx.wrong,false,'só os acentos diferem: não é erro de nome');assert.equal(fx.title,OFFICIAL+' - 130','mas a recomendação traz a grafia oficial');
+ fx=fixReport(MTEM,'VIGA DO REATOR R-32003 PLATAFORMA');assert.equal(fx.title,OFFICIAL+' - VIGA DO REATOR R-32003 PLATAFORMA','sem o nome do relatório: o nome oficial vai para a frente');assert.equal(fx.missing,true);
+ fx=fixReport(MTEM,'RELATÓRIO DE MONTAGEM - VIGA');assert.equal(fx.title,OFFICIAL+' - VIGA','nome truncado: completado');
+ fx=fixReport(MTEM,'RELATÓRIO DE MONTAGEM DE ANDAIMES APLICADOS');assert.ok(fx.title.startsWith(OFFICIAL+' - RELATÓRIO DE MONTAGEM DE ANDAIMES'),'outro tipo de relatório no título da LD: o oficial vem na frente e nada se perde');assert.equal(fx.wrong,true);
+ fx=fixReport(MTEM,'RELATÓRIO DE MONTAGM DE ESTRUTURAS METALCAS - 130');assert.equal(fx.title,OFFICIAL+' - 130','erro de digitação no nome é reconhecido como variante');
+ fx=fixReport(MTEM,'MTEM - RELATÓRIO DE MONTAGEM DE ESTRUTURA METÁLICA - 130');assert.equal(fx.title,OFFICIAL+' - 130','sigla do Grupo 6 antes do nome é retirada');assert.equal(fx.dropped,'MTEM');
+ assert.equal(fixReport(MTEM,'X',{titleStandardAmbiguous:true}),null,'norma com mais de uma redação: não decide sozinho');
+ assert.equal(fixReport(MTEM,'X',{sheet:'CV'}),null,'currículo fica de fora');
+ assert.equal(fixReport(MTEM,'X',{titleStandard:''}),null,'sem redação na ET: nada a impor');
+ // Pelo Worker completo: o nome é consultado na ET, a LD é corrigida, o restante do título e a TAG ficam.
+ const montagem=(await request(46,'analyze',{bytes:ldWith([[MTEM,'RELATÓRIO DE MONTAGEM DE ESTRUTURA METÁLICA \\ 130 - REATORES \\ VIGA R-32003 - MONTAGEM DE VIGA COM FASE 2']]),name:'LD_MTEM.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.ok(montagem.proposed.startsWith(OFFICIAL+' \\ 130 - REATORES \\ VIGA R-32003'),'a recomendação começa com o nome oficial da ET e mantém o título da LD');
+ assert.match(montagem.proposed,/ - EMT-FOO-01$/,'a TAG do código fecha o título');
+ assert.equal(montagem.issue,'document_type','erro no nome do relatório aparece como "Tipo documental"');
+ assert.match(montagem.reason,/ET, Tabela 13/,'a justificativa diz que o nome foi conferido na ET');
+ assert.match(montagem.reason,/ESTRUTURA METÁLICA/,'a justificativa mostra o que estava errado na LD');
  // Duas LDs com códigos repetidos: linhas e saídas devem permanecer isoladas.
  const batch=await request(4,'analyzeBatch',{files:[
   {name:'LD_A.xlsx',bytes:fixture},{name:'LD_B.xlsx',bytes:fixture}],codes:[],sourceMode:'auto'});
