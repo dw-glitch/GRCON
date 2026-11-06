@@ -67,8 +67,8 @@ const REVISIONS = Object.freeze(["0", "A", "B", "C", "D", "E", "F", "G", "H", "J
 export const SIGEM_INCLUDED_DATE_HEADER = "DATA DE INCLUSÃO NO SIGEM";
 export const COORDINATOR_HEADERS = Object.freeze([
   "DOCUMENTO", "REVISÃO", "TÍTULO", "STATUS LD", "SITUAÇÃO SIGEM", "REVISÃO PW",
-  "STATE", "Última emissão", "AÇÃO", "Cadastro", "ABA", "STATUS SIGEM",
-  ...REVISIONS.map(revision => "Rev. " + revision), SIGEM_INCLUDED_DATE_HEADER,
+  "STATE", "Última emissão", "AÇÃO", "Cadastro", "ABA", "STATUS SIGEM", SIGEM_INCLUDED_DATE_HEADER,
+  ...REVISIONS.map(revision => "Rev. " + revision),
 ]);
 const GRCON = Object.freeze({
   navy: "FF153A5C", ink: "FF253A50", slate: "FF657C90",
@@ -109,15 +109,15 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     pending: report.totals.registerSigem + report.totals.registerAbsent + report.totals.issue,
   };
   const revisions = [...new Set([...REVISIONS, ...report.rows.map(row => row.revision)])];
-  const headers = [...COORDINATOR_HEADERS.slice(0, 12), ...revisions.map(rev => "Rev. " + rev), SIGEM_INCLUDED_DATE_HEADER];
+  const headers = [...COORDINATOR_HEADERS.slice(0, 13), ...revisions.map(rev => "Rev. " + rev)];
   const header1: CellValue[] = Array(headers.length).fill("");
   const header2: CellValue[] = Array(headers.length).fill("");
   [header1[0], header1[1], header1[2], header1[3], header1[4], header1[5], header1[6], header1[7], header1[8], header1[9]] =
     ["CONTROLE PW • GRCON", "REVISÕES", summary.active, "PW CAD.", summary.registered, "PW EMIT.", summary.emitted, "SIGEM", summary.posted, summary.pending];
   header2[0] = "Revisão de documento"; header2[5] = "Evidência PW";
   revisions.forEach((rev, index) => {
-    header2[index + 12] = rev;
-    header1[index + 12] = report.rows.filter(row => row.revision === rev && !row.pwEmitted).length;
+    header2[index + 13] = rev;
+    header1[index + 13] = report.rows.filter(row => row.revision === rev && !row.pwEmitted).length;
   });
   const master: Matrix = [header1, header2, headers];
   const sourceNumbers = new Map<number, number>();
@@ -153,8 +153,8 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     };
     formulas.push(info);
     const values = [row.code, row.revision, row.title, row.referenceStatus, row.sigemSituation,
-      ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" + (row.missingBefore.length ? " · FORA DE SEQUÊNCIA: falta " + row.missingBefore.join(", ") : "") : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass, sigemStatusText(row),
-      ...revisions.map(rev => row.revision === rev && !row.pwEmitted ? "X" : ""), row.sigemIncludedAt];
+      ...results, row.action, row.revision !== "0" ? "Emissão (não é cadastro)" + (row.missingBefore.length ? " · FORA DE SEQUÊNCIA: falta " + row.missingBefore.join(", ") : "") : row.pwRegistered ? "Cadastrado" : "Não cadastrado", row.documentClass, sigemStatusText(row), row.sigemIncludedAt,
+      ...revisions.map(rev => row.revision === rev && !row.pwEmitted ? "X" : "")];
     master.push(values);
     const name = classNames.get(row.documentClass)!;
     classFormulas[name].push({ ...info, excelRow: sheets[name].length + 1 }); sheets[name].push([...values]);
@@ -164,7 +164,7 @@ export function coordinatorPlan(state: SigemPwState, filters: PwFilters = {}): C
     const h = sheets[name][0];
     h[2] = classFormulas[name].length; h[4] = entry.registered; h[6] = entry.issued; h[8] = entry.sigem;
     h[9] = entry.registerSigem + entry.registerAbsent + entry.issue;
-    revisions.forEach((rev, index) => { h[index + 12] = report.rows.filter(row => row.documentClass === entry.documentClass && row.revision === rev && !row.pwEmitted).length; });
+    revisions.forEach((rev, index) => { h[index + 13] = report.rows.filter(row => row.documentClass === entry.documentClass && row.revision === rev && !row.pwEmitted).length; });
   }
   const overview: Matrix = [["GRCON | SIGEM × PW", "DEMANDA DA EQUIPE PW"], ["INDICADOR", "REVISÕES DE DOCUMENTOS"]];
   const overviewSections: number[] = [];
@@ -246,15 +246,14 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
   sheet.getColumn(10).width = 19;
   sheet.getColumn(11).width = 14;
   sheet.getColumn(12).width = 30;
-  for (let index = 13; index <= 12 + plan.revisions.length; index++) sheet.getColumn(index).width = 10;
-  sheet.getColumn(13 + plan.revisions.length).width = 25;
-  sheet.getColumn(13 + plan.revisions.length).numFmt = "@";
+  sheet.getColumn(13).width = 25;
+  for (let index = 14; index <= 13 + plan.revisions.length; index++) sheet.getColumn(index).width = 10;
   // Excel rows 4+ are actual data, never inject unrelated title rows.
   [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].forEach(index => sheet.getColumn(index).numFmt = "@");
   for (let column = 0; column < 13 + plan.revisions.length; column++) {
     formatHeader(sheet.getCell(`${columnLetter(column)}3`));
     const top = sheet.getCell(`${columnLetter(column)}1`);
-    formatHeader(top, column >= 12 ? GRCON.teal : GRCON.navy);
+    formatHeader(top, column >= 13 ? GRCON.teal : GRCON.navy);
     const group = sheet.getCell(`${columnLetter(column)}2`);
     formatHeader(group, GRCON.slate);
   }
@@ -277,10 +276,10 @@ function styleMain(sheet: ExcelSheet, plan: CoordinatorPlan): void {
     const info = plan.formulas[idx];
     const excelRow = info.excelRow;
     const row = sheet.getRow(excelRow);
-    const includedDate = sheet.getCell(`${columnLetter(12 + plan.revisions.length)}${excelRow}`);
+    const includedDate = sheet.getCell(`M${excelRow}`);
     includedDate.alignment = { vertical: "middle", wrapText: true };
     includedDate.font = { name: "Aptos", size: 9, color: { argb: GRCON.ink } };
-    row.height = text(plan.sheets[MAIN_SHEET][excelRow - 1][12 + plan.revisions.length]).includes(" | ") ? 48 : 32;
+    row.height = text(plan.sheets[MAIN_SHEET][excelRow - 1][12]).includes(" | ") ? 48 : 32;
     sheet.getCell(`C${excelRow}`).alignment = { vertical: "middle", wrapText: true };
     sheet.getCell(`E${excelRow}`).alignment = { vertical: "middle", wrapText: true };
     // Style only operational cells: avoid huge per-cell styles on data sources.
