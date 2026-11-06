@@ -23,15 +23,55 @@ function outName(folder:string,original:string,sha:string,existing:Data[]){
 }
 function remainingGroups(events:Data[],rows:Data[]=state.rows){const latest=new Map(events.map(e=>[JSON.stringify([e.lineage,e.field]),e]));return g.GrconAllocationAssistant?.groups(rows.map(row=>({...row,recommendations:(row.recommendations||[]).filter((p:Data)=>!['accepted','rejected'].includes(latest.get(JSON.stringify([row.lineage,p.field]))?.decision||''))})))||[];}
 function clearResults(){saveRequest='';savedEvents=0;saveMetadata=null;emit({groups:[],summary:{},rows:[],events:[],progress:0,total:0,runId:'',selected:[],context:{...state.context,saved:false,checkpoint:false,history:undefined}});}
+const canonical=(value:any):string=>value&&typeof value.toJSON==='function'?canonical(value.toJSON()):JSON.stringify(value===undefined?null:value&&typeof value==='object'?Array.isArray(value)?value.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,JSON.parse(canonical(value[k]))])):value);
+const digest=async(value:any)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(value))))).map(x=>x.toString(16).padStart(2,'0')).join('');
+const sameInput=(input:Data,result:Data)=>['document','sourceHash','sourceFile','sourceSheet','sourceRow','allocation'].every(k=>String(input[k]??'')===String(result[k]??''))&&(!input.revision||String(input.revision)===String(result.revision));
+async function referenceDigest(context:Data){return digest({versions:context.versions||{},applicability:context.applicability||{},bases:context.bases||{},history:context.history||[],ldRecords:(context.ldRecords||[]).map(({sourceTimestamp,...r}:Data)=>r)});}
+function stopWorker(){epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise substituída.')));pending.clear();}
+function emptySnapshot():Partial<Snapshot>{return {groups:[],summary:{},rows:[],records:[],history:[],events:[],context:{},progress:0,total:0,error:'',message:'Conversa sem análise vinculada. Anexe as fontes para começar.',runId:'',selected:[]};}
+function commitRestore(snapshot:Partial<Snapshot>,meta:Data|null,t:number){current(t);stopWorker();sourceFiles.clear();g.GrconAllocationGeneratorUi?.clearAuditLd?.();saveRequest='';savedEvents=snapshot.events?.length||0;saveMetadata=meta;emit(snapshot);}
+async function stageRestore(run:Data){
+ const t=epoch,rows:Data[]=[],records:Data[]=[];let meta:Data=run.metadata||{},events:Data[]=[];
+ if(!Number.isInteger(run.expected_count)||run.expected_count<1||run.expected_count>50000)throw Error('A análise salva não informa um total documental válido.');
+ const total=run.expected_count;
+ for(let after=0;after<total;){const d=await rpc('detail',{id:run.id,after});current(t);
+  if(d.run.id!==run.id||d.run.expected_count!==total)throw Error('A identificação da análise salva mudou durante a leitura.');
+  if(after===0){run=d.run;meta=run.metadata||{};events=d.events||[];}
+  if(!Array.isArray(d.rows)||d.rows.length>200)throw Error('Página de resultados inválida.');
+  if(!d.rows.length)break;
+  for(const item of d.rows){if(item.row_number!==rows.length+1)throw Error('A análise salva tem linhas ausentes ou fora de ordem.');rows.push(item.payload);}
+  after=rows.length;
+ }
+ if(rows.length>total||(run.completed_at&&rows.length!==total))throw Error('Os resultados salvos não correspondem ao total esperado.');
+ let inputComplete=false;
+ if(meta.snapshotVersion===2){
+  for(let after=0;after<total;){const d=await rpc('input-detail',{id:run.id,after});current(t);
+   if(!Array.isArray(d.rows)||d.rows.length>200)throw Error('Página de entrada inválida.');if(!d.rows.length)break;
+   for(const item of d.rows){if(item.row_number!==records.length+1)throw Error('A entrada salva tem linhas ausentes ou fora de ordem.');records.push(item.payload);}after=records.length;
+  }
+  inputComplete=records.length===total&&await digest(records)===meta.inputHash;
+  current(t);
+  if(records.length===total&&!inputComplete)throw Error('A identidade da entrada salva não confere. A retomada foi bloqueada.');
+  if(inputComplete&&rows.some((row,i)=>!sameInput(records[i],row)))throw Error('Os resultados não seguem a ordem da entrada salva.');
+ }
+ const grouped=await compute('summarize',{rows});current(t);
+ const context={checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions||{},applicability:meta.applicability||{},contract:cloud().membership.contract_id,saved:Boolean(run.completed_at),engine:meta.engine,referenceHash:meta.referenceHash,inputHash:meta.inputHash,snapshotVersion:meta.snapshotVersion,inputComplete,createdBy:run.created_by,
+  resume:{action:!inputComplete?'reanalyze':(meta.sources||[]).length?'reattach':'resume',message:!inputComplete?'Entrada completa não disponível nesta análise histórica. Inicie uma nova auditoria com todas as fontes originais.':'Entrada completa recuperada. Reanexe as fontes originais para confirmar referências e versões antes de continuar.'}};
+ const snapshot:Partial<Snapshot>={...grouped,groups:remainingGroups(events,rows),history:[],rows,records:inputComplete?records:[],events,runId:run.id,selected:rows.map((_,i)=>i),progress:rows.length,total,context,error:'',message:'Análise histórica recuperada: '+rows.length+' de '+total+' documentos. '+context.resume.message};
+ return {commit:()=>commitRestore(snapshot,meta,t)};
+}
 async function generator(){await g.GRCONModuleLoader.ensure('react-dist/allocation-app.js');return g.GrconAllocationGeneratorUi;}
 async function getContext(){const ui=await generator();return await ui.auditContext();}
 const identifyAllocation=(name:string)=>name.match(/(C1O-ALOC-[A-Z]+-\d{3,4}-20\d{2})/i)?.[1]?.toUpperCase()||'';
+const unidentifiedAllocations=()=>((state.context.sources||[]) as Data[]).filter(source=>source.kind==='allocation'&&state.records.some(r=>r.sourceHash===source.sha256&&!r.allocation&&r.allocationIdentity!=='draft-confirmed')).map(source=>({name:source.name,sha256:source.sha256}));
+const inspectionFailure=(name:string,tabs:Data[])=>name+': não encontrei uma aba com códigos documentais e cabeçalhos reconhecíveis. '+tabs.filter(tab=>tab.warning).slice(0,3).map(tab=>tab.name+': '+tab.warning).join(' ')+' Confira o arquivo antes do envio.';
 const save=(bytes:Uint8Array,name:string)=>{const u=URL.createObjectURL(new Blob([bytes as BlobPart]));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),60000);};
 export const service={
  async assistantRpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_assistant',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message);return r.data;},
  // Exclui a análise atual para começar outra. Os arquivos originais do usuário nunca são tocados;
  // o histórico já salvo no servidor é imutável (trilha de auditoria) e permanece.
  async discard(includeLds=false){
+  if(state.busy)throw Error('Pause a análise e aguarde a operação atual antes de iniciar outra auditoria.');
   epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise excluída.')));pending.clear();
   const keep=includeLds?[]:((state.context.sources||[]) as Data[]).filter(x=>x.kind==='ld');
   for(const key of [...sourceFiles.keys()])if(!keep.some(x=>x.sha256===key))sourceFiles.delete(key);
@@ -62,7 +102,7 @@ export const service={
     seenNames.add(file.name);
     const tabs=await compute('inspect',{file});
     const candidates=(tabs as Data[]).filter(t=>['official-16','mapped'].includes(t.model)&&t.documentCount>0);
-    if(!candidates.length)throw Error(file.name+': não encontrei uma aba com códigos documentais e cabeçalhos reconhecíveis. Confira o arquivo antes do envio.');
+    if(!candidates.length)throw Error(inspectionFailure(file.name,tabs));
     const official=candidates.filter(t=>t.model==='official-16');
     const officialGeneral=official.filter(t=>t.name.toUpperCase()==='GERAL');
     const mappedGeneral=candidates.filter(t=>t.name.toUpperCase()==='GERAL');
@@ -81,7 +121,7 @@ export const service={
   for(const file of files){
    const tabs=await compute('inspect',{file});current(t);
    const compatible=(tabs as Data[]).filter(x=>['official-16','mapped'].includes(x.model)&&x.documentCount>0);
-   if(!compatible.length)throw Error(file.name+': não encontrei uma aba com códigos documentais e cabeçalhos reconhecíveis. Confira o arquivo antes do envio.');
+   if(!compatible.length)throw Error(inspectionFailure(file.name,tabs));
    const official=compatible.filter(x=>x.model==='official-16');
    const officialGeneral=official.filter(x=>x.name.toUpperCase()==='GERAL');
    const mappedGeneral=compatible.filter(x=>x.name.toUpperCase()==='GERAL');
@@ -90,6 +130,8 @@ export const service={
    const candidate=requested?compatible.find(x=>x.name===requested):preferred;
    if(!candidate)throw Error(file.name+': mais de uma aba documental possível ('+compatible.map(x=>x.name).join(', ')+'). Selecione a aba correta para continuar.');
    const parsed=await compute('parse',{file,sheet:candidate.name,contract:c.membership.contract_id,allocation:identifyAllocation(file.name)});current(t);
+   const namedAllocation=identifyAllocation(file.name);
+   if(namedAllocation&&parsed.records.some((r:Data)=>r.allocation&&r.allocation!==namedAllocation))throw Error(file.name+': a identificação da alocação nas linhas diverge do nome do arquivo. Confira a coluna Alocação e o nome antes de importar; nenhuma associação foi presumida.');
    if(parsed.records.some((r:Data)=>Boolean(r.returnedAt||(parsed.columns?.fiscalComment>=0&&r.fiscalComment))))throw Error(file.name+': a planilha possui retorno ou comentário identificado da fiscalização. O Robô Auditor recebe alocações antes da submissão; comentários fiscais anteriores são usados como precedentes separados.');
    // STATUS/OBSERVACAO in a draft is an internal note, never a Fiscal 01 response.
    const normalizedRecords=parsed.records.map((r:Data)=>parsed.columns?.fiscalComment<0&&r.fiscalComment?{
@@ -98,16 +140,16 @@ export const service={
    const named=seenNames.get(file.name);
    if(named&&named!==parsed.sha256)throw Error(file.name+': o lote contém arquivos diferentes com o mesmo nome. Renomeie uma cópia.');
    seenNames.set(file.name,parsed.sha256);
-   entries.push({name:file.name,sha256:parsed.sha256,kind:'allocation',sheet:candidate.name,model:parsed.model,documentCount:parsed.records.length,correctionMode:parsed.model==='official-16'?'official-16':'audit-only'});
+   entries.push({name:file.name,sha256:parsed.sha256,kind:'allocation',sheet:candidate.name,model:parsed.model,documentCount:parsed.records.length,readingPolicy:parsed.readingPolicy,sourceIssueCount:parsed.sourceIssues?.length||0,correctionMode:parsed.model==='official-16'?'official-16':'audit-only'});
    records.push(...normalizedRecords);
   }
   const keyOf=(r:Data)=>JSON.stringify([r.contract,r.sourceHash||r.sourceFile||r.document,r.sourceSheet||'',r.sourceRow||'',r.allocation||'',r.document,r.revision]);
-  const unionAll=new Map([...state.records,...records].map(r=>[keyOf(r),r]));
   const previousAllocations=(state.context.sources||[]).filter((x:Data)=>x.kind==='allocation');
   // Retomada: os mesmos arquivos de uma análise parcial salva continuam a análise. Qualquer outro envio
   // inicia uma NOVA análise: as alocações anteriores são substituídas (nunca empilhadas); as LDs permanecem.
-  const checkpoint=Boolean(state.context.checkpoint)&&entries.every((e:Data)=>previousAllocations.some((old:Data)=>old.sha256===e.sha256))&&unionAll.size===state.records.length;
-  const unique=checkpoint?unionAll:new Map(records.map((r:Data)=>[keyOf(r),r]));
+  const checkpoint=Boolean(state.context.checkpoint);
+  if(checkpoint&&entries.some(e=>!previousAllocations.some((old:Data)=>old.sha256===e.sha256&&old.name===e.name&&old.sheet===e.sheet)))throw Error('O arquivo, a aba ou o hash não corresponde à análise pausada. Use Nova auditoria para conferir outra entrada.');
+  const unique=checkpoint?new Map(state.records.map((r,i)=>[String(i),r])):new Map(records.map((r:Data)=>[keyOf(r),r]));
   if(unique.size>50000)throw Error('O conjunto excede 50.000 registros. Divida a auditoria em lotes.');
   const replaced=!checkpoint&&(state.records.length>0||previousAllocations.length>0);
   // Commit only after every workbook, selection and origin is verified.
@@ -122,12 +164,24 @@ export const service={
   }
   if(!checkpoint)clearResults();
   emit({records:[...unique.values()],context:{...state.context,sources,inputFile:'',inputSheet:'',inputModel:'',sourceHash:'',allocation:''},message:(replaced?'Nova análise iniciada: as alocações anteriores foram substituídas. ':'')+entries.length+' alocação(ões) recebida(s) e validada(s). Arquivos originais preservados.'});
-  return {checkpoint,replaced,documents:unique.size,files:entries.length};
+  return {checkpoint,replaced,documents:unique.size,files:entries.length,unidentified:unidentifiedAllocations(),readingNotice:'Todas as linhas documentais foram consideradas, inclusive ocultas ou filtradas. Fórmulas usam o resultado salvo no arquivo; não são recalculadas pelo robô.'};
  });},
- async importAssistantLd(files:File[]){
+ unidentifiedAllocations,
+ confirmAllocationIdentities(identities:Data[]){
+  const c=requireSession();if(state.busy)throw Error('Aguarde a operação atual.');
+  const needed=unidentifiedAllocations();
+  if(identities.length!==needed.length||new Set(identities.map(x=>x.sha256)).size!==needed.length)throw Error('Confirme a identificação de cada arquivo pendente.');
+  const confirmed=new Map<string,Data>();
+  for(const source of needed){const item=identities.find(x=>x.sha256===source.sha256),value=String(item?.value||'').trim().toUpperCase();
+   if(!item||(!item.draft&&!/^[A-Z0-9][A-Z0-9 ._/-]{0,119}$/.test(value))||(item.draft&&value))throw Error('Informe o número/código de '+source.name+' ou confirme que é um rascunho sem numeração.');
+   confirmed.set(source.sha256,{allocation:value,allocationIdentity:item.draft?'draft-confirmed':'user-confirmed',identityConfirmedBy:c.session.user.id,identityConfirmedAt:new Date().toISOString()});
+  }
+  clearResults();emit({records:state.records.map(r=>{const value=confirmed.get(r.sourceHash);return value&&!r.allocation?{...r,...value}:r;}),context:{...state.context,sources:(state.context.sources||[]).map((s:Data)=>confirmed.has(s.sha256)?{...s,...confirmed.get(s.sha256)}:s)},message:'Identificações registradas para esta análise. Rascunhos continuam identificados como conferência preliminar.'});
+ },
+ async importAssistantLd(files:File[]){return task(async()=>{
   const t=epoch;
-  requireSession();
   if(!files.length||files.length>20)throw Error('Selecione de 1 a 20 LDs XLSX.');
+  if(files.reduce((sum,file)=>sum+file.size,0)>100*1024*1024)throw Error('O lote de LDs ultrapassa 100 MB. Divida os arquivos.');
   const entries:Data[]=[],names=new Map<string,string>();
   for(const file of files){
    const sha256=await compute('fingerprint',{file});current(t);
@@ -137,14 +191,15 @@ export const service={
    names.set(file.name,sha256);
    entries.push({name:file.name,sha256,kind:'ld'});
   }
-  const previous=state,previousRequest=saveRequest,previousEvents=savedEvents,previousMeta=saveMetadata;
-  const unchanged=Boolean(state.context.checkpoint)&&entries.every((e:Data)=>(state.context.sources||[]).some((old:Data)=>old.kind==='ld'&&old.sha256===e.sha256));
+  const unchanged=Boolean(state.context.checkpoint);
+  if(unchanged&&entries.some(e=>!(state.context.sources||[]).some((old:Data)=>old.kind==='ld'&&old.sha256===e.sha256&&old.name===e.name)))throw Error('A LD não corresponde à fonte da análise pausada. Use Nova auditoria para mudar as referências.');
   const previousLd=(state.context.sources||[]).filter((x:Data)=>x.kind==='ld')
    .map((x:Data)=>[x.name as string,sourceFiles.get(x.sha256)] as const).filter((pair:readonly [string,File|undefined]):pair is readonly [string,File]=>Boolean(pair[1]));
   const allLd=[...new Map<string,File>([...previousLd,...files.map(f=>[f.name,f] as const)]).values()];
+  if(unchanged){const order=(state.context.sources||[]).filter((x:Data)=>x.kind==='ld').map((x:Data)=>x.name);allLd.sort((a,b)=>order.indexOf(a.name)-order.indexOf(b.name));}
   // importLd clears obsolete findings/decisions, never the underlying allocation records.
-  await service.importLd(allLd);current(t);
-  if(unchanged){saveRequest=previousRequest;savedEvents=previousEvents;saveMetadata=previousMeta;emit(previous);}
+  await (await generator()).importAuditLd(allLd);current(t);
+  if(!unchanged)clearResults();
   const sources=[...(state.context.sources||[])];
   for(let i=0;i<entries.length;i++){
    sourceFiles.set(entries[i].sha256,files[i]);
@@ -152,7 +207,7 @@ export const service={
   }
   emit({context:{...state.context,sources,ldHashes:Object.fromEntries(sources.filter((x:Data)=>x.kind==='ld').map((x:Data)=>[x.name,x.sha256]))},message:unchanged?'LDs originais reconectadas para continuar a auditoria.':'LDs anexadas. Alocações preservadas; resultados anteriores invalidados para nova conferência.'});
   return {unchanged,records:state.records.length};
- },
+ });},
  async assistantPackage(sessionId:string,generateOfficial=false){return task(async()=>{
   if(!state.rows.length||state.progress!==state.total||state.rows.length!==state.total||state.records.length!==state.total)throw Error('Conclua a auditoria antes de preparar o pacote ou emitir nova alocação.');
   const t=epoch,files:Data[]=[],exceptions:string[]=[];const approved=g.GrconAllocationAuditorCore.approvedChanges(state.events);
@@ -200,7 +255,7 @@ export const service={
  missingSources:()=>((state.context.sources||[]) as Data[]).filter(x=>!sourceFiles.has(x.sha256)).map(x=>x.name),
  core:()=>g.GrconAllocationAuditorCore,
  async activate(){requireSession();try{const data=await rpc('history');emit({runs:data.runs});}catch(e){emit({message:'Histórico compartilhado indisponível: '+(e as Error).message});}},
- async open(seed:Data){return task(async()=>{const t=epoch;current(t);clearResults();emit({records:seed.rows.map((r:Data)=>({...r.record,document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow,databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,allocation:seed.allocation||'',sourceFile:seed.allocation?'Histórico do Gerador':'Gerador GRCON',sourceVersions:seed.sourceVersions||{},contract:cloud().membership.contract_id})),context:{...seed,contract:cloud().membership.contract_id},message:'Documentos recebidos do Gerador. Inicie a auditoria.'});});},
+ async open(seed:Data){return task(async()=>{const t=epoch;current(t);clearResults();emit({records:seed.rows.map((r:Data)=>({...r.record,document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow,databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,allocation:seed.allocation||'',allocationIdentity:seed.allocation?'from-source':'draft-confirmed',sourceFile:seed.allocation?'Histórico do Gerador':'Gerador GRCON',sourceVersions:seed.sourceVersions||{},contract:cloud().membership.contract_id})),context:{...seed,contract:cloud().membership.contract_id},message:'Documentos recebidos do Gerador. Inicie a auditoria.'});});},
  prepareUpload(){if(state.busy)return;clearResults();emit({records:[],context:{...state.context,inputFile:'',inputSheet:'',inputModel:'',sourceHash:'',allocation:''},message:'Lendo o novo arquivo de alocação…'});},
  inspect:(file:File)=>task(async()=>compute('inspect',{file})),
  async import(file:File,sheet:string,kind:'allocation'|'history',allocation=''){return task(async()=>{const c=requireSession(),t=epoch;const code=allocation.trim()||identifyAllocation(file.name);const data=await compute('parse',{file,sheet,allocation:code,contract:c.membership.contract_id});current(t);clearResults();emit(kind==='history'?{history:g.GrconAllocationAuditorCore.mergeHistory(state.history,data.records),message:`${data.records.length} eventos fiscais lidos. Comentários originais preservados.`}:{records:data.records,context:{...state.context,inputFile:file.name,inputSheet:sheet,inputModel:data.model,allocation:code,sourceHash:data.sha256},message:`${data.records.length} documentos da aba ${sheet} reconhecidos (${data.model==='official-16'?'modelo oficial de 16 colunas':'colunas compatíveis'}). Iniciando verificação.`});return data;});},
@@ -211,13 +266,22 @@ export const service={
  async useLd(){return task(async()=>{const t=epoch,ctx=await getContext();current(t);clearResults();emit({records:ctx.ldRecords.map((r:Data)=>({...r,ld:r.source,ldSheet:r.sheet,sourceFile:r.source,sourceSheet:r.sheet,sourceRow:r.row,contract:cloud().membership.contract_id})),context:ctx,message:'Documentos da LD selecionados.'});});},
  setApplicability(revision:string,evidence:string){if(state.busy)return;clearResults();emit({context:{...state.context,applicability:{source:'ET-5290.00-22000-912-1LV-001',revision,evidence,contract:cloud()?.membership?.contract_id,confirmed:Boolean(evidence.trim()&&revision)}}});},
  async analyze(resume=false){return task(async()=>{
-  const t=epoch;cancelled=false;if(!state.records.length)throw Error('Importe uma alocação ou selecione os documentos da LD.');if(state.records.length>50000)throw Error('Limite de 50.000 documentos por análise.');
+  const t=epoch;cancelled=false;
+  if(resume&&(state.context.inputComplete===false||state.records.length!==state.total||!state.total))throw Error('A entrada completa não foi recuperada. O total esperado foi preservado; inicie uma nova auditoria com todas as fontes originais.');
+  if(!state.records.length)throw Error('Importe uma alocação ou selecione os documentos da LD.');if(state.records.length>50000)throw Error('Limite de 50.000 documentos por análise.');
+  if(resume&&state.context.engine&&state.context.engine!==g.GrconAllocationAuditorCore.VERSION)throw Error('O motor mudou. Inicie uma nova auditoria; os resultados históricos permanecem preservados.');
+  if(resume&&state.runId&&state.context.createdBy!==cloud().session.user.id)throw Error('Somente o autor pode continuar esta análise.');
   let fresh:Data={},contextWarning='';try{fresh=await getContext();}catch(e){current(t);contextWarning='As bases complementares não puderam ser consultadas: '+((e as Error).message||String(e))+'. Auditoria parcial; verificações dependentes das bases permanecem inconclusivas.';}
    current(t);const context:Data={...fresh,...state.context,saved:false,checkpoint:resume&&Boolean(state.context.checkpoint),ldRecords:fresh.ldRecords||state.context.ldRecords||[],bases:fresh.bases||state.context.bases||{},versions:fresh.versions||state.context.versions||{},baseMetadata:fresh.baseMetadata||[],contract:cloud().membership.contract_id,history:g.GrconAllocationAuditorCore.mergeHistory(fresh.centralHistory||[],state.history),records:state.records,homologated:{},contextWarning};
-  if(resume&&JSON.stringify(context.sources)!==JSON.stringify(state.context.sources))throw Error('As fontes mudaram. Inicie uma nova análise.');
-  if(resume&&JSON.stringify(context.versions)!==JSON.stringify(state.rows[0]?.versions||context.versions))throw Error('As bases mudaram. Inicie uma nova análise.');
+  if(resume&&contextWarning)throw Error('Não foi possível confirmar as referências para retomar. Tente novamente quando as bases estiverem disponíveis.');
+  if(resume&&canonical(context.versions)!==canonical(state.context.versions||{}))throw Error('As bases mudaram. Inicie uma nova análise.');
   if(resume&&state.context.checkpoint&&(state.context.sources||[]).some((s:Data)=>!sourceFiles.has(s.sha256)))throw Error('Reanexe todas as alocações e LDs originais antes de retomar.');
-  if(!resume)clearResults();emit({context,total:state.records.length});await compute('context',context);current(t);
+  context.referenceHash=await referenceDigest(context);current(t);
+  if(resume&&(!state.context.referenceHash||context.referenceHash!==state.context.referenceHash))throw Error('As referências ou o histórico mudaram. Inicie uma nova auditoria para não misturar resultados.');
+  if(resume&&state.rows.some((r,i)=>!sameInput(state.records[i],r)))throw Error('Os resultados parciais não correspondem à ordem da entrada.');
+  context.inputComplete=true;context.engine=g.GrconAllocationAuditorCore.VERSION;context.createdBy=cloud().session.user.id;
+  const total=resume?state.total:state.records.length;
+  if(!resume)clearResults();emit({context,total});await compute('context',context);current(t);
   let rows=resume?state.rows.slice():[];
   for(let i=rows.length;i<context.records.length;i+=100){if(cancelled)break;const next=await compute('batch',{first:i,count:100});current(t);rows=[...rows,...next];emit({rows,progress:rows.length,selected:rows.map((_,i)=>i)});await new Promise(resolve=>setTimeout(resolve,0));}
   const grouped=await compute('summarize',{rows});current(t);
@@ -229,27 +293,37 @@ export const service={
   const event={...g.GrconAllocationAuditorCore.reviewEvent(row,input,c.session.user.id),requestId:crypto.randomUUID()};
   const events=[...state.events,event];emit({events,groups:remainingGroups(events),message:'Decisão registrada. A Central e a LD oficial não foram alteradas.'});
  },
- async save(){return task(async()=>{if(!state.rows.length)throw Error('Nenhuma análise para salvar.');const t=epoch;saveRequest=saveRequest||crypto.randomUUID();
-  const metadata=saveMetadata||(saveMetadata={engine:g.GrconAllocationAuditorCore.VERSION,contextWarning:state.context.contextWarning||'',sources:state.context.sources||[],ldHashes:state.context.ldHashes||{},versions:state.context.versions,applicability:state.context.applicability||{},sourceCount:(state.context.history||state.history).length,summary:g.GrconAllocationAuditorCore.summary(state.rows),kind:'audit'});
-  const {id}=state.runId?{id:state.runId}:await rpc('begin',{requestId:saveRequest,count:state.total||state.records.length,metadata});current(t);emit({runId:id});
-  // Saved rows are immutable. Finishing may be retried after a lost response.
-  if(!state.context.saved){for(let i=0;i<state.rows.length;i+=100){const rows=state.rows.slice(i,i+100).map(r=>{const {history,...rest}=r;return {...rest,history:history.map((h:Data)=>({document:h.document,revision:h.revision,allocation:h.allocation,fiscalComment:h.fiscalComment,fiscalDecision:h.fiscalDecision,returnedAt:h.returnedAt,sourceFile:h.sourceFile,sourceSheet:h.sourceSheet,sourceRow:h.sourceRow}))};});await rpc('chunk',{id,first:i+1,rows});current(t);}if(state.rows.length===state.total){await rpc('finish',{id});current(t);emit({context:{...state.context,saved:true,checkpoint:false}});}else emit({context:{...state.context,checkpoint:true}});}
-  for(let i=savedEvents;i<state.events.length;i++){const e=state.events[i];await rpc('event',{id,requestId:e.requestId,event:e});current(t);savedEvents=i+1;}
-  const page=await rpc('history');emit({runs:page.runs,message:state.progress===state.total?'Análise e decisões salvas com histórico auditável.':'Progresso parcial salvo. Reanexe as mesmas fontes para retomar após fechar o navegador.'});
+ async save(){return task(async()=>{
+  if(!state.rows.length)throw Error('Nenhuma análise para salvar.');
+  if(state.records.length!==state.total||state.context.inputComplete===false)throw Error('Não é possível salvar uma entrada incompleta como análise completa.');
+  const t=epoch;saveRequest=saveRequest||crypto.randomUUID();
+  const metadata=saveMetadata||{snapshotVersion:2,inputHash:await digest(state.records),referenceHash:state.context.referenceHash,engine:g.GrconAllocationAuditorCore.VERSION,contextWarning:state.context.contextWarning||'',sources:state.context.sources||[],ldHashes:state.context.ldHashes||{},versions:state.context.versions,applicability:state.context.applicability||{},sourceCount:(state.context.history||state.history).length,summary:g.GrconAllocationAuditorCore.summary(state.rows),kind:'audit'};
+  current(t);saveMetadata=metadata;
+  const {id}=state.runId?{id:state.runId}:await rpc('begin',{requestId:saveRequest,count:state.total,metadata});current(t);if(!id)throw Error('O servidor não confirmou a identificação da análise.');emit({runId:id});
+  const sendRows=async(operation:string,rows:Data[])=>{
+   for(let first=0;first<rows.length;){let end=first,bytes=0;
+    while(end<rows.length&&end-first<100){const size=new TextEncoder().encode(JSON.stringify(rows[end])).length;if(size>90000)throw Error('Um registro excede o limite de salvamento. Divida o conteúdo de evidências na origem.');if(end>first&&bytes+size>1000000)break;bytes+=size;end++;}
+    await rpc(operation,{id,first:first+1,rows:rows.slice(first,end)});current(t);first=end;
+   }
+  };
+  try{
+   if(!state.context.saved){
+    await sendRows('input-chunk',state.records);
+    const rows=state.rows.map(r=>{const {history,...rest}=r;return {...rest,history:(history||[]).map((h:Data)=>({document:h.document,revision:h.revision,allocation:h.allocation,fiscalComment:h.fiscalComment,fiscalDecision:h.fiscalDecision,returnedAt:h.returnedAt,sourceFile:h.sourceFile,sourceSheet:h.sourceSheet,sourceRow:h.sourceRow}))};});
+    await sendRows('chunk',rows);
+    if(state.rows.length===state.total){await rpc('finish',{id});current(t);emit({context:{...state.context,saved:true,checkpoint:false}});}
+    else emit({context:{...state.context,checkpoint:true}});
+   }
+   for(let i=savedEvents;i<state.events.length;i++){const e=state.events[i];await rpc('event',{id,requestId:e.requestId,event:e});current(t);savedEvents=i+1;}
+  }catch(e){current(t);emit({message:'O salvamento não foi confirmado por completo. Mantenha esta análise aberta e tente salvar novamente; os lotes idênticos podem ser reenviados.'});throw e;}
+  let runs=state.runs,warning='';try{const page=await rpc('history');runs=page.runs;}catch(e){current(t);warning=' A gravação foi confirmada, mas a lista de histórico está indisponível: '+(e as Error).message;}
+  emit({runs,message:(state.progress===state.total?'Análise e decisões salvas com histórico auditável.':'Progresso parcial e entrada completa salvos. Reanexe as mesmas fontes para retomar após fechar o navegador.')+warning});
  });},
  async historyRows(id:string,after=0){return rpc('detail',{id,after});},
- async restoreById(id:string){const data=await rpc('detail',{id,after:0});return service.restore(data.run);},
- async restore(run:Data){return task(async()=>{const t=epoch;const rows:Data[]=[];let meta:Data={},events:Data[]=[];
-  for(let i=0;i<run.expected_count;i+=200){const d=await rpc('detail',{id:run.id,after:i});current(t);if(!d.rows.length)break;rows.push(...d.rows.map((x:Data)=>x.payload));meta=d.run.metadata;events=d.events;}
-  const grouped=await compute('summarize',{rows});current(t);
-  clearResults();saveMetadata=meta;savedEvents=events.length;// Fase 8: retomada só com contrato, permissão, motor, hashes e versões compatíveis.
-  // As versões atuais das bases só são consultadas ao retomar (analyze compara de novo); restaurar nunca carrega o Gerador.
-  const currentVersions:Data=meta.versions||{};
-  const available:Data={};for(const key of sourceFiles.keys())available[key]=key;
-  const learning=g.GrconAllocationLearning;
-  const check=learning?learning.resumeCheck({contract:cloud().membership.contract_id,engine:meta.engine,sources:meta.sources||[],versions:meta.versions||{}},{contract:cloud().membership.contract_id,permitted:['owner','admin','operator'].includes(cloud().membership.role),engine:g.GrconAllocationAuditorCore.VERSION,availableSources:available,versions:currentVersions}):{action:'reanalyze',reasons:[],reattach:[],message:'Reanalise para usar bases atuais.'};
-  emit({...grouped,groups:remainingGroups(events,rows),rows,records:rows.map(r=>({...r})),events,runId:run.id,selected:rows.map((_,i)=>i),progress:rows.length,total:run.expected_count,context:{checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions,applicability:meta.applicability,contract:cloud().membership.contract_id,saved:Boolean(run.completed_at),resume:{action:check.action,reasons:check.reasons,reattach:check.reattach}},message:'Análise histórica carregada com suas versões originais. '+check.message});
- });},
+ async prepareRestoreById(id:string){return task(async()=>{const data=await rpc('detail',{id,after:0});return stageRestore(data.run);}) as Promise<{commit:()=>void}>;},
+ prepareEmptyConversation(){if(state.busy)throw Error('Aguarde a operação atual antes de trocar de conversa.');const t=epoch;return {commit:()=>commitRestore(emptySnapshot(),null,t)};},
+ async restoreById(id:string){const staged=await service.prepareRestoreById(id);staged.commit();},
+ async restore(run:Data){const staged=await task(()=>stageRestore(run)) as {commit:()=>void};staged.commit();},
  async export(official=false){return task(async()=>{if(!state.rows.length)throw Error('Execute a auditoria primeiro.');const t=epoch;let files:Data[]=[];
   if(official){if(state.progress!==state.total)throw Error('Conclua a análise antes de gerar o pacote oficial.');const ui=await generator();files=await ui.generateAudited(state.rows.filter((_,i)=>state.selected.includes(i)),state.events,state.context.versions);current(t);}
   const bytes=await compute('export',{...state.context,rows:state.rows,events:state.events,history:state.context.history|| (state.history.length?state.history:state.rows.flatMap(r=>r.history||[])),files});current(t);save(bytes,'Auditoria_Alocacao_GRCON.zip');

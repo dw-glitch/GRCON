@@ -91,7 +91,10 @@
  // Resumo real: nenhum número demonstrativo.
  function plan(rows,context,assistant,events){
   const proposals=[],complementary=[];
-  const accepted=new Set((events||[]).filter(e=>e.field&&e.decision==='accepted').map(e=>JSON.stringify([e.lineage,e.field,e.after])));
+  // A decisão VIGENTE é a última por (linhagem, campo, valor): aceitar e depois rejeitar/revogar remove a autorização.
+  const ordered=(events||[]).map((e,i)=>({e,i})).sort((a,b)=>(a.e.at&&b.e.at?String(a.e.at).localeCompare(String(b.e.at)):0)||a.i-b.i).map(x=>x.e);
+  const latest=new Map();for(const e of ordered)if(e.field)latest.set(JSON.stringify([e.lineage,e.field,e.after]),e.decision);
+  const accepted={has:key=>latest.get(key)==='accepted'};
   let clear=0,withProposal=0,withPending=0;
   for(const row of rows||[]){
    const recs=row.recommendations||[];

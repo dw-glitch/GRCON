@@ -4,14 +4,16 @@ export type Message={id:string;role:'user'|'assistant';text:string};
 type SheetChoice={name:string;options:Array<{name:string;model:string;documentCount:number}>;selected:string};
 type State={
  open:boolean;messages:Message[];sessionId:string;revision:number;
- pending:boolean;error:string;sessions:Data[];pendingSheets:SheetChoice[];plan:Data|null;
+ pending:boolean;error:string;sessions:Data[];pendingSheets:SheetChoice[];pendingAllocations:Data[];plan:Data|null;saveState:'idle'|'saving'|'saved'|'failed'|'conflict';
 };
 const welcome='Olá! Sou o Robô Auditor Preventivo do GRCON. Posso conferir uma alocação criada aqui ou uma planilha externa, antes do envio à fiscalização. Envie a alocação, anexe as LDs necessárias e peça para auditar.';
 const initial=():State=>({
  open:false,messages:[{id:'hello',role:'assistant',text:welcome}],
- sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[],plan:null
+ sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[],pendingAllocations:[],plan:null,saveState:'idle'
 });
-let state=initial(),generation=0;
+let state=initial(),generation=0,pendingWrite:Data|null=null;
+const contextIdentity=()=>{const g=window as unknown as Data;return JSON.stringify([g.GrconCloud?.state?.session?.user?.id,g.GrconCloud?.state?.membership?.workspace_id,g.GrconCloud?.state?.membership?.contract_id]);};
+let sessionIdentity=contextIdentity();
 let pendingAllocationFiles:File[]=[];
 const listeners=new Set<()=>void>();
 const emit=(patch:Partial<State>)=>{state={...state,...patch};listeners.forEach(f=>f());};
@@ -21,22 +23,34 @@ const say=(text:string,role:Message['role']='assistant')=>emit({
 
 async function persist(){
  const ticket=generation,snapshot=state,s=service.snapshot();
- const result=await service.assistantRpc('session-write',{
-  id:snapshot.sessionId,revision:snapshot.revision,
-  payload:{messages:snapshot.messages.slice(-100),runId:s.runId,
-   sourceHashes:(s.context.sources||[]).map((x:Data)=>x.sha256)}
- });
- if(ticket===generation)emit({revision:result.revision});
+ emit({saveState:'saving'});
+ let revision=snapshot.revision;
+ if(pendingWrite?.id===snapshot.sessionId){
+  const prior=await service.assistantRpc('session-write',pendingWrite);
+  if(ticket!==generation)return;
+  if(!Number.isInteger(prior.revision))throw Error('O servidor não confirmou a revisão da conversa.');
+  revision=prior.revision;pendingWrite=null;emit({revision});
+ }
+ const messages=snapshot.messages.slice(-100),sourceHashes=(s.context.sources||[]).map((x:Data)=>x.sha256);
+ while(messages.length>1&&new TextEncoder().encode(JSON.stringify({messages,runId:s.runId,sourceHashes})).length>70000)messages.shift();
+ const request={
+  id:snapshot.sessionId,revision,
+  payload:{messages,runId:s.runId,sourceHashes}
+ };pendingWrite=request;
+ const result=await service.assistantRpc('session-write',request);
+ if(!Number.isInteger(result.revision))throw Error('O servidor não confirmou a revisão da conversa.');
+ if(ticket===generation){pendingWrite=null;emit({revision:result.revision,saveState:'saved'});}
 }
-async function execute(action:(speak:typeof say)=>Promise<unknown>){
+async function execute(action:(speak:typeof say)=>Promise<unknown>,allowConflict=false){
  if(state.pending)return;
+ if(state.saveState==='conflict'&&!allowConflict){emit({error:'Esta conversa foi alterada em outra janela. Reabra a conversa salva ou inicie Nova auditoria antes de continuar.'});return;}
  const ticket=generation;
  emit({pending:true,error:''});
  try{
   await action((text,role)=>{if(ticket===generation)say(text,role);});
   if(ticket===generation){
    try{await persist();}
-   catch(e){if(ticket===generation)emit({error:'Conversa ainda não salva: '+(e as Error).message});}
+   catch(e){if(ticket===generation)emit({saveState:/outra janela/.test((e as Error).message)?'conflict':'failed',error:'Conversa ainda não salva: '+(e as Error).message});}
   }
  }catch(e){
   if(ticket===generation){
@@ -55,12 +69,15 @@ const snapshotStatus=()=>{
   (s.context.contextWarning?' Há limitações de acesso às bases complementares; confira as fontes no relatório.':'');
 };
 async function audit(resume=false,speak:typeof say=say){
+ if(resume&&service.snapshot().context.inputComplete===false){speak('A análise histórica não contém a entrada completa. O total original foi preservado. Use Nova auditoria e anexe todas as fontes para conferir o conjunto inteiro.');return;}
+ const unidentified=service.unidentifiedAllocations?.()||[];
+ if(unidentified.length){emit({pendingAllocations:unidentified.map((x:Data)=>({...x,value:state.pendingAllocations.find(p=>p.sha256===x.sha256)?.value||'',draft:state.pendingAllocations.find(p=>p.sha256===x.sha256)?.draft||false}))});speak('Falta confirmar a identificação de '+unidentified.length+' alocação(ões). Informe o número/código abaixo ou confirme que o arquivo é um rascunho sem numeração. Nenhuma emissão será criada.');return;}
  if(!service.snapshot().records.length){
   speak('Envie uma alocação XLSX externa ou selecione documentos no Gerador para começar.');return;
  }
  if(resume){
   const s=service.snapshot();
-  if(s.total===0||s.progress===0){speak('Não há um processamento pausado. Inicie a auditoria dos arquivos recebidos.');return;}
+  if(s.total===0||(s.progress===0&&!s.context.checkpoint)){speak('Não há um processamento pausado. Inicie a auditoria dos arquivos recebidos.');return;}
   if(s.progress===s.total){speak('Esta análise já foi concluída. Consulte as pendências ou baixe o pacote.');return;}
  }
  speak(resume?'Vou continuar a conferência do ponto salvo.':'Vou iniciar a conferência preventiva dos documentos, consultando as referências disponíveis.');
@@ -92,6 +109,7 @@ const help=()=>[
  '• Consultar "Situação" ou "Ver pendências";',
  '• Pedir explicação citando o código completo do documento;',
  '• "Retomar análise" após uma pausa ou "Baixar pacote" ao concluir.',
+ 'Limites por envio: até 20 arquivos XLSX, 30 MB por arquivo e 100 MB no lote. A auditoria aceita até 50.000 registros documentais. Linhas ocultas e filtradas também são conferidas.',
  'Uma nova emissão numerada é uma ação separada, nunca automática.'
 ].join('\n');
 
@@ -108,6 +126,7 @@ export const assistant={
    .catch((e:Error)=>{if(ticket===generation)emit({error:'Histórico de conversas indisponível: '+e.message});});
  },
  close(){emit({open:false});},
+ retrySave(){return execute(async(speak)=>speak('Vou tentar salvar a conversa novamente.'));},
  status(){return execute(async(speak)=>speak(snapshotStatus()));},
  help(){return execute(async(speak)=>speak(help()));},
  current(){return execute(async(speak)=>{
@@ -134,8 +153,9 @@ export const assistant={
    }
    const imported=await service.importMany(files) as Data;
    pendingAllocationFiles=[];
-   emit({pendingSheets:[]});
+   emit({pendingSheets:[],pendingAllocations:[]});
    speak('Recebi e validei '+files.length+' alocação(ões).'+(imported.replaced?' Iniciei uma nova análise: as alocações anteriores foram substituídas e não se misturam a estas.':' Documentos incorporados à sessão com origem e ocorrências preservadas.'));
+   if(imported.readingNotice)speak(imported.readingNotice);
    if(imported.checkpoint&&service.snapshot().progress<service.snapshot().total){
     const missing=service.missingSources();
     if(missing.length){speak('A análise parcial foi preservada. Reanexe estas fontes para continuar: '+missing.join(', '));return;}
@@ -161,6 +181,14 @@ export const assistant={
   if(state.pending)return;
   emit({pendingSheets:state.pendingSheets.map(x=>x.name===fileName?{...x,selected:sheet}:x)});
  },
+ identifyAllocation(sha256:string,value:string,draft=false){if(state.pending)return;emit({pendingAllocations:state.pendingAllocations.map(x=>x.sha256===sha256?{...x,value:draft?'':value,draft}:x)});},
+ confirmAllocationIdentities(){return execute(async(speak)=>{
+  if(!state.pendingAllocations.length)return;
+  service.confirmAllocationIdentities(state.pendingAllocations);
+  emit({pendingAllocations:[]});
+  speak('Identificação confirmada. Vou conferir as fontes disponíveis; rascunho sem numeração continua sujeito à identificação da emissão final.');
+  await audit(false,speak);
+ });},
  cancelSheetSelection(){
   if(state.pending)return;
   pendingAllocationFiles=[];emit({pendingSheets:[]});
@@ -174,7 +202,8 @@ export const assistant={
   const selected=Object.fromEntries(state.pendingSheets.map(x=>[x.name,x.selected]));
   const imported=await service.importMany(pendingAllocationFiles,selected) as Data;
   speak('Abas confirmadas e arquivos validados.'+(imported.replaced?' Iniciei uma nova análise: as alocações anteriores foram substituídas.':'')+' Vou conferir as ocorrências antes do envio à fiscalização.');
-  pendingAllocationFiles=[];emit({pendingSheets:[]});
+  pendingAllocationFiles=[];emit({pendingSheets:[],pendingAllocations:[]});
+  if(imported.readingNotice)speak(imported.readingNotice);
   if(imported.checkpoint&&service.snapshot().progress<service.snapshot().total){
    const missing=service.missingSources();
    if(missing.length)speak('A análise parcial foi preservada. Reanexe as fontes restantes: '+missing.join(', '));
@@ -273,13 +302,16 @@ export const assistant={
  });},
  // Exclui a análise atual (e, se pedido, as LDs desta sessão) para começar uma nova. Não altera arquivos do usuário.
  async discardAnalysis(includeLds=false){
-  generation++;pendingAllocationFiles=[];
-  emit({pending:false,error:'',pendingSheets:[],plan:null});
+  if(state.pending||service.snapshot().busy){emit({error:'Pause a análise e aguarde a operação atual antes de iniciar outra auditoria.'});return;}
+  const open=state.open,sessions=state.sessions;generation++;const ticket=generation;pendingAllocationFiles=[];pendingWrite=null;
+  emit({...initial(),open,sessions,pending:true});
   try{
    await service.discard(includeLds);
+   if(ticket!==generation)return;
    say(includeLds?'Análise e LDs excluídas desta sessão. Envie as alocações e as LDs para começar uma nova auditoria. Seus arquivos originais não foram alterados.':'Análise excluída. As LDs continuam disponíveis: envie a alocação que deseja auditar. Seus arquivos originais não foram alterados.');
-   try{await persist();}catch(e){emit({error:'Conversa ainda não salva: '+(e as Error).message});}
-  }catch(e){emit({error:(e as Error).message});}
+   try{await persist();}catch(e){if(ticket===generation)emit({saveState:'failed',error:'Conversa ainda não salva: '+(e as Error).message});}
+  }catch(e){if(ticket===generation)emit({error:(e as Error).message});}
+  finally{if(ticket===generation)emit({pending:false});}
  },
  applySafe(){return execute(async(speak)=>{
   const count=await service.applyAutomatic();
@@ -294,11 +326,17 @@ export const assistant={
  });},
  restore(id:string){return execute(async(speak)=>{
   if(state.pendingSheets.length){speak('Cancele primeiro a seleção de abas da importação pendente.');return;}
+  const ticket=generation;
   const result=await service.assistantRpc('session-read',{id});
-  if(result.payload.runId)await service.restoreById(result.payload.runId);
-  emit({sessionId:id,revision:result.revision,messages:result.payload.messages||[]});
+  if(!result.payload||!Array.isArray(result.payload.messages)||!Number.isInteger(result.revision))throw Error('A conversa salva retornou dados incompletos.');
+  const staged=result.payload.runId?await service.prepareRestoreById(result.payload.runId):service.prepareEmptyConversation();
+  if(ticket!==generation)return;
+  staged.commit();pendingAllocationFiles=[];pendingWrite=null;
+  emit({sessionId:id,revision:result.revision,messages:result.payload.messages,pendingSheets:[],pendingAllocations:[],plan:null,saveState:'saved'});
+  if(service.snapshot().rows.length)await refreshPlan();
   speak('Conversa recuperada. Reanexe as fontes originais quando necessário e reanalise antes de novas correções.');
- });},
+ },true);},
 };
-for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])
- window.addEventListener(event,()=>{generation++;pendingAllocationFiles=[];state=initial();listeners.forEach(f=>f());});
+function resetConversation(){generation++;pendingAllocationFiles=[];pendingWrite=null;sessionIdentity=contextIdentity();state=initial();listeners.forEach(f=>f());}
+for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])window.addEventListener(event,resetConversation);
+window.addEventListener('grcon:cloud-ready',()=>{if(sessionIdentity!==contextIdentity())resetConversation();});

@@ -9,11 +9,41 @@ importScripts('../xlsx.full.min.js','../exceljs.min.js','../jszip.min.js',
  '../vendor/recon/ld_preservation.js','../vendor/recon/ld_title_writer.js','../vendor/recon/ld_databook_writer.js','../vendor/recon/title_codes_csv.js',
  '../vendor/recon/offline_resources.js','../vendor/recon/offline_recon_databook_c.js','../vendor/recon/offline_recon_eap_paths.js',
  '../vendor/recon/offline_recon_allocation_template.js','../vendor/recon/offline_recon_audit_bases.js','../vendor/recon/databook_catalog.js',
- '../vendor/recon/allocation_databook_finder.js','../allocation_ld_export.js','../allocation_generator_core.js');
+ '../vendor/recon/allocation_databook_finder.js','../allocation_ld_export.js','../allocation_generator_core.js','../allocation_auditor_core.js');
 const A=self.AllocationCore,C=self.RECONTriagemCore,W=self.AllocationWorkbook,Engine=self.GrconAllocationGeneratorCore;
 const bytesToBase64=bytes=>{let value='';for(let i=0;i<bytes.length;i+=8192)value+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(value);};
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');
-function read(bytes){return XLSX.read(bytes,{type:'array',cellDates:true,cellFormula:true});}
+function read(bytes){return XLSX.read(bytes,{type:'array',cellDates:true,cellFormula:true,cellNF:true,sheetStubs:true});}
+function parseAuditLd(book,name){
+ const parsed=C.parseWorkbook(book,name,Date.now()),I=self.GrconAllocationAuditorCore;
+ if(!parsed.records.length)throw Error('Nenhum documento foi reconhecido nas abas técnicas da LD '+name+'. Confira as abas e a coluna Documento antes de importar.');
+ const maps=new Map();
+ for(const info of parsed.coverage.sheets.filter(s=>s.role==='técnica')){
+  const ws=book.Sheets[info.sheet],range=XLSX.utils.decode_range(ws['!ref']);
+  const header=[];for(let col=0;col<=Math.min(range.e.c,400);col++)header[col]=I.cellSnapshot(ws,XLSX,info.headerRow-1,col).display;
+  const map=I.headerMap(header);
+  for(const field of ['document','revision','title','databook']){
+   const matches=header.map((value,index)=>{
+    const label=C.norm(value),matches=field==='document'?label==='DOCUMENTO'||label.startsWith('DOCUMENTO ')||['CODIGO DOCUMENTO','CODIGO DO DOCUMENTO'].includes(label):field==='title'?label==='TITULO'||label.includes('TITULO DO DOCUMENTO'):field==='databook'?label.includes('CAMINHO DATABOOK')||label.includes('CAMINHO DATA BOOK'):I.headerMap([value])[field]===0;
+    return matches?index:-1;
+   }).filter(index=>index>=0);
+   if(matches.length>1)throw Error(name+' · '+info.sheet+': cabeçalho ambíguo na linha '+info.headerRow+'. Há mais de uma coluna de '+({document:'documento',revision:'revisão',title:'título',databook:'Data Book'}[field])+'. Confirme o layout da LD.');
+   if(matches.length===1)map[field]=matches[0];
+  }
+  maps.set(info.sheet.trim(),{...map,sourceSheet:info.sheet});
+  for(let row=info.headerRow;row<=range.e.r;row++)if(map.document>=0){const value=I.cellSnapshot(ws,XLSX,row,map.document);if(value.issue)throw Error(name+' · '+info.sheet+'!'+value.cell+': '+value.issue+'. Corrija a LD e importe novamente.');}
+ }
+ for(const row of parsed.records){const map=maps.get(row.sheet);if(!map)continue;row.cellValues={};row.sourceIssues=[];
+  for(const field of ['document','revision','title','ldVersion','workflow','eap','tag','databook','discipline']){
+   if(map[field]<0||map[field]===undefined)continue;
+   const value=I.cellSnapshot(book.Sheets[map.sourceSheet],XLSX,row.row-1,map[field]);row.cellValues[field]=value;
+   if(value.issue){row.sourceIssues.push({field,cell:value.cell,message:value.issue});row[field]='';}
+   else if(['document','revision','eap','tag'].includes(field))row[field]=I.text(value.display);
+  }
+  row.documentKey=C.key(row.document);
+ }
+ return parsed;
+}
 function parse(kind,book,name){
  if(kind==='databook'){
   // Historical files may have the revision in the official map's sheet name.
@@ -76,7 +106,7 @@ function parse(kind,book,name){
   throw Error('Nenhuma aba de caminhos Databook encontrada. Use CAMINHO DB_SIGEM (com ou sem sufixo de revisão) ou uma tabela com a coluna Caminho Databook.');
  }
  if(kind==='eap')return A.parseProjectLevelBase(book,XLSX);
- if(kind==='ld')return C.parseWorkbook(book,name,Date.now());
+ if(kind==='ld')return parseAuditLd(book,name);
  if(kind==='confirmation')return self.RECONAllocationConfirmations.parseWorkbook(book,XLSX,{name}).rows;
  if(kind==='list')return A.parseRelationWorkbook(book,XLSX).entries.map(e=>({document:e.raw}));
  if(kind==='history')return A.parseHistoricalAllocationWorkbook(book,XLSX,name).rows;

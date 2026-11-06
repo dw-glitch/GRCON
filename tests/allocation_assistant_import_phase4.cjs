@@ -46,7 +46,7 @@ class FakeWorker{
  terminate(){}
 }
 const qaModule={exports:{}};
-vm.runInNewContext(js,{exports:qaModule.exports,module:qaModule,window:g,Worker:FakeWorker,crypto:require('node:crypto').webcrypto,console,setTimeout,clearTimeout,Promise,Blob,URL});
+vm.runInNewContext(js,{exports:qaModule.exports,module:qaModule,window:g,Worker:FakeWorker,crypto:require('node:crypto').webcrypto,console,TextEncoder,setTimeout,clearTimeout,Promise,Blob,URL});
 const service=qaModule.exports.service;
 (async()=>{
  const a=files('C1O-ALOC-CM-0372-2026.xlsx','a'.repeat(64));

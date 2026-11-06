@@ -52,7 +52,7 @@ const qaModule={exports:{}};
 vm.runInNewContext(script,{exports:qaModule.exports,module:qaModule,require:id=>{
  if(id==='./service')return {service};
  throw Error('Unexpected import '+id);
-},window,crypto:webCrypto,console,Promise});
+},window,crypto:webCrypto,console,TextEncoder,Promise});
 const assistant=qaModule.exports.assistant;
 const read=()=>assistant.snapshot().messages.map(x=>x.text).join('\n');
 (async()=>{
