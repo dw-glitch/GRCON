@@ -16,7 +16,7 @@ class TestWorker{
  terminate(){this.stopped=true;}
 }
 w.Worker=TestWorker;
-for(const f of ['allocation_auditor_core.js','allocation_auditor_assistant.js','allocation_auditor_corrections.js','allocation_auditor_learning.js','react-dist/allocation-auditor-app.js'])w.eval(fs.readFileSync(path.join(root,f),'utf8'));
+for(const f of ['allocation_auditor_references.js','allocation_auditor_opinion.js','allocation_auditor_core.js','allocation_auditor_assistant.js','allocation_auditor_corrections.js','allocation_auditor_learning.js','react-dist/allocation-auditor-app.js'])w.eval(fs.readFileSync(path.join(root,f),'utf8'));
 const wait=async fn=>{for(let i=0;i<300;i++){if(fn())return;await new Promise(r=>setTimeout(r,10));}throw Error('DOM wait timed out');};
 const button=t=>[...w.document.querySelectorAll('button')].find(b=>b.textContent===t);
 (async()=>{
@@ -27,9 +27,9 @@ const button=t=>[...w.document.querySelectorAll('button')].find(b=>b.textContent
  await wait(()=>w.document.querySelector('[aria-label="Confirmar identificação das alocações"]'));
  assert.equal(audits,0,'Unidentified allocation cannot start automatically');assert.equal(button('Confirmar identificação e auditar').disabled,true);
  assert.match(w.document.querySelector('.aac-messages').textContent,/Informe o número\/código/);
- w.document.querySelector('[aria-label="Fechar conversa"]').click();await wait(()=>!w.document.querySelector('#aac-panel'));w.document.querySelector('.aac-launcher').click();await wait(()=>w.document.querySelector('[aria-label="Confirmar identificação das alocações"]'));
+ w.document.querySelector('[aria-label="Minimizar conversa"]').click();await wait(()=>!w.document.querySelector('#aac-panel'));w.document.querySelector('.aac-launcher').click();await wait(()=>w.document.querySelector('[aria-label="Confirmar identificação das alocações"]'));
  w.document.querySelector('[aria-label="Confirmar identificação das alocações"] input[type="checkbox"]').click();await wait(()=>!button('Confirmar identificação e auditar').disabled);button('Confirmar identificação e auditar').click();
  await wait(()=>w.document.querySelector('.aac-plan'));assert.equal(audits,1);assert.equal(w.document.querySelector('[aria-label="Confirmar identificação das alocações"]'),null);
- assert.match(w.document.querySelector('.aac-result').textContent,/1 de 1/);assert.match(w.document.querySelector('.aac-result').textContent,/[1-9]\d* verificações pendentes/);assert.equal(errors.length,0);
+ assert.match(w.document.querySelector('.aac-result').textContent,/1 de 1/);assert.match(w.document.querySelector('.aac-result').textContent,/[1-9]\d* documento\(s\) com verificação pendente/);assert.equal(errors.length,0);
  console.log(JSON.stringify({suite:'allocation_auditor_identity_dom_phase1',passed:['real React upload','identification gate','empty confirmation disabled','close and reopen preserves pending identity','explicit draft confirmation starts Worker','result retains pending checks'],limitations:'JSDOM; file transport and RPC fixtures; no pixel or mobile verification'},null,2));
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>dom.window.close());

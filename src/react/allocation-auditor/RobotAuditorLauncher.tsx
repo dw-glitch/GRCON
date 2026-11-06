@@ -1,5 +1,6 @@
 import {useEffect,useLayoutEffect,useRef,useState,useSyncExternalStore} from 'react';
 import {assistant} from './assistantStore';
+import {service} from './service';
 
 type MascotHost = {
  presentIn?:(host:HTMLElement|null)=>boolean;
@@ -20,7 +21,7 @@ const launchAvailable=()=>{
  * transferring the mascot could cause the official runtime to recreate its overlay.
  */
 export function RobotAuditorLauncher(){
- const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot);
+ const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot),svc=useSyncExternalStore(service.subscribe,service.snapshot);
  const [active,setActive]=useState(launchAvailable);
  const host=useRef<HTMLSpanElement>(null);
 
@@ -71,6 +72,9 @@ export function RobotAuditorLauncher(){
   };
  },[active,chat.open]);
 
+ const complete=svc.rows.length>0&&svc.total>0&&svc.progress===svc.total;
+ const open=complete?(svc.summary.errors||0)+(svc.summary.pending||0):0;
+ const caption=svc.busy&&svc.total>0?'Auditando '+svc.progress+'/'+svc.total:svc.rows.length&&!complete?'Retomar auditoria':complete?'Ver resultado':'Auditar antes do envio';
  if(!active)return null;
  return <button type="button"
    className={'aac-launcher'+(chat.open?' aac-launcher-hidden':'')}
@@ -83,6 +87,6 @@ export function RobotAuditorLauncher(){
    title="Audite a alocação antes de enviar à fiscalização"
    onClick={()=>assistant.show()}>
    <span ref={host} className="aac-launcher-mascot" aria-hidden="true"/>
-   <span className="aac-launcher-caption">Auditar antes do envio</span>
+   <span className="aac-launcher-caption">{caption}{open>0&&<span className="aac-launcher-badge" aria-label={open+' documento(s) com erros ou pendências'}>{open}</span>}</span>
  </button>;
 }

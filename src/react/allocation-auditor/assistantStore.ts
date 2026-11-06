@@ -5,11 +5,13 @@ type SheetChoice={name:string;options:Array<{name:string;model:string;documentCo
 type State={
  open:boolean;messages:Message[];sessionId:string;revision:number;
  pending:boolean;error:string;sessions:Data[];pendingSheets:SheetChoice[];pendingAllocations:Data[];plan:Data|null;saveState:'idle'|'saving'|'saved'|'failed'|'conflict';
+ tab:Tab;
 };
+export type Tab='conversa'|'pendencias'|'arquivos'|'historico';
 const welcome='Olá! Sou o Robô Auditor Preventivo do GRCON. Posso conferir uma alocação criada aqui ou uma planilha externa, antes do envio à fiscalização. Envie a alocação, anexe as LDs necessárias e peça para auditar.';
 const initial=():State=>({
  open:false,messages:[{id:'hello',role:'assistant',text:welcome}],
- sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[],pendingAllocations:[],plan:null,saveState:'idle'
+ sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[],pendingAllocations:[],plan:null,saveState:'idle',tab:'conversa'
 });
 let state=initial(),generation=0,pendingWrite:Data|null=null;
 const contextIdentity=()=>{const g=window as unknown as Data;return JSON.stringify([g.GrconCloud?.state?.session?.user?.id,g.GrconCloud?.state?.membership?.workspace_id,g.GrconCloud?.state?.membership?.contract_id]);};
@@ -136,6 +138,7 @@ export const assistant={
    .catch((e:Error)=>{if(ticket===generation)emit({error:'Histórico de conversas indisponível: '+e.message});});
  },
  close(){emit({open:false});},
+ setTab(tab:Tab){emit({tab});},
  retrySave(){return execute(async(speak)=>speak('Vou tentar salvar a conversa novamente.'));},
  status(){return execute(async(speak)=>speak(snapshotStatus()));},
  help(){return execute(async(speak)=>speak(help()));},
@@ -233,7 +236,8 @@ export const assistant={
  details(){return execute(async(speak)=>{
   const s=service.snapshot();
   if(!s.rows.length){speak('Ainda não há resultados. Envie ou selecione uma alocação e execute a auditoria preventiva.');return;}
-  speak(snapshotStatus()+' O detalhamento técnico e as evidências estarão no relatório RESUMO/DETALHAMENTO. Os grupos de correção aparecem abaixo da conversa.');
+  emit({tab:'pendencias'});
+  speak('Abri a lista de pendências nesta janela, com filtros e orientação por item.'+opinionLines());
  });},
  send(text:string){
   const request=text.trim().slice(0,2000);
@@ -278,7 +282,8 @@ export const assistant={
     case 'package':await assistant.downloadInternal(false,speak);break;
     case 'details':{
      const s=service.snapshot();
-     speak(s.rows.length?snapshotStatus()+' As pendências estão agrupadas na conversa e documentadas no relatório.':'Ainda não existem resultados. Execute a auditoria primeiro.');
+     if(s.rows.length)emit({tab:'pendencias'});
+     speak(s.rows.length?'Abri a lista de pendências nesta janela.'+opinionLines():'Ainda não existem resultados. Execute a auditoria primeiro.');
      break;
     }
     default:{
@@ -328,6 +333,14 @@ export const assistant={
   await refreshPlan();
   speak(count?count+' correção(ões) segura(s) autorizada(s) por regra ativa. As cópias serão verificadas ao gerar os arquivos.':'Nenhuma correção segura nova: só são executadas as cobertas por regra homologada ativa.');
  });},
+ // Revisão individual de um item: autorizar/recusar uma proposta ou registrar exceção justificada (com justificativa e evidência humanas).
+ decide(input:{rowIndex:number;field:string;after:string;decision:'accepted'|'rejected'|'exception';justification:string;evidence:string}){return execute(async(speak)=>{
+  const evidence=input.evidence.trim()?[input.evidence.trim()]:[];
+  await service.review(input.rowIndex,{state:input.decision==='exception'?'Exceção justificada':'Correção proposta',decision:input.decision,field:input.field,value:input.after,justification:input.justification.trim(),evidence});
+  await service.save();
+  await refreshPlan();
+  speak(input.decision==='accepted'?'Proposta autorizada. Ela só conta como correção depois de gerar os arquivos e reexecutar a auditoria.':input.decision==='rejected'?'Proposta recusada. O valor original foi mantido.':'Exceção registrada com justificativa e evidência. Ela ainda exige conferência humana final.');
+ });},
  group(group:Data){return execute(async(speak)=>{
   await service.acceptGroup(group);
   await service.save();
@@ -342,7 +355,7 @@ export const assistant={
   const staged=result.payload.runId?await service.prepareRestoreById(result.payload.runId):service.prepareEmptyConversation();
   if(ticket!==generation)return;
   staged.commit();pendingAllocationFiles=[];pendingWrite=null;
-  emit({sessionId:id,revision:result.revision,messages:result.payload.messages,pendingSheets:[],pendingAllocations:[],plan:null,saveState:'saved'});
+  emit({sessionId:id,revision:result.revision,messages:result.payload.messages,pendingSheets:[],pendingAllocations:[],plan:null,saveState:'saved',tab:'conversa'});
   if(service.snapshot().rows.length)await refreshPlan();
   speak('Conversa recuperada. Reanexe as fontes originais quando necessário e reanalise antes de novas correções.');
  },true);},
