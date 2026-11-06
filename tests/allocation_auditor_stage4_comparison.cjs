@@ -103,4 +103,54 @@ assert.deepEqual(ids(run(row)), []);
   assert.equal(stamped.items[0].authorized, false, 'com data, vale a decisão mais recente mesmo fora de ordem no vetor');
 }
 
+// 10. RA-02 completo: Workflow e Data Book × LD (pendência a confirmar, não erro), equivalências explícitas e N-1710.
+{
+  const etDoc = 'C1O_RNEST_U32_5.7.3.1_ELE_TEST_TAG-A';
+  const wf = run({ ...row, document: etDoc, workflow: 'OUTRO' }, { ldRecords: [{ ...ld, document: etDoc }], bases: { ...ctx.bases, workflows: [{ workflow: 'WF' }, { workflow: 'OUTRO' }] } });
+  const f = wf.findings.find(x => x.id === 'LD-WORKFLOW-MISMATCH');
+  assert.ok(f && f.severity === 'pending' && f.field === 'workflow', 'Workflow diferente da LD: pendência a confirmar (a LD pode estar desatualizada)');
+  assert.equal(f.evidence[0].alocacao, 'OUTRO'); assert.equal(f.evidence[0].ld, 'WF');
+  assert.equal(wf.recommendations.filter(x => x.field === 'workflow').length, 0, 'sem modelo oficial não se inventa proposta de Workflow');
+  const dbPath = 'U32|QUALIDADE|CIVIL';
+  const db = run({ ...row, databook: dbPath }, { bases: { ...ctx.bases, databook: [{ databook: row.databook }, { databook: dbPath }] } });
+  assert.ok(db.findings.some(x => x.id === 'LD-DATABOOK-MISMATCH' && x.severity === 'pending'), 'Data Book diferente da LD');
+  assert.ok(!ids(run(row)).includes('LD-DATABOOK-MISMATCH'));
+  // Equivalência explícita: sigla × nome da disciplina é sugestão; disciplina realmente outra é erro.
+  const sem = run({ ...row, discipline: 'ELETRICA' });
+  assert.ok(ids(sem).includes('LD-DISCIPLINE-SEMANTIC') && !ids(sem).includes('LD-DISCIPLINE-MISMATCH'), 'ELE × ELETRICA é equivalente, não erro');
+  assert.equal(sem.findings.find(x => x.id === 'LD-DISCIPLINE-SEMANTIC').severity, 'suggestion');
+  assert.ok(run({ ...row, discipline: 'CIVIL' }).findings.some(x => x.id === 'LD-DISCIPLINE-MISMATCH' && x.severity === 'error'));
+  // Prefixo hierárquico da EAP: sugestão (a LD pode estar no nível pai); código sem relação: erro.
+  const parent = run({ ...row, eap: '5.7.3.1.2' }, { bases: { ...ctx.bases, eap: [{ code: '5.7.3.1', levels: row.levels, source: 'QA' }, { code: '5.7.3.1.2', levels: row.levels, source: 'QA' }] } });
+  assert.ok(ids(parent).includes('LD-EAP-SEMANTIC') && !ids(parent).includes('LD-EAP-MISMATCH'));
+  assert.ok(run({ ...row, eap: '5.7.4' }).findings.some(x => x.id === 'LD-EAP-MISMATCH'));
+  // N-1710: Workflow não é auditado.
+  const n1710 = run({ ...row, document: 'PR-5290.00-22313-955-001', workflow: 'OUTRO' }, { ldRecords: [{ ...ld, document: 'PR-5290.00-22313-955-001' }] });
+  assert.ok(!ids(n1710).includes('LD-WORKFLOW-MISMATCH'), 'Workflow não é auditado em N-1710');
+}
+
+// 11. EAP 5.7.3.1 e 10.2.1.2: até 10 níveis, lacunas legítimas e múltiplos caminhos, sem inventar nível.
+{
+  const lv = (n, gap) => Array.from({ length: 10 }, (_, i) => (i >= n || i === gap) ? '' : 'N' + (i + 1));
+  const eap = [{ code: '5.7.3.1', levels: lv(7, 4), source: 'QA' }];
+  const ctxE = { bases: { ...ctx.bases, eap }, ldRecords: [{ ...ld, levels: lv(7, 4) }] };
+  const ok = run({ ...row, eap: '5.7.3.1', levels: lv(7, 4) }, ctxE);
+  assert.ok(!ids(ok).includes('EAP-LEVEL-MISMATCH'), 'sete níveis com lacuna legítima no 5º: sem erro');
+  const wrong = lv(7, 4); wrong[6] = 'ERRADO';
+  const r = run({ ...row, eap: '5.7.3.1', levels: wrong }, ctxE);
+  const m = r.findings.find(x => x.id === 'EAP-LEVEL-MISMATCH');
+  assert.ok(m && m.evidence[0].differences.some(d => d.index === 6 && d.actual === 'ERRADO' && d.expected === 'N7'), 'o 7º nível (acima do N6 do modelo oficial) também é conferido');
+  const beyond = lv(7, 4).concat(); beyond[8] = 'EXTRA';
+  assert.ok(!ids(run({ ...row, eap: '5.7.3.1', levels: beyond }, ctxE)).includes('EAP-LEVEL-MISMATCH'), 'nível adicional sem referência na base não é erro');
+  // 10.2.1.2 com dois caminhos (ELETRICA × CIVIL): o Workflow seleciona só quando unívoco; ambíguo vira pendência, nunca chute.
+  const multi = [{ code: '10.2.1.2', levels: ['10', 'ELETRICA'], source: 'QA' }, { code: '10.2.1.2', levels: ['10', 'CIVIL'], source: 'QA' }];
+  const idx = C.prepare({ ...ctx, bases: { ...ctx.bases, eap: multi } });
+  assert.equal(C.chooseEap('10.2.1.2', 'C&M/ELETRICA', idx).entry.levels[1], 'ELETRICA');
+  assert.equal(C.chooseEap('10.2.1.2', 'C&M/CIVIL', idx).entry.levels[1], 'CIVIL');
+  assert.equal(C.chooseEap('10.2.1.2', 'C&M/OUTRO', idx).ambiguous, true, 'Workflow sem disciplina clara: ambíguo');
+  const amb = run({ ...row, eap: '10.2.1.2', workflow: 'C&M/OUTRO', levels: ['10', 'CIVIL'] }, { bases: { ...ctx.bases, eap: multi }, ldRecords: [{ ...ld, eap: '10.2.1.2', workflow: 'C&M/OUTRO' }] });
+  assert.ok(amb.findings.some(x => x.id === 'EAP-DISCIPLINE-AMBIGUOUS' && x.severity === 'pending'), 'dois caminhos e Workflow ambíguo: pendência');
+  assert.ok(!ids(amb).includes('EAP-LEVEL-MISMATCH'), 'não compara níveis com um caminho escolhido no escuro');
+}
+
 console.log('allocation_auditor_stage4_comparison: título/TAG/disciplina/EAP × LD, TAG × Grupo 7, estado final sem prova por campo, propostas abertas e decisão vigente OK');

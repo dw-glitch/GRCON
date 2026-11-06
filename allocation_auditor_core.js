@@ -313,17 +313,28 @@
   if(!source)delete r.origin;
   if(source)for(const issue of source.sourceIssues||[])add('LD-CELL-UNREADABLE','history',issue.field,'Não foi possível ler um valor da LD: '+issue.message+'. Corrija a célula na referência e reimporte antes de validar este campo.',[{file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,cell:issue.cell}],{origin:'LD',technicalFailure:true});
   if(source){r.valueOrigins={...(r.valueOrigins||{})};for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k])&&!invalidFields.has(k)&&!(r.officialAllocation&&k==='workflow')){r[k]=text(source[k]);if(r[k])r.valueOrigins[k]={kind:'LD',received:'',file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow};}r.ld=r.ld||text(source.source||source.sourceFile);r.ldSheet=r.ldSheet||text(source.sheet||source.sourceSheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={revision:text(source.revision),file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
-  // RA-02 — campo PREENCHIDO é comparado com a linha exata da LD (existir não basta). Três níveis: igual; igual só na forma (maiúsculas,
-  // acentos, espaços) → sugestão; diferente → erro. Valor copiado da LD (campo vazio) não é comparado consigo mesmo.
-  if(source)for(const [k,label,category] of [['title','Título','title'],['tag','TAG','tag'],['discipline','Disciplina','scope'],['eap','EAP','hierarchy']]){
+  // RA-02 — campo PREENCHIDO é comparado com a linha exata da LD (existir não basta). Quatro níveis, sempre com os dois valores e a origem:
+  // igual → nada; igual só na forma (maiúsculas, acentos, espaços) ou EQUIVALENTE por regra explícita (sigla × nome da disciplina,
+  // prefixo hierárquico da EAP) → sugestão; diferente → erro (título, TAG, disciplina, EAP) ou pendência a confirmar (Workflow, Data Book,
+  // que podem ter sido reclassificados de propósito). Valor copiado da LD (campo vazio na alocação) não é comparado consigo mesmo.
+  const DISCIPLINE_ALIAS={ELE:'ELETRICA',TUB:'TUBULACAO',HVAC:'HVAC',CVL:'CIVIL'};
+  const equivalent={
+   discipline:(a,b)=>{const x=norm(a),y=norm(b);return (DISCIPLINE_ALIAS[x]||x)===(DISCIPLINE_ALIAS[y]||y);},
+   eap:(a,b)=>{const x=text(a),y=text(b);return x.startsWith(y+'.')||y.startsWith(x+'.');}
+  };
+  const compared=[['title','Título','title','error'],['tag','TAG','tag','error'],['discipline','Disciplina','scope','error'],['eap','EAP','hierarchy','error'],['workflow','Workflow','workflow','pending'],['databook','Caminho do Data Book','databook','pending']];
+  if(source)for(const [k,label,category,severity] of compared){
    const mine=text(r[k]),theirs=text(source[k]);
-   if(!mine||!theirs||mine===theirs||invalidFields.has(k)||r.valueOrigins?.[k]?.kind==='LD')continue;
-   const same=norm(mine)===norm(theirs),where={file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow};
-   const evidence=[{field:k,alocacao:mine,ld:theirs,comparacao:same?'igual na forma normalizada':'divergente',...where}];
-   if(same)add('LD-'+k.toUpperCase()+'-FORMAT',category,k,label+' da alocação difere da LD só na forma (maiúsculas, acentos ou espaços). Confirme o padrão exigido antes de enviar.',evidence,{severity:'suggestion',origin:'LD exata'});
+   if(!mine||!theirs||mine===theirs||invalidFields.has(k)||r.valueOrigins?.[k]?.kind==='LD'||(k==='workflow'&&isN1710))continue;
+   const same=norm(mine)===norm(theirs),semantic=!same&&equivalent[k]&&equivalent[k](mine,theirs),where={file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow};
+   const evidence=[{field:k,alocacao:mine,ld:theirs,comparacao:same?'igual na forma normalizada':semantic?'equivalente por regra explícita':'divergente',...where}];
+   const id=k.toUpperCase();
+   if(same)add('LD-'+id+'-FORMAT',category,k,label+' da alocação difere da LD só na forma (maiúsculas, acentos ou espaços). Confirme o padrão exigido antes de enviar.',evidence,{severity:'suggestion',origin:'LD exata'});
+   else if(semantic)add('LD-'+id+'-SEMANTIC',category,k,label+' da alocação é equivalente ao da LD por regra explícita ('+(k==='discipline'?'sigla × nome da disciplina':'um código EAP contém o outro como prefixo hierárquico')+'), mas não é idêntico. Confirme se o nível de detalhe está correto.',evidence,{severity:'suggestion',origin:'LD exata'});
    else{
-    add('LD-'+k.toUpperCase()+'-MISMATCH',category,k,label+' da alocação difere da linha exata da LD. Confirme qual valor está correto na origem antes de enviar; a LD é o primeiro documento contratual.',evidence,{severity:'error',origin:'LD exata'});
-    recommendations.push({field:k,before:mine,after:theirs,justification:label+' da linha exata da LD. Proposta, não correção: depende de confirmação na origem.',evidence:[JSON.stringify(where)],confidence:'media',proposal:true});
+    add('LD-'+id+'-MISMATCH',category,k,label+' da alocação difere da linha exata da LD. Confirme qual valor está atualizado na origem antes de enviar; a LD é o primeiro documento contratual.',evidence,{severity,origin:'LD exata'});
+    // Workflow e Data Book já geram proposta própria (modelo oficial, com a base ativa) mais abaixo; aqui não se duplica.
+    if(!['workflow','databook'].includes(k))recommendations.push({field:k,before:mine,after:theirs,justification:label+' da linha exata da LD. Proposta, não correção: depende de confirmação na origem.',evidence:[JSON.stringify(where)],confidence:'media',proposal:true});
    }
   }
   // ET 7.1.7 — a TAG informada precisa ser a do Grupo 7 do código ("_" e "/" valem como "-"). Item nt- não tem TAG para comparar.
@@ -467,7 +478,9 @@
    const groups=References.groupBlocks(v);
    // Um único apontamento por registro (não um por referência), para não afogar os problemas reais; o detalhe vai na evidência.
    if(groups.length)add('REF-BLOCKED','reference','document','Verificação incompleta: '+groups.length+' referência(s) sem o nível exigido, '+v.blocked.length+' regra(s) bloqueada(s). Referência necessária: '+groups.map(g=>g.reference+(g.revision&&g.revision!=='qualquer'?' (rev. '+g.revision+')':'')+' — '+g.needed).join('; ')+'. Estas verificações não foram feitas; ausência de apontamento nelas não significa conformidade.',groups.map(g=>({code:g.code,reference:g.reference,revision:g.revision,needed:g.needed,rules:g.rules,fields:g.fields})),{severity:'pending',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
-   verification={status:v.status,verified:v.verified,blocked:v.blocked.map(b=>({rule:b.rule,field:b.field,codes:b.blockers.map(x=>x.code),reference:b.reference})),catalog:context.references.fingerprint};
+   // Verificação que só se sustenta num sinalizador (sem responsável/data) é dita; "nunca forçar flags" = não tratar sinalizador como demonstração.
+   if(v.flagOnly.length)add('REF-FLAG-ONLY','reference','document','Esta verificação depende de sinalizador de homologação sem responsável e data ('+[...new Set(v.flagOnly.map(x=>x.name))].join('; ')+'). Registre a validação com evidência para demonstrar fonte, revisão e vigência.',v.flagOnly,{severity:'suggestion',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
+   verification={status:v.status,verified:v.verified,flagOnly:v.flagOnly.map(x=>x.rule),blocked:v.blocked.map(b=>({rule:b.rule,field:b.field,codes:b.blockers.map(x=>x.code),reference:b.reference})),catalog:context.references.fingerprint};
   }
   const status=f.some(x=>x.severity==='error')?'Correções pendentes':f.some(x=>x.severity==='pending')?'Verificações inconclusivas':f.some(x=>x.severity==='suggestion')?'Sugestões de melhoria':'Sem não conformidades detectadas';
   return {...r,docKind:kind,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto',...(verification?{verification}:{})};

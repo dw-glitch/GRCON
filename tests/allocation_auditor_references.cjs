@@ -177,4 +177,29 @@ const codes = e => e.blockers.map(b => b.code);
   assert.deepEqual(R.LEVELS, ['ausente', 'localizado', 'carregado', 'validado', 'homologado']);
 }
 
+// 9. RA-07 — "nunca forçar flags": o que se sustenta só em sinalizador é identificado; registro completo e aplicabilidade confirmada não.
+{
+  const flagged = build({ loadedBases: { eap: true }, homologated: { eap: true } });
+  assert.equal(entry(flagged, 'anexo-iii-apendice-a@sem-revisao').demonstration, 'sinalizador');
+  const v = R.verification({ docKind: 'ET', eap: '5.7.3.1' }, flagged);
+  assert.ok(v.flagOnly.some(x => x.rule === 'EAP-ANEXO-III-APA'), 'regra liberada só pelo sinalizador é listada');
+  const full = build({ loadedBases: { eap: true }, validations: [{ kind: 'anexo-iii-apendice-a', by: 'Qualidade', at: '2026-11-06', evidence: 'Conferido com o Anexo III' }], homologations: [{ kind: 'anexo-iii-apendice-a', by: 'Fiscalização', at: '2026-11-07' }] });
+  assert.equal(entry(full, 'anexo-iii-apendice-a@sem-revisao').demonstration, 'registro completo');
+  assert.equal(R.verification({ docKind: 'ET', eap: '5.7.3.1' }, full).flagOnly.length, 0);
+  const app = build({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } });
+  assert.equal(entry(app, 'et-codificacao@R').demonstration, 'confirmação de aplicabilidade');
+  // No motor: apontamento de sugestão (nunca bloqueia nem vira conformidade) e coluna "Demonstração" no Excel.
+  const doc = 'C1O_RNEST_U32_5.7.3.1_ELE_TEST_TAG-A';
+  const rec = { document: doc, revision: '0', title: 'RELATORIO DE INSPECAO DE RECEBIMENTO', eap: '5.7.3.1' };
+  const context = { contract: CONTRACT, records: [rec], history: [], ldRecords: [], bases: {}, versions: {}, homologated: { eap: true }, applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa' } };
+  context.references = R.buildCatalog({ contract: CONTRACT, applicability: context.applicability, homologated: context.homologated, loadedBases: { eap: true } });
+  const row = C.auditRecord(rec, context, C.prepare(context));
+  const f = row.findings.find(x => x.id === 'REF-FLAG-ONLY');
+  assert.ok(f && f.severity === 'suggestion' && /sinalizador/.test(f.message));
+  assert.ok(row.verification.flagOnly.includes('EAP-ANEXO-III-APA'));
+  const rows = R.exportRows(flagged);
+  assert.equal(rows.references[0].at(-1), 'Demonstração'); assert.equal(rows.trace[0].at(-1), 'Demonstração');
+  assert.ok(rows.references.some(r => r.at(-1) === 'sinalizador'));
+}
+
 console.log('allocation_auditor_references: escada localizado/carregado/validado/homologado, revisões N/P/Q/R separadas, vigência, bloqueios sem falsa conformidade, rastreabilidade integrada ao motor e ao Excel OK');

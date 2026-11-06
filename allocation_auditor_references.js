@@ -138,6 +138,10 @@
   if(ref&&e.effective.proof!=='nenhuma'&&/^\d{2}\/\d{2}\/\d{4}$/.test(e.effective.date)){const [d,m,y]=e.effective.date.split('/').map(Number);if(new Date(ref).getTime()<Date.UTC(y,m-1,d))e.blockers.push({code:'REF-FORA-VIGENCIA',message:'A data de referência é anterior à vigência informada ('+e.effective.date+').'});}
   if(e.effective.proof==='declarada')e.notes.push('Vigência apenas declarada — comprovação documental pendente.');
   if(e.effective.proof==='nenhuma'&&loaded)e.notes.push('Vigência não comprovada.');
+  // Como a validação/homologação foi DEMONSTRADA: registro completo (responsável, data, evidência), confirmação de aplicabilidade (com evidência)
+  // ou apenas o sinalizador que a tela já grava (sem responsável nem data). Sinalizador não é demonstração.
+  const proof=e.homologated||e.validated;
+  e.demonstration=!proof?'':proof.origin==='sinalizador-existente'?'sinalizador':proof.origin==='applicability'?'confirmação de aplicabilidade':'registro completo';
   e.dependsRules=DEPENDENCIES.filter(d=>d.requires.kind===e.kind&&(d.requires.revision==='any'||d.requires.revision==='applicable'||d.requires.revision===e.revision)).map(d=>d.rule);
   return e;
  }
@@ -178,6 +182,7 @@
    for(const b of entry.blockers)if(b.code==='REF-FORA-VIGENCIA'||b.code==='REF-REVISAO-NAO-IDENTIFICADA')result.blockers.push({...b,reference:KINDS[req.kind],revision:entry.revision||'não identificada',needed:'vigência/revisão comprovadas'});
   }
   result.state=result.blockers.length?'bloqueada':'verificavel';
+  result.demonstration=result.state==='verificavel'&&entry?entry.demonstration:'';
   return result;
  }
  function relevantRules(record){return DEPENDENCIES.filter(d=>applies(d,record));}
@@ -187,7 +192,8 @@
   const checks=relevantRules(record).map(d=>ruleAvailability(d,catalog));
   const blocked=checks.filter(c=>c.state==='bloqueada'),ok=checks.filter(c=>c.state==='verificavel');
   const status=!checks.length?'nao-verificado':blocked.length===0?'verificado':ok.length===0?'nao-verificado':'parcial';
-  return {status,verified:ok.map(c=>c.rule),blocked:blocked.map(c=>({rule:c.rule,family:c.family,field:c.field,requires:c.requires,blockers:c.blockers,reference:c.reference&&c.reference.id})),checks};
+  const flagOnly=ok.filter(c=>c.demonstration==='sinalizador').map(c=>({rule:c.rule,field:c.field,reference:c.reference&&c.reference.id,name:c.reference&&c.reference.name}));
+  return {status,verified:ok.map(c=>c.rule),flagOnly,blocked:blocked.map(c=>({rule:c.rule,family:c.family,field:c.field,requires:c.requires,blockers:c.blockers,reference:c.reference&&c.reference.id})),checks};
  }
  function groupBlocks(v){ // um bloqueio por referência, listando as regras afetadas (evita repetir o mesmo aviso dezenas de vezes)
   const groups=new Map();
@@ -201,7 +207,7 @@
    const a=ruleAvailability(d,catalog),ref=a.reference;
    return {rule:d.rule,family:d.family,officialDocument:KINDS[d.requires.kind],revision:a.requires.revision,item:text(ruleSources[d.rule])||d.requires.scope||'',field:d.field,
     evidence:ref?{referenceId:ref.id,level:ref.level,files:ref.files,validated:ref.validated?{by:ref.validated.by,at:ref.validated.at,evidence:ref.validated.evidence}:null,homologated:ref.homologated||null,effective:ref.effective}:null,
-    result:a.state==='verificavel'?'verificavel':'bloqueada',blockers:a.blockers.map(b=>b.code+': '+b.message)};
+    result:a.state==='verificavel'?'verificavel':'bloqueada',demonstration:a.demonstration||'',blockers:a.blockers.map(b=>b.code+': '+b.message)};
   });
  }
  function traceFinding(finding,catalog,ruleSources={}){
@@ -213,10 +219,10 @@
  // Linhas planas para exportação (Excel/JSON), mesma fonte do motor.
  function exportRows(catalog){
   return {
-   references:[['Identificador','Tipo','Revisão','Nível','Carregado de','Escopos carregados','Arquivos (hash)','Vigência','Prova da vigência','Validado por','Evidência da validação','Homologado por','Bloqueios','Regras que dependem'],
-    ...catalog.entries.map(e=>[e.id,KINDS[e.kind]||e.kind,e.revision||'não identificada',e.level,e.loadedFrom,e.loadedScopes.join(', '),e.files.map(f=>f.name+' ['+f.sha256.slice(0,12)+']').join(' | '),e.effective.date,e.effective.proof,e.validated?e.validated.by:'',e.validated?e.validated.evidence:'',e.homologated?e.homologated.by:'',e.blockers.map(b=>b.code).join('; '),e.dependsRules.join(', ')])],
-   trace:[['Regra','Família','Documento oficial','Revisão','Item/escopo','Campo analisado','Nível da referência','Evidência','Resultado','Bloqueios'],
-    ...traceMatrix(catalog).map(r=>[r.rule,r.family,r.officialDocument,r.revision,r.item,r.field,r.evidence?r.evidence.level:'ausente',r.evidence&&r.evidence.validated?r.evidence.validated.evidence:'',r.result==='verificavel'?'Verificável':'BLOQUEADA',r.blockers.join(' | ')])]
+   references:[['Identificador','Tipo','Revisão','Nível','Carregado de','Escopos carregados','Arquivos (hash)','Vigência','Prova da vigência','Validado por','Evidência da validação','Homologado por','Bloqueios','Regras que dependem','Demonstração'],
+    ...catalog.entries.map(e=>[e.id,KINDS[e.kind]||e.kind,e.revision||'não identificada',e.level,e.loadedFrom,e.loadedScopes.join(', '),e.files.map(f=>f.name+' ['+f.sha256.slice(0,12)+']').join(' | '),e.effective.date,e.effective.proof,e.validated?e.validated.by:'',e.validated?e.validated.evidence:'',e.homologated?e.homologated.by:'',e.blockers.map(b=>b.code).join('; '),e.dependsRules.join(', '),e.demonstration||''])],
+   trace:[['Regra','Família','Documento oficial','Revisão','Item/escopo','Campo analisado','Nível da referência','Evidência','Resultado','Bloqueios','Demonstração'],
+    ...traceMatrix(catalog).map(r=>[r.rule,r.family,r.officialDocument,r.revision,r.item,r.field,r.evidence?r.evidence.level:'ausente',r.evidence&&r.evidence.validated?r.evidence.validated.evidence:'',r.result==='verificavel'?'Verificável':'BLOQUEADA',r.blockers.join(' | '),r.demonstration||''])]
   };
  }
  return Object.freeze({VERSION,LEVELS,KINDS,BUILT_IN,DEPENDENCIES,classifyFile,buildCatalog,ruleAvailability,relevantRules,verification,groupBlocks,traceMatrix,traceFinding,exportRows,rank});
