@@ -96,7 +96,8 @@ assert.ok(run(state([ref(1,"B")], [sig(1,"B")], [pw(1,"0","Sim"), pw(1,"A","Sim"
   assert.equal(byRevision.B, "Postado");
   assert.equal(byRevision.A, "Revisão não consta no SIGEM · Rev. B: Postado");
   assert.equal(byRevision["0"], "Revisão não consta no SIGEM · Rev. B: Postado");
-  assert.equal(statusRows[2][12], "Rev. 0", "as colunas de revisão começam depois do STATUS SIGEM");
+  assert.equal(statusRows[2][12], "DATA DE INCLUSÃO NO SIGEM", "a data de inclusão fica ao lado do STATUS SIGEM");
+  assert.equal(statusRows[2][13], "Rev. 0", "as colunas de revisão começam depois da data de inclusão");
   // Revisão presente no SIGEM mas sem status: não pode dizer que não consta (a coluna E diz que consta).
   const noStatus = coordinatorPlan(state([ref(1,"0")], [{ ...sig(1,"0"), status: "" }], [pw(1,"0","Sim")])).sheets[MAIN_SHEET].slice(3)[0];
   assert.equal(noStatus[4], "Consta no SIGEM");

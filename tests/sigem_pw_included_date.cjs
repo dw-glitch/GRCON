@@ -47,7 +47,9 @@ function state(refs, sigem, pwRows) {
   const filters={revision:"A"};
   const plan=coordinatorPlan(sample,filters), dateColumn=plan.sheets[MAIN_SHEET][2].indexOf(SIGEM_INCLUDED_DATE_HEADER);
   assert.equal(plan.sheets[MAIN_SHEET][3][dateColumn],"03/11/2026 09:20");
-  assert.equal(plan.sheets[MAIN_SHEET][3][13],"X", "a coluna X da revisão A permanece no mesmo lugar");
+  assert.equal(dateColumn,12,"a data de inclusão fica logo depois de STATUS SIGEM (coluna M)");
+  assert.equal(plan.sheets[MAIN_SHEET][2][dateColumn-1],"STATUS SIGEM");
+  assert.equal(plan.sheets[MAIN_SHEET][3][14],"X", "a revisão A (0 em N, A em O) marca X na coluna O");
   const {workbook}=buildCoordinatorWorkbook(sample,ExcelJS,undefined,filters);
   const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
   for(const name of [MAIN_SHEET,...plan.classSheets]) {
