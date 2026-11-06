@@ -1916,8 +1916,27 @@
       state.historySyncSince = newestUpdatedAt(rows, state.historySyncSince);
       if (!rows.length) return { records: History.read(), removed: 0 };
 
-      const activeRows = rows.filter((row) => !row.deleted_at);
+      // A consulta usa `updated_at >= último` de propósito (não perder linhas com
+      // o mesmo carimbo), então o servidor SEMPRE devolve de volta a linha mais
+      // recente. Sem este filtro cada ciclo de 45 s regravava o mesmo registro e
+      // disparava `grcon:history-updated`, fazendo todos os painéis se
+      // redesenharem — a tela "piscava" sozinha enquanto o Realtime estava fora.
+      const localByCloudKey = new Map();
+      for (const record of History.read()) {
+        if (record.cloudId) localByCloudKey.set("c:" + record.cloudId, record);
+        if (record.clientRecordId) localByCloudKey.set("r:" + record.clientRecordId, record);
+        if (record.id) localByCloudKey.set("r:" + record.id, record);
+      }
+      const alreadyMirrored = (row) => {
+        const local = localByCloudKey.get("c:" + row.id) || localByCloudKey.get("r:" + row.client_record_id);
+        return Boolean(local)
+          && local.syncState === "synced"
+          && String(local.cloudUpdatedAt || local.syncedAt || "") === String(row.updated_at || "");
+      };
+
+      const activeRows = rows.filter((row) => !row.deleted_at && !alreadyMirrored(row));
       const deletedRows = rows.filter((row) => Boolean(row.deleted_at));
+      if (!activeRows.length && !deletedRows.length) return { records: History.read(), removed: 0 };
       await loadCreatorProfiles(activeRows);
       if (activeRows.length) {
         const saved = History.saveMany(activeRows.map(cloudHistoryRecord));
@@ -1939,6 +1958,8 @@
       }
 
       const records = History.read();
+      // Tombstone já aplicado (ou sem cópia local) não muda nada na tela.
+      if (!activeRows.length && !removed) return { records, removed: 0 };
       window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { cloudPull: true, incremental: true, records, removed } }));
       return { records, removed };
     } catch (error) {
