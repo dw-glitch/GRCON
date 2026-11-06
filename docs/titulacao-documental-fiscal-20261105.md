@@ -1,8 +1,8 @@
 # Codificação e titulação de documentos — orientação da fiscal (05/11/2026)
 
-Fonte: apresentação "Controle de Documentação — Codificação e titulação de documentos / Relatórios de C&M, itens tagueados e não tagueados" (`Controle de Documentação.pptx`, 10 slides), enviada pelo proprietário do GRCON. Norma citada: **ET-5290.00-22000-912-1LV-001** (item 7.1.7.2, última versão publicada; o corretor de títulos usa a Rev. R), ISO 9001:2015 / N-381, Anexos VII e X do contrato.
+Fonte: apresentação "Controle de Documentação — Codificação e titulação de documentos / Relatórios de C&M, itens tagueados e não tagueados" (`Controle de Documentação.pptx`, 10 slides), enviada pelo proprietário do GRCON. Norma citada: **ET-5290.00-22000-912-1LV-001** (item 7.1.7.2, última versão publicada; o Auditor de Títulos usa a Rev. R), ISO 9001:2015 / N-381, Anexos VII e X do contrato.
 
-Este documento é a referência para o **Corretor Inteligente de Títulos** (`workers/title-corrector.worker.js`, `src/react/title-corrector/`) e para qualquer trabalho sobre títulos de documentos. Quando a norma e esta apresentação divergirem de uma regra interna, vale a norma; regras do proprietário registradas abaixo ("Regras do proprietário") prevalecem sobre os exemplos.
+Este documento é a referência para o **Auditor de Títulos** (`workers/title-corrector.worker.js`, `src/react/title-corrector/`) e para qualquer trabalho sobre títulos de documentos. Quando a norma e esta apresentação divergirem de uma regra interna, vale a norma; regras do proprietário registradas abaixo ("Regras do proprietário") prevalecem sobre os exemplos.
 
 ## 1. Por que o título importa
 - O **título é parte obrigatória da identificação documental**, não texto acessório. Deve permitir identificação **clara, inequívoca e sem ambiguidade** (rastreabilidade de qualidade, Anexos VII e X; ISO 9001:2015 / N-381).
@@ -31,7 +31,7 @@ Exemplo: `XXX_RNEST_U12_3.1.1.1_EST_RIR_FT-22101`
 
 **Não tagueados**
 - Campo 7 **deve iniciar com `nt-`**. Vale para serviços e materiais não tagueados da Planilha de Preços (Anexo IIB), desde que não exista TAG formalmente definido para o objeto.
-- **`nt-` não é TAG.** Nenhuma regra de TAG (por exemplo, "TAG no final do título") se aplica a documento `nt-`.
+- **`nt-` não faz parte da TAG.** O prefixo `nt-` identifica o item não tagueado, mas **não entra no TAG do final do título**: em `…_CVL_DESEM_nt-EMT-R-32003-R-32503-EL.37.015` a TAG do final é `EMT-R-32003-R-32503-EL.37.015` (o Grupo 7 sem o `nt-`).
 - Usar os prefixos padronizados quando existirem; **não inserir espaços nem caracteres diferentes dos definidos**.
 - Sem prefixo padronizado, seguir a lógica **O QUÊ É + ONDE É**, ou **O QUÊ É + QUANDO**. Os dois últimos itens (onde/quando) **não precisam estar juntos** no mesmo código.
 
@@ -72,7 +72,12 @@ Exemplos de codificação `nt` (slides 8 e 9):
 4. Evitar codificações excessivamente extensas; **jamais ultrapassar 78 caracteres na codificação** (nome do documento). A descrição não deve ser genérica.
 5. A estrutura de pastas do SIGEM segue a EAP (Anexo III, AP.A) — arquivamento nas pastas N1 a N5.
 
-## 6. Regras do proprietário para o Corretor de Títulos (05/11/2026)
+## 6. Regras do proprietário para o Auditor de Títulos (05–06/11/2026)
 - **A TAG do código fica sempre no final do título**, no modelo `TÍTULO - TAG`. (Os exemplos da apresentação não mostram a TAG no fim, mas a regra do proprietário prevalece.)
-- **`nt-` não se configura como TAG**: documentos `nt-` não recebem TAG no título e nunca têm identificadores `NT-…` tratados como TAG.
-- O corretor é um **recolhedor de informações**: o título atual da LD costuma trazer o que é, onde, quando ou dados adicionais que as bases não têm. A ferramenta identifica essas informações, cruza com as bases (norma, SCON, LI de válvulas, Apêndice 3, SCON ESCOPO…) e monta o título **mais detalhado possível**, com a TAG no final. Informação presente só no título atual é mantida e marcada como "não verificada nas bases"; identificadores técnicos diferentes da TAG do código não são incorporados (não cruza TAGs).
+- **Documento `nt-`**: o `nt-` **não é parte da TAG**; a TAG do final é o Grupo 7 sem o prefixo. Exemplo do proprietário, LD correta:
+  `C1O_RNEST_U32_3.9.1.1_CVL_DESEM_nt-EMT-R-32003-R-32503-EL.37.015` → `RELATÓRIO DE DESMONTAGEM DE ESTRUTURA METÁLICA \ 130 - REATORES \ VIGA \ R-32003/503-EL.37.015 - DESMONTAGEM DE ESTRUTURAS METÁLICAS DA VIGA COM GRAU DE CORROSÃO SEVERA - EMT-R-32003-R-32503-EL.37.015`.
+- **O Auditor é um REUNIDOR de informações, não um substituto de título.** Ele junta o **título atual da LD** com o que encontra nas **bases oficiais** (norma, SCON, LI de válvulas, Apêndice 3, SCON ESCOPO…) e forma um título coerente e o mais detalhado possível, **sem retirar informação que o título atual já traz**, com a TAG no final. Há julgamento de onde juntar:
+  - título atual **rico** (traz muito mais do que as bases): ele é mantido **por inteiro**; o tipo documental das bases entra na frente se faltar, e o que as bases acrescentam entra antes da TAG;
+  - título atual **pobre ou genérico**: o título das bases é o esqueleto e o que o atual diz a mais é anexado;
+  - bases **em conflito**: o título atual é mantido por inteiro e a linha segue para revisão;
+  - identificador técnico que não pertence ao código do documento (outra TAG) nunca é incorporado, e trecho do título atual que **contradiz** as bases (ex.: "VALVULA AUTOMATICA" × "VALVULA MANUAL") não é recolhido; ambos são ditos na justificativa.

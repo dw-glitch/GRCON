@@ -110,10 +110,21 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  assert.match(location.proposed,/CASA DE BOMBAS - VM-320003$/,'complemento de local (com preposição) continua sendo informação adicional');
  // O botão "Restaurar recomendação técnica" volta para a recomendação FINAL (com a TAG no final e as informações recolhidas).
  assert.equal(gathered.originalProposed,gathered.proposed);
- // "nt-" não é TAG: nada de TAG no final nem de identificador NT- tratado como TAG.
- const nt=(await request(42,'analyze',{bytes:ldWith([['C1O_RNEST_U32_6.21.1.1_CVL_MTAND_nt-EMT-AND-FEV-26','RELATORIO DE MONTAGEM DE ANDAIMES APLICADOS FEV 2026']]),name:'LD_NT.xlsx',codes:[],sourceMode:'auto'})).rows[0];
- assert.equal(nt.endTag,'','documento nt- não tem TAG no final');
- assert.doesNotMatch(nt.proposed||'',/NT-EMT-AND-FEV-26\s*$/i,'nt- não vira TAG no final do título');
+ // "nt-" não faz parte da TAG: o TAG do final do título é o Grupo 7 SEM o prefixo "nt-".
+ const nt=(await request(42,'analyze',{bytes:ldWith([['C1O_RNEST_U32_6.21.1.1_CVL_MTAND_nt-EMT-AND-FEV-26','RELATORIO DE MONTAGEM DE ANDAIMES FEV 2026']]),name:'LD_NT.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.equal(nt.endTag,'EMT-AND-FEV-26','a TAG do final de um nt- é o Grupo 7 sem o prefixo nt-');
+ assert.match(nt.proposed||'',/ - EMT-AND-FEV-26$/,'o título de um nt- termina com o código sem o nt-');
+ assert.doesNotMatch(nt.proposed||'',/\bnt-/i,'o prefixo nt- nunca entra no título');
+ // Exemplo do proprietário (nt-): o título da LD é MANTIDO por inteiro, o que as bases trazem é reunido e a TAG do código fecha o título.
+ const owner=(await request(45,'analyze',{bytes:ldWith([['C1O_RNEST_U32_3.9.1.1_CVL_DESEM_nt-EMT-R-32003-R-32503-EL.37.015','RELATÓRIO DE DESMONTAGEM DE ESTRUTURA METÁLICA \\ 130 - REATORES \\ VIGA \\ R-32003/503-EL.37.015 - DESMONTAGEM DE ESTRUTURAS METÁLICAS DA VIGA COM GRAU DE CORROSÃO SEVERA - EMT-R-32003-R-32503-EL.37.015']]),name:'LD_OWNER.xlsx',codes:[],sourceMode:'auto'})).rows[0];
+ assert.equal(owner.endTag,'EMT-R-32003-R-32503-EL.37.015');
+ assert.match(owner.proposed,/ - EMT-R-32003-R-32503-EL\.37\.015$/,'a TAG do código fecha o título');
+ for(const piece of ['130 - REATORES','VIGA','R-32003/503-EL.37.015','DESMONTAGEM DE ESTRUTURAS METÁLICAS DA VIGA COM GRAU DE CORROSÃO SEVERA'])assert.ok(owner.proposed.includes(piece),'o título atual não perde "'+piece+'"');
+ assert.match(owner.proposed,/POLYSHIFT/,'a informação das bases oficiais entra no título reunido');
+ assert.equal((owner.proposed.match(/EMT-R-32003-R-32503-EL\.37\.015/g)||[]).length,1,'a TAG não se repete');
+ assert.ok(owner.facts.some(f=>f.field==='informacao_bases'&&/POLYSHIFT/.test(f.value)),'a informação das bases aparece nas evidências');
+ assert.ok(owner.reviewRequired,'bases em conflito: segue para revisão mesmo com o título reunido');
+ assert.equal(owner.originalProposed,owner.proposed);
  // Duas LDs com códigos repetidos: linhas e saídas devem permanecer isoladas.
  const batch=await request(4,'analyzeBatch',{files:[
   {name:'LD_A.xlsx',bytes:fixture},{name:'LD_B.xlsx',bytes:fixture}],codes:[],sourceMode:'auto'});

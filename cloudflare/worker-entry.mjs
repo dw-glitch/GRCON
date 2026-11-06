@@ -177,7 +177,7 @@ async function handleTitleAi(request,env){
  const user=await authenticatedUser(request,env);
  const body=await aiBody(request,7000),workspace=workspaceFrom(request,body);
  if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
- if(!aiEnabled(env))return apiError('IA indisponível. O corretor determinístico continua disponível.',503,'AI_NOT_CONFIGURED');
+ if(!aiEnabled(env))return apiError('IA indisponível. O Auditor de Títulos determinístico continua disponível.',503,'AI_NOT_CONFIGURED');
  const prepared=prepareTitlePrompt(body);
  const budget=await rpc(env,'grcon_document_ai_budget',{operation:'status',target_workspace:workspace,actor_id:user.id});
  if(!budget.available)return apiError('Limite da IA atingido. A revisão manual permanece disponível.',429,'AI_DAILY_LIMIT');

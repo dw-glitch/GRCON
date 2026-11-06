@@ -1,5 +1,5 @@
 'use strict';
-// Corretor de títulos: os arquivos e as bases são processados no próprio navegador.
+// Auditor de títulos: os arquivos e as bases são processados no próprio navegador.
 importScripts('../xlsx.full.min.js','../jszip.min.js','title-corrector-reports.js',
   '../vendor/recon/recon_contracts.js','../vendor/recon/core.js',
   '../vendor/recon/ld_conflicts.js','../vendor/recon/allocation_confirmation_sources.js',
@@ -77,22 +77,30 @@ function endsWithTag(title,tag){
   if(!needle)return true;
   return new RegExp('(?:^|\\s)[-–—]\\s+'+escapeRegex(needle)+'$','i').test(text);
 }
-function tagAtEnd(title,tag){
+function stripTag(title,tag){
   const text=clean(title),needle=clean(tag);
-  if(!text||!needle||endsWithTag(text,needle))return text;
+  if(!text||!needle)return text;
   const found=new RegExp('(^|[^A-Za-z0-9])(?:TAG\\s*[:\\-]?\\s*)?'+escapeRegex(needle)+'(?![A-Za-z0-9])','gi');
-  const body=text.replace(found,(match,before)=>/[(\[]/.test(before)?before:' ')
+  return text.replace(found,(match,before)=>/[(\[]/.test(before)?before:' ')
     .replace(/\(\s*\)|\[\s*\]/g,' ')
     .replace(/\s+/g,' ')
     .replace(/(?:\s[-–—]\s*){2,}/g,' - ')
     .replace(/^\s*[-–—:]\s*|\s*[-–—:]\s*$/g,'')
     .trim();
+}
+function tagAtEnd(title,tag){
+  const text=clean(title),needle=clean(tag);
+  if(!text||!needle||endsWithTag(text,needle))return text;
+  const body=stripTag(text,needle);
   return body?body+' - '+needle:text;
 }
-// Recolhedor de informações: o título atual da LD muitas vezes traz dados que as bases não têm (o que é, onde, fase, linha…).
-// O título sugerido nasce das bases (norma, SCON, LI de válvulas, Apêndice…) e, em seguida, o que o título atual diz a mais é
-// identificado e anexado antes da TAG. O que as bases já cobrem não é repetido; identificadores técnicos diferentes da TAG do código
-// nunca são incorporados (não cruza TAGs).
+// REUNIDOR de informações: o título atual da LD e o título montado a partir das bases oficiais são JUNTADOS; nada que o título atual
+// já diz é descartado. Há julgamento de qual é o esqueleto:
+//  · título atual RICO (traz muito mais do que as bases) → ele é mantido por inteiro e o que as bases acrescentam entra antes da TAG;
+//  · título atual POBRE ou genérico → o título das bases é o esqueleto e o que o atual diz a mais é anexado;
+//  · bases em conflito entre si → o título atual é sempre mantido por inteiro (nada se perde) e a linha segue para revisão.
+// Identificadores técnicos que não pertencem ao código do documento (outra TAG) nunca são incorporados; trecho do título atual que
+// CONTRADIZ as bases (ex.: "VALVULA AUTOMATICA" × "VALVULA MANUAL") não é recolhido. A TAG do código sempre fecha o título.
 const STOPWORDS=new Set(['DE','DA','DO','DAS','DOS','E','EM','NA','NO','NAS','NOS','A','O','AS','OS','PARA','POR','COM','SEM','AO','AOS']);
 const TECH_ID=/^[A-Z0-9]{1,4}(?:-[A-Z])?-[A-Z0-9][A-Z0-9._/-]{2,}$/;
 const tokenKey=token=>normal(token).replace(/[^A-Z0-9]/g,'');
@@ -103,9 +111,11 @@ function isCovered(keys,token){
   if(!key)return true;
   return keys.some(other=>other===key||(key.length>=3&&other.length>=3&&(other.startsWith(key)||key.startsWith(other))));
 }
-// Trecho do título atual que CONTRADIZ as bases não é informação adicional: "VALVULA AUTOMATICA" onde a lista confirma "VALVULA MANUAL".
-// Contradição = o trecho (só palavras, sem número) vem colado a uma palavra já coberta (no máximo com "DE" entre elas) e as bases
-// trazem OUTRA palavra nesse mesmo lugar. Com outra preposição (DA, EM, NA…) ou com números/identificadores é complemento (onde, quando, linha…).
+function significantTokens(text,tag){
+  const own=tag?tokenKey(tag):'';
+  return clean(text).split(/\s+/).filter(token=>{const key=tokenKey(token);return key&&!STOPWORDS.has(key)&&key!==own;});
+}
+// Trecho só de palavras, colado a uma palavra já coberta (no máximo com "DE" entre elas), em que as bases trazem OUTRA palavra no mesmo lugar.
 function contradictsProposal(tokens,spanStart,proposal){
   const span=tokens.slice(spanStart).filter(Boolean);
   const first=stemKey(tokenKey(span[0]||''));
@@ -124,27 +134,65 @@ function contradictsProposal(tokens,spanStart,proposal){
   }
   return false;
 }
-function mergeCurrentInfo(row,base){
-  const current=clean(row.current),proposal=clean(base);
-  if(!current||!proposal||normal(current)===normal(proposal))return null;
-  const tag=clean(row.titleTag),tagKey=value=>tokenKey(value);
-  const keys=coverageIndex(proposal),extras=[],skipped=[];
-  const segments=current.split(/\s+[-–—]\s+/);
-  for(const segment of segments){
+// Identificador do próprio código do documento (inclusive abreviado: R-32003/503-EL.37.015 dentro de …R-32003-R-32503-EL.37.015) não é "outra TAG".
+function ownIdentifier(bare,docKey){
+  const parts=bare.split(/[-/.]/).filter(part=>part.length>=3);
+  return Boolean(docKey)&&parts.length>0&&parts.every(part=>docKey.includes(tokenKey(part)));
+}
+function hasForeignIdentifier(span,tag,docKey){
+  return span.split(/\s+/).some(token=>{
+    const bare=token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,'').toUpperCase();
+    return TECH_ID.test(bare)&&!/^NT-/.test(bare)&&bare!==clean(tag).toUpperCase()&&!ownIdentifier(bare,docKey);
+  });
+}
+// O que `source` diz e `against` não cobre. wholeSegment: segmento das bases com muita informação nova entra por inteiro.
+function extractExtras(source,against,options){
+  const {tag,docKey,foreign,wholeSegment}=options;
+  const keys=coverageIndex(against),extras=[],skipped=[],contradicted=[];
+  for(const segment of clean(source).split(/\s+[-–—]\s+/)){
     const tokens=segment.replace(/\bTAG\b\s*[:\-]?\s*/gi,' ').split(/\s+/).filter(Boolean);
     const meaningful=tokens.map((token,index)=>({token,index,key:tokenKey(token)}))
-      .filter(item=>item.key&&!STOPWORDS.has(item.key)&&!(tag&&item.key===tagKey(tag))&&!isCovered(keys,item.token));
+      .filter(item=>item.key&&!STOPWORDS.has(item.key)&&!(tag&&item.key===tokenKey(tag))&&!isCovered(keys,item.token));
     if(!meaningful.length)continue;
-    const span=tokens.slice(meaningful[0].index,meaningful[meaningful.length-1].index+1).join(' ').replace(/^[\s,;:()\[\]-]+|[\s,;:()\[\]-]+$/g,'');
+    const signif=significantTokens(segment,tag).length;
+    const coveredShare=signif?1-meaningful.length/signif:0;
+    const whole=wholeSegment&&coveredShare<0.7;
+    const startIndex=whole?0:meaningful[0].index,endIndex=whole?tokens.length-1:meaningful[meaningful.length-1].index;
+    const span=tokens.slice(startIndex,endIndex+1).join(' ').replace(/^[\s,;:()\[\]-]+|[\s,;:()\[\]-]+$/g,'');
     if(!span)continue;
-    if(contradictsProposal(tokens,meaningful[0].index,proposal)){skipped.push(span);continue;}
-    if(span.split(/\s+/).some(token=>{const bare=token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,'').toUpperCase();return TECH_ID.test(bare)&&!/^NT-/.test(bare)&&bare!==clean(tag).toUpperCase();})){skipped.push(span);continue;}
+    if(foreign&&hasForeignIdentifier(span,tag,docKey)){skipped.push(span);continue;}
+    if(foreign&&contradictsProposal(tokens,meaningful[0].index,against)){contradicted.push(span);continue;}
     if(!extras.some(item=>normal(item)===normal(span)))extras.push(span);
   }
-  if(!extras.length)return skipped.length?{title:base,extras:[],skipped}:null;
-  let body=proposal;
-  if(tag&&endsWithTag(body,tag))body=body.replace(new RegExp('\\s*[-–—]\\s+'+escapeRegex(tag)+'$','i'),'');
-  return {title:body+' - '+extras.join(' - '),extras,skipped};
+  return {extras,skipped,contradicted};
+}
+function mergeCurrentInfo(row,base,conflict){
+  const tag=clean(row.titleTag),current=clean(row.current),proposal=clean(base);
+  if(!current||!proposal)return null;
+  const curBody=stripTag(current,tag),recBody=stripTag(proposal,tag);
+  if(!curBody||!recBody||normal(curBody)===normal(recBody))return null;
+  const docKey=normal(row.document).replace(/[^A-Z0-9]/g,'');
+  const fromCurrent=extractExtras(curBody,recBody,{tag,docKey,foreign:true});
+  const significant=significantTokens(curBody,tag),keys=coverageIndex(recBody);
+  const uncovered=significant.filter(token=>!isCovered(keys,token)).length;
+  const rich=significant.length>=6&&uncovered>=5&&uncovered/significant.length>=0.5;
+  const keepCurrent=rich||(conflict&&uncovered>0);
+  if(keepCurrent){
+    // Esqueleto = título atual da LD, por inteiro. As bases entram: tipo documental (se faltar) na frente; o resto, antes da TAG.
+    const recSegments=recBody.split(/\s+[-–—]\s+/);
+    let front='',rest=recSegments;
+    if(recSegments.length>1){
+      const head=significantTokens(recSegments[0],tag),curKeys=coverageIndex(curBody);
+      const missing=head.filter(token=>!isCovered(curKeys,token)).length;
+      if(head.length&&missing/head.length>=0.5){front=recSegments[0];rest=recSegments.slice(1);}
+    }
+    const addition=extractExtras(rest.join(' - '),curBody+' '+front,{tag,docKey,foreign:false,wholeSegment:true});
+    const parts=[front,curBody,...addition.extras].filter(Boolean);
+    return {mode:'atual',title:parts.join(' - '),extras:[...(front?[front]:[]),...addition.extras],skipped:fromCurrent.skipped,contradicted:[]};
+  }
+  const keep=fromCurrent.extras;
+  if(!keep.length&&!fromCurrent.skipped.length&&!fromCurrent.contradicted.length)return null;
+  return {mode:'bases',title:keep.length?recBody+' - '+keep.join(' - '):base,extras:keep,skipped:fromCurrent.skipped,contradicted:fromCurrent.contradicted};
 }
 function enforceTagAtEnd(row,suggested){
   const tag=clean(row.titleTag);
@@ -155,12 +203,19 @@ function enforceTagAtEnd(row,suggested){
   if(!fixed||fixed===base)return {title:suggested,issue:row.issue,reason:row.reason,classification:row.classification};
   return row.issue==='ok'
     ?{title:fixed,issue:'tag_position',reason:'A TAG '+tag+' deve ficar no final do título, no modelo "TÍTULO - '+tag+'"',classification:'suggestion'}
-    :{title:fixed,issue:row.issue,reason:(row.reason?row.reason+'; ':'')+'a TAG '+tag+' foi colocada no final do título',classification:row.classification};
+    :{title:fixed,issue:row.issue,reason:endsWithTag(row.current,tag)?row.reason:(row.reason?row.reason+'; ':'')+'a TAG '+tag+' foi colocada no final do título',classification:row.classification};
 }
 // Documento "nt-" (Grupo 7 = NT-…) não tem TAG: nenhuma regra de TAG no final se aplica a ele.
 const declaresNonTag=document=>/(?:^|[_-])NT(?:[-/_.]|$)/.test(normal(document));
+// Em documento "nt-", o "nt-" não faz parte da TAG: a TAG do final do título é o Grupo 7 SEM o prefixo (…_nt-EMT-R-32003 → "EMT-R-32003").
+function nonTaggedCodeTag(document){
+  const raw=clean(document).replace(/\.(?:PDF|DOCX?|XLSX?|XLSM|DWG|DGN|PPTX?)$/i,'');
+  const group7=raw.split('_').pop()||'';
+  const match=/^nt-(.+)$/i.exec(group7);
+  return match?clean(match[1]):'';
+}
 function shape(source,refs){
-  const row=declaresNonTag(source.document)?{...source,titleTag:''}:source;
+  const row=declaresNonTag(source.document)?{...source,titleTag:nonTaggedCodeTag(source.document)}:source;
   const area=areaFor(row,refs);
   const facts=[];
   if(row.titleStandard)facts.push({field:'tipo',value:row.titleStandard,source:row.titleStandardSource||'ET Rev. R',verified:true});
@@ -176,11 +231,15 @@ function shape(source,refs){
     row.sconEscopoEapFallback||row.sconEscopoTagFallback);
   const safeArea=area&&!unsafe?area:null;
   const withArea=safeArea?titleWithArea(row,safeArea):clean(row.proposed);
-  const gathered=unsafe?null:mergeCurrentInfo(row,withArea);
-  if(gathered?.extras.length)facts.push({field:'informacao_adicional',value:gathered.extras.join(' · '),source:'Título atual da LD (informação que as bases não trazem)',verified:false});
-  const tagged=enforceTagAtEnd(row,gathered?.extras.length?gathered.title:withArea),suggested=tagged.title;
-  if(gathered?.extras.length)tagged.reason=(tagged.reason?tagged.reason+'; ':'')+'informação adicional do título atual da LD mantida: '+gathered.extras.join(' · ');
-  if(gathered?.skipped.length)tagged.reason=(tagged.reason?tagged.reason+'; ':'')+'trecho com identificador diferente da TAG do código não foi incorporado: '+gathered.skipped.join(' · ');
+  const gathered=mergeCurrentInfo(row,withArea,unsafe);
+  if(gathered?.mode==='bases'&&gathered.extras.length)facts.push({field:'informacao_adicional',value:gathered.extras.join(' · '),source:'Título atual da LD (informação que as bases não trazem)',verified:false});
+  if(gathered?.mode==='atual'&&gathered.extras.length)facts.push({field:'informacao_bases',value:gathered.extras.join(' · '),source:row.descriptionSource||row.nonTaggedSource||'Bases oficiais',verified:!unsafe});
+  const tagged=enforceTagAtEnd(row,gathered?gathered.title:withArea),suggested=tagged.title;
+  const note=text=>{tagged.reason=(tagged.reason?tagged.reason+'; ':'')+text;};
+  if(gathered?.mode==='atual')note(gathered.extras.length?'título atual da LD mantido por inteiro e informação das bases acrescentada: '+gathered.extras.join(' · '):'título atual da LD mantido por inteiro');
+  if(gathered?.mode==='bases'&&gathered.extras.length)note('informação adicional do título atual da LD mantida: '+gathered.extras.join(' · '));
+  if(gathered?.skipped?.length)note('trecho com identificador diferente da TAG do código não foi incorporado: '+gathered.skipped.join(' · '));
+  if(gathered?.contradicted?.length)note('trecho do título atual que contradiz as bases não foi incorporado: '+gathered.contradicted.join(' · '));
   return {id:String(row.id),document:row.document,sheet:row.sheet,row:row.row,discipline:row.discipline||'',
     current:clean(row.current),proposed:suggested,originalProposed:suggested,issue:tagged.issue,
     reason:tagged.reason||'',confidence:unsafe?'baixa':row.confidence||'nenhuma',
