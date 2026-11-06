@@ -25,29 +25,11 @@
  }
  const fieldMatches=(finding,change)=>finding.field===change.field||(finding.field==='levels'&&/^N[1-6]$/.test(change.field));
  // Estado final: considera achados do motor e correções efetivamente verificadas.
- function finalState(rows,files,exceptions,contextWarning){
-  const changes=(files||[]).flatMap(f=>(f.changes||[]).filter(c=>c.verified!==false).map(c=>({...c,consumed:false})));
-  // Uma alteração só comprova o que ela diz resolver: se cita achados (findingIds), esses; senão, no máximo UM erro do mesmo campo.
-  // (Alterar o campo não prova que todos os apontamentos dele foram resolvidos.) O mesmo vale para propostas em aberto.
-  const covered=(row,predicate)=>{
-   const explicit=changes.find(c=>c.lineage===row.lineage&&Array.isArray(c.findingIds)&&predicate.id&&c.findingIds.includes(predicate.id));
-   if(explicit)return true;
-   const generic=changes.find(c=>!c.consumed&&c.lineage===row.lineage&&!Array.isArray(c.findingIds)&&fieldMatches(predicate,c));
-   if(generic){generic.consumed=true;return true;}
-   return false;
-  };
-  let uncorrected=0,pending=0,openProposals=0;
-  for(const row of rows||[]){
-   for(const f of row.findings||[]){
-    if(f.severity==='error'){if(!covered(row,f))uncorrected++;}
-    else if(f.severity==='pending')pending++;
-   }
-   // Proposta de correção ainda sem alteração verificada: exige revisão humana antes do envio (não é conformidade).
-   for(const rec of row.recommendations||[])if(rec&&rec.field&&!covered(row,{field:rec.field}))openProposals++;
-  }
-  const inconclusive=pending+openProposals+(exceptions||[]).length+(contextWarning?1:0);
-  const state=uncorrected?STATES.fix:inconclusive?STATES.verify:STATES.ready;
-  return {state,uncorrectedErrors:uncorrected,inconclusive,pendingFindings:pending,openProposals};
+ // Estado final: delega ao parecer canônico (allocation_auditor_opinion.js), a mesma fonte do chat e do relatório.
+ const opinion=()=>root.GrconAllocationAuditorOpinion||(typeof require==='function'?require('./allocation_auditor_opinion.js'):null);
+ function finalState(rows,files,exceptions,contextWarning,events,reaudit){
+  const o=opinion().build({rows,files,exceptions,contextWarning,events,reaudit});
+  return {state:STATES[o.state],uncorrectedErrors:o.uncorrectedErrors,inconclusive:o.inconclusive,pendingFindings:o.pendingFindings,openProposals:o.openProposals,blockers:o.blockers,counts:o.counts,lifecycle:o.lifecycle};
  }
  function safeName(name){
   if(typeof name!=='string'||!/^[\wÀ-ÿ .()/\-]+\.xlsx$/u.test(name)||name.includes('..')||name.startsWith('/')||name.includes('//')||/(^|\/)\./.test(name))throw Error('Nome de saída inseguro ou repetido.');
@@ -58,7 +40,8 @@
   if(!root.ExcelJS)importScripts('../exceljs.min.js');
   const rows=input.rows,events=C.approvedChanges(input.events||[]),exceptions=(input.exceptions||[]).map(String),files=input.files||[];
   const plan=input.plan||{items:[]},planByKey=new Map((plan.items||[]).filter(i=>i.field&&i.after!==undefined).map(i=>[JSON.stringify([i.lineage,i.field,i.after]),i]));
-  const summary=C.summary(rows),state=finalState(rows,files,exceptions,input.contextWarning);
+  const summary=C.summary(rows),state=finalState(rows,files,exceptions,input.contextWarning,input.events||[],input.reaudit);
+  const opinionText=opinion().describe(state.counts);
   const generatedAt=new Date();
   const verifiedChanges=files.flatMap(f=>(f.changes||[]).map(c=>({...c,file:f.name})));
   const appliedKey=new Set(verifiedChanges.map(c=>JSON.stringify([c.lineage,c.field,c.after])));
@@ -201,6 +184,8 @@
    ['Parecer',[['Estado da auditoria',state.state],['Conclusão',verdict]]],
    ['Identificação',[['Contrato',input.contract],['Identificação da auditoria',input.runId||input.sessionId||''],['Data de geração',generatedAt],['Alocações analisadas',allocations.join('; ')||'—'],['Versão do motor de auditoria',C.VERSION]]],
    ['Indicadores',[['Documentos analisados',rows.length],['Documentos sem apontamentos',clearDocs],['Não conformidades confirmadas sem correção',state.uncorrectedErrors],['Verificações pendentes',state.inconclusive],['Sugestões preventivas (precedentes, não normativas)',summary.suggestions],['Propostas aguardando decisão',proposalsOpen],['Correções autorizadas',authorized],['Correções aplicadas e verificadas em cópia',executed],['Cópias de LD geradas',ldCopies],['Cópias de alocação geradas',allocCopies]]],
+   // Mesma fonte do chat e do manifesto (allocation_auditor_opinion.js). Cada número diz a unidade: linha/documento, ocorrência ou proposta.
+   ['Contagens por unidade',[['Linhas de alocação / documentos distintos',opinionText.documents],['Ocorrências (apontamentos do motor)',opinionText.occurrences],['Propostas de correção',opinionText.proposals],['Impedimentos para concluir',state.blockers.length?state.blockers.map(b=>b.count+' '+b.message).join('; '):'Nenhum']]],
    ...(multiple?[['Resultado por alocação',perAllocation]]:[]),
    ['Como usar este relatório',[multiple?['Abas por alocação','Cada alocação tem as suas próprias abas (DETALHAMENTO, ALOC. CORRIGIDA e, quando houver, TÍTULOS LD), identificadas pelo número, para não misturar documentos de normas diferentes.']:['DETALHAMENTO','Todos os apontamentos, com valor atual, valor sugerido, evidência e situação.'],['ALOCAÇÃO CORRIGIDA','A alocação com as correções sugeridas ou aplicadas. Células destacadas foram alteradas; a coluna "Alterações nesta linha" mostra o valor anterior.'],['TÍTULOS DA LD','Quando houver, o título atual e o título sugerido para ajuste na LD de origem.'],['Escopo por norma','Documentos N-1710: auditados apenas quanto a Data Book, níveis (EAP) e título. Documentos ET-5290: também código/TAG (nt-) e demais regras da ET.']]],
    ['Fontes e referências',[['Fontes utilizadas',(input.sources||[]).map(s=>s.name+' ('+(s.kind==='ld'?'LD':'alocação')+', SHA-256 '+String(s.sha256||'').slice(0,12)+'…)').join('\n')||'—'],['Versões das referências',Object.entries(input.versions||{}).map(([k,v])=>k+': '+v).join('\n')||'Não informadas'],['Bases complementares',input.contextWarning||'Consultadas']]],
@@ -242,6 +227,7 @@
    engine:C.VERSION,assistant:root.GrconAllocationAssistant.VERSION,generatedAt:generatedAt.toISOString(),
    finalState:state.state,sources,referenceVersions:input.versions||{},
    counts:{documents:rows.length,allocations:allocations.length,withoutProblems:clearDocs,confirmedErrors:summary.errors,pendingVerifications:summary.pending,preventiveSuggestions:summary.suggestions},
+   opinion:{version:opinion().VERSION,state:state.state,counts:state.counts,blockers:state.blockers,lifecycle:state.lifecycle.reduce((h,x)=>{const k=x.kind+':'+x.state;h[k]=(h[k]||0)+1;return h;},{})},
    corrections:{proposed:proposalsOpen+authorized,authorized,executed,verified:verifiedChanges.filter(c=>c.verified!==false).length,
     applied:verifiedChanges.map(c=>({file:c.file,sheet:c.sheet,cell:c.cell,document:c.document,revision:c.revision,field:c.field,before:c.before,after:c.after,ruleId:c.ruleId||'',ruleVersion:c.ruleVersion||0,actor:c.actor||'',verified:c.verified!==false}))},
    events,exceptions,outputs,omitted,limitations:[...LIMITS,...(input.contextWarning?[input.contextWarning]:[])],

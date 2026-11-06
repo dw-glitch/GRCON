@@ -60,10 +60,20 @@ async function execute(action:(speak:typeof say)=>Promise<unknown>,allowConflict
   }
  }finally{if(ticket===generation)emit({pending:false});}
 }
+// Parecer canônico (allocation_auditor_opinion.js): mesma fonte do relatório; cada número diz a unidade (documento, ocorrência, proposta).
+const opinionLines=():string=>{
+ const O=(window as unknown as Data).GrconAllocationAuditorOpinion,s=service.snapshot();
+ if(!O||!s.rows.length)return '';
+ try{
+  const o=O.build({rows:s.rows,events:s.events,files:[],exceptions:[],contextWarning:s.context.contextWarning||''}),d=O.describe(o.counts);
+  const impedimentos=o.blockers.length?' Impedimentos para concluir: '+o.blockers.map((b:Data)=>b.count+' '+b.message).join('; ')+'.':'';
+  return ' '+d.documents+'. '+d.occurrences+'. '+d.proposals+'.'+impedimentos;
+ }catch{return '';}
+};
 const snapshotStatus=()=>{
  const s=service.snapshot(),sources=s.context.sources||[];
  const progress=s.total>0?s.progress+' de '+s.total+' documentos':s.records.length+' documento(s) recebido(s)';
- const context=s.rows.length?' Inconsistências confirmadas: '+(s.summary.errors||0)+'. Verificações pendentes: '+(s.summary.pending||0)+'. Sugestões preventivas: '+(s.summary.suggestions||0)+'.':'';
+ const context=s.rows.length?(opinionLines()||' Inconsistências confirmadas: '+(s.summary.errors||0)+'. Verificações pendentes: '+(s.summary.pending||0)+'. Sugestões preventivas: '+(s.summary.suggestions||0)+'.'):'';
  return 'Situação da auditoria preventiva: '+progress+'. Arquivos identificados: '+sources.length+'.'+context+
   (s.progress===s.total&&s.total>0?' A análise está concluída para as fontes disponíveis, mas isso não equivale à aprovação fiscal.':'')+
   (s.context.contextWarning?' Há limitações de acesso às bases complementares; confira as fontes no relatório.':'');
@@ -96,7 +106,7 @@ async function audit(resume=false,speak:typeof say=say){
  const plan=state.plan;
  speak('Auditoria preventiva concluída: '+summary.total+' documento'+(summary.total===1?'':'s')+' analisado'+(summary.total===1?'':'s')+'. '+
   (plan?plan.safe+' correção(ões) segura(s) ('+plan.safeAuthorized+' autorizada(s) por regra ativa), '+plan.proposed+' proposta(s) para revisão, '+plan.pending+' pendência(s) e '+plan.clear+' documento(s) sem problemas detectados.':'Resumo de correções indisponível.')+
-  ' Foram autorizadas '+count+' correções nesta execução. Precedentes fiscais não são provas normativas nem garantem aprovação pela fiscalização.');
+  opinionLines()+' Foram autorizadas '+count+' correções nesta execução. Precedentes fiscais não são provas normativas nem garantem aprovação pela fiscalização.');
 }
 async function refreshPlan(){
  try{emit({plan:await service.correctionPlan()});}
