@@ -180,6 +180,9 @@ export function AllocationAssistant(){
    <div className="aac-attachments"><label>Anexar alocações<input type="file" multiple accept=".xlsx" disabled={busy} onChange={upload('allocation')}/></label><label>Anexar LDs<input type="file" multiple accept=".xlsx" disabled={busy} onChange={upload('ld')}/></label></div>
    {s.context.contextWarning&&<p className="aac-warn" role="note">{s.context.contextWarning}</p>}
    <hr/>
+   <strong>Modelo de aprendizado</strong>
+   <p>{s.context.mlModel?.card?.version?'Modelo '+s.context.mlModel.card.version+' ativo: gera apenas sugestões não normativas, nunca erros, pendências ou valores.':'Nenhum modelo ativo. O auditor usa só regras determinísticas e precedentes fiscais; sugestões de modelo ficam desligadas.'}</p>
+   <hr/>
    <strong>Emissão oficial (opcional)</strong>
    <p>Separada da auditoria preventiva. Cria nova numeração oficial no Gerador e não altera a Central compartilhada. Para corrigir uma alocação externa, use o relatório e os arquivos corrigidos.</p>
    {confirmIssue?<div className="aac-issue-confirm" role="group" aria-label="Confirmar nova emissão">

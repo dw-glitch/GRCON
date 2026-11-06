@@ -1,6 +1,7 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
  const VERSION='1.6.0';
+ const MlModule=()=>{try{if(typeof module==='object'&&module.exports&&typeof require==='function')return require('./allocation_auditor_ml.js');}catch(_){}return typeof globalThis!=='undefined'?globalThis.GrconAllocationAuditorMl:null;};
  // Catálogo de referências (Etapa 3): opcional e aditivo. Sem context.references o motor se comporta como antes.
  const References=(()=>{try{if(typeof module==='object'&&module.exports&&typeof require==='function')return require('./allocation_auditor_references.js');}catch(_){}return typeof globalThis!=='undefined'?globalThis.GrconAllocationAuditorReferences:undefined;})();
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
@@ -482,6 +483,8 @@
    if(v.flagOnly.length)add('REF-FLAG-ONLY','reference','document','Esta verificação depende de sinalizador de homologação sem responsável e data ('+[...new Set(v.flagOnly.map(x=>x.name))].join('; ')+'). Registre a validação com evidência para demonstrar fonte, revisão e vigência.',v.flagOnly,{severity:'suggestion',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
    verification={status:v.status,verified:v.verified,flagOnly:v.flagOnly.map(x=>x.rule),blocked:v.blocked.map(b=>({rule:b.rule,field:b.field,codes:b.blockers.map(x=>x.code),reference:b.reference})),catalog:context.references.fingerprint};
   }
+  // Sugestões do modelo local (Etapas 9–10): opcionais e só "suggestion". Nunca alteram os achados acima; falha ou ausência do modelo não afeta a auditoria.
+  if(context.mlModel&&context.mlEnabled!==false){try{const Ml=MlModule();if(Ml)for(const s of Ml.suggest(context.mlModel,r,{enabled:true}))f.push(s);}catch(_){/* o modelo é opcional */}}
   const status=f.some(x=>x.severity==='error')?'Correções pendentes':f.some(x=>x.severity==='pending')?'Verificações inconclusivas':f.some(x=>x.severity==='suggestion')?'Sugestões de melhoria':'Sem não conformidades detectadas';
   return {...r,docKind:kind,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto',...(verification?{verification}:{})};
  }
