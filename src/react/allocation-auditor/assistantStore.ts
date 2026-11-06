@@ -4,21 +4,22 @@ export type Message={id:string;role:'user'|'assistant';text:string};
 type SheetChoice={name:string;options:Array<{name:string;model:string;documentCount:number}>;selected:string};
 type State={
  open:boolean;messages:Message[];sessionId:string;revision:number;
- pending:boolean;error:string;sessions:Data[];pendingSheets:SheetChoice[];pendingAllocations:Data[];plan:Data|null;saveState:'idle'|'saving'|'saved'|'failed'|'conflict';
+ pending:boolean;error:string;errorCode:string;sessions:Data[];pendingSheets:SheetChoice[];pendingAllocations:Data[];plan:Data|null;saveState:'idle'|'saving'|'saved'|'failed'|'conflict';
  tab:Tab;
 };
 export type Tab='conversa'|'pendencias'|'arquivos'|'historico';
 const welcome='Olá! Sou o Robô Auditor Preventivo do GRCON. Posso conferir uma alocação criada aqui ou uma planilha externa, antes do envio à fiscalização. Envie a alocação, anexe as LDs necessárias e peça para auditar.';
 const initial=():State=>({
  open:false,messages:[{id:'hello',role:'assistant',text:welcome}],
- sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',sessions:[],pendingSheets:[],pendingAllocations:[],plan:null,saveState:'idle',tab:'conversa'
+ sessionId:crypto.randomUUID(),revision:0,pending:false,error:'',errorCode:'',sessions:[],pendingSheets:[],pendingAllocations:[],plan:null,saveState:'idle',tab:'conversa'
 });
 let state=initial(),generation=0,pendingWrite:Data|null=null;
 const contextIdentity=()=>{const g=window as unknown as Data;return JSON.stringify([g.GrconCloud?.state?.session?.user?.id,g.GrconCloud?.state?.membership?.workspace_id,g.GrconCloud?.state?.membership?.contract_id]);};
 let sessionIdentity=contextIdentity();
 let pendingAllocationFiles:File[]=[];
 const listeners=new Set<()=>void>();
-const emit=(patch:Partial<State>)=>{state={...state,...patch};listeners.forEach(f=>f());};
+// Um novo erro sem código explícito limpa o código anterior, para não classificar a falha nova pela antiga.
+const emit=(patch:Partial<State>)=>{state={...state,...('error' in patch&&!('errorCode' in patch)?{errorCode:''}:{}),...patch};listeners.forEach(f=>f());};
 const say=(text:string,role:Message['role']='assistant')=>emit({
  messages:[...state.messages,{id:crypto.randomUUID(),role,text:text.slice(0,2000)}].slice(-100)
 });
@@ -56,9 +57,13 @@ async function execute(action:(speak:typeof say)=>Promise<unknown>,allowConflict
   }
  }catch(e){
   if(ticket===generation){
-   const detail=(e as Error).message||String(e);
-   emit({error:detail});
-   say('Não consegui concluir essa etapa: '+detail+'. Os arquivos originais foram preservados.');
+   const detail=(e as Error).message||String(e),code=(e as Data)?.code||'';
+   const E=(window as unknown as Data).GrconAllocationAuditorErrors,d=E?E.describe({message:detail,code}):null;
+   if(code==='CANCELLED'){say((d?d.what+' '+d.compromised:'Operação cancelada.')+' '+(d?d.todo:''));}
+   else{
+    emit({error:detail,errorCode:code});
+    say(d?'Não consegui concluir essa etapa. '+d.what+' '+d.compromised+' '+d.todo:'Não consegui concluir essa etapa: '+detail+'. Os arquivos originais foram preservados.');
+   }
   }
  }finally{if(ticket===generation)emit({pending:false});}
 }
@@ -139,6 +144,10 @@ export const assistant={
    .catch((e:Error)=>{if(ticket===generation)emit({error:'Histórico de conversas indisponível: '+e.message});});
  },
  close(){emit({open:false});},
+ // Aviso curto e transitório na janela (ex.: diagnóstico copiado), sem criar nova conversa.
+ notice(text:string){say(text);},
+ // Cancelamento real de qualquer operação em andamento (Worker, gravação, IA); o que já foi calculado é preservado.
+ cancelOperation(){const n=service.cancel();say(n?'Cancelando a operação em andamento…':'Não há operação em andamento para cancelar.');},
  setTab(tab:Tab){emit({tab});},
  retrySave(){return execute(async(speak)=>speak('Vou tentar salvar a conversa novamente.'));},
  status(){return execute(async(speak)=>speak(snapshotStatus()));},

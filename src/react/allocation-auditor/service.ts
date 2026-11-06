@@ -1,7 +1,56 @@
 export type Data=Record<string,any>;
-type Snapshot={groups:Data[];summary:Data;rows:Data[];records:Data[];history:Data[];events:Data[];runs:Data[];context:Data;busy:boolean;progress:number;total:number;error:string;message:string;runId:string;selected:number[];comparison:Data|null};
+export class OperationError extends Error{
+ code:string;operation:string;
+ constructor(code:string,message:string,operation=''){super(message);this.name='OperationError';this.code=code;this.operation=operation;}
+}
+// Prazos por operação (ms). Valores generosos para arquivos grandes, mas finitos.
+export const DEADLINES:Record<string,number>={
+ inspect:60_000,parse:120_000,context:60_000,batch:120_000,summarize:60_000,'revise-allocation':120_000,'assistant-package':180_000,export:180_000,
+ rpc:30_000,'rpc-write':60_000,ai:35_000,default:90_000
+};
+export const deadlineFor=(operation:string,overrides:Record<string,number>={})=>overrides[operation]??DEADLINES[operation]??overrides.default??DEADLINES.default;
+
+type Pending={reject:(e:Error)=>void;operation:string;started:number};
+// Registro das operações em andamento, para cancelar todas de uma vez.
+export class OperationRegistry{
+ private active=new Map<number,Pending&{id:number}>();private serial=0;
+ log:Data[]=[];max=100;
+ begin(operation:string,reject:(e:Error)=>void){const id=++this.serial;this.active.set(id,{id,reject,operation,started:Date.now()});return id;}
+ end(id:number){this.active.delete(id);}
+ get size(){return this.active.size;}
+ cancelAll(message='Operação cancelada a seu pedido.'){const items=[...this.active.values()];this.active.clear();for(const i of items)i.reject(new OperationError('CANCELLED',message,i.operation));return items.length;}
+ record(entry:Data){this.log.push(entry);if(this.log.length>this.max)this.log.splice(0,this.log.length-this.max);}
+}
+
+// Executa `start` com prazo. Se o prazo estoura, rejeita com TIMEOUT e chama `onTimeout` (ex.: encerrar o Worker ou abortar o fetch).
+export function withDeadline<T>(operation:string,start:(signal:AbortSignal)=>Promise<T>,opts:{ms?:number;overrides?:Record<string,number>;onTimeout?:()=>void;registry?:OperationRegistry;signal?:AbortSignal}={}):Promise<T>{
+ const ms=opts.ms??deadlineFor(operation,opts.overrides),controller:AbortController=typeof AbortController==='function'?new AbortController():({signal:undefined as any,abort(){}} as any);
+ return new Promise<T>((resolve,reject)=>{
+  let done=false,timer:ReturnType<typeof setTimeout>|undefined,regId=0;
+  const finish=(fn:()=>void)=>{if(done)return;done=true;if(timer){try{clearTimeout(timer);}catch{/* ambiente sem clearTimeout */}}if(regId)opts.registry?.end(regId);opts.signal?.removeEventListener?.('abort',onAbort);fn();};
+  const onAbort=()=>finish(()=>{controller.abort();reject(new OperationError('CANCELLED','Operação cancelada a seu pedido.',operation));});
+  if(opts.signal){if(opts.signal.aborted){reject(new OperationError('CANCELLED','Operação cancelada a seu pedido.',operation));return;}opts.signal.addEventListener('abort',onAbort,{once:true});}
+  if(opts.registry)regId=opts.registry.begin(operation,e=>finish(()=>{controller.abort();reject(e);}));
+  timer=setTimeout(()=>finish(()=>{controller.abort();try{opts.onTimeout?.();}catch{/* o encerramento é melhor esforço */}reject(new OperationError('TIMEOUT','Tempo esgotado na operação '+operation+' ('+(ms<1000?ms+' ms':Math.round(ms/1000)+' s')+').',operation));}),ms);
+  (timer as any)?.unref?.(); // no Node, o prazo pendente não deve segurar o processo
+  let promise:Promise<T>;try{promise=start(controller.signal);}catch(e){finish(()=>reject(e as Error));return;}
+  promise.then(v=>finish(()=>resolve(v)),e=>finish(()=>reject(e)));
+ });
+}
+
+// Identificador curto de operação para o registro técnico.
+export const newOperationId=()=>'op-'+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
+
+type Snapshot={groups:Data[];summary:Data;rows:Data[];records:Data[];history:Data[];events:Data[];runs:Data[];context:Data;busy:boolean;progress:number;total:number;error:string;message:string;runId:string;selected:number[];comparison:Data|null;errorCode:string};
 const g=window as unknown as Data;
-let state:Snapshot={groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[],comparison:null};
+let state:Snapshot={groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[],comparison:null,errorCode:''};
+// Prazos e cancelamento por operação (RA-11) e registro técnico seguro: só identificadores, etapa, código e tempos.
+const ops=new OperationRegistry();let deadlineOverrides:Record<string,number>={};
+const errorsApi=()=>g.GrconAllocationAuditorErrors;
+function logOp(operation:string,started:number,error?:any,count?:number){
+ const E=errorsApi();if(!E)return;
+ ops.record(E.logEntry({operationId:newOperationId(),step:operation,code:error?(error.code||E.classify(error).code):'OK',ok:!error,ms:Date.now()-started,count}));
+}
 // Resultado anterior (concluído) da mesma sessão, guardado ao limpar os resultados para reauditar: serve só para a comparação antes × depois.
 let baseline:Data[]|null=null;
 const listeners=new Set<()=>void>(),emit=(p:Partial<Snapshot>)=>{state={...state,...p};listeners.forEach(f=>f());};
@@ -12,10 +61,33 @@ let identity=scope(),epoch=0,cancelled=false,worker:Worker|null=null,serial=0,sa
 const pending=new Map<number,{resolve:(v:any)=>void;reject:(e:Error)=>void}>();
 function requireSession(){const c=cloud();if(!c?.session?.user?.id||!c.membership?.contract_id||!c.membership?.workspace_id)throw Error('Entre em um contrato para auditar alocações.');if(identity!==scope())reset();return c;}
 function current(t:number){if(t!==epoch||identity!==scope())throw Error('Conta ou contrato alterado. Reabra a análise.');}
-async function compute(operation:string,input:Data){if(!worker){worker=new Worker('workers/allocation-auditor.worker.js');worker.onmessage=({data})=>{const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);};worker.onerror=()=>{pending.forEach(p=>p.reject(Error('Falha no processamento. A análise parcial permanece disponível.')));pending.clear();worker?.terminate();worker=null;};}const id=++serial;return new Promise<any>((resolve,reject)=>{pending.set(id,{resolve,reject});worker!.postMessage({id,operation,input});});}
-async function rpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_auditor',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message||'Não foi possível acessar o histórico do auditor.');return r.data;}
-async function task(action:()=>Promise<unknown>){if(state.busy)throw Error('Aguarde a operação atual.');requireSession();const t=epoch;emit({busy:true,error:'',message:''});try{return await action();}catch(e){if(t===epoch)emit({error:(e as Error).message||String(e)});throw e;}finally{if(t===epoch)emit({busy:false});}}
-function reset(){baseline=null;sourceFiles.clear();identity=scope();epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();saveRequest='';savedEvents=0;saveMetadata=null;emit({comparison:null,groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[]});}
+function abortWorker(error:Error){const dead=worker;worker=null;try{dead?.terminate();}catch{/* melhor esforço */}const all=[...pending.values()];pending.clear();for(const p of all)p.reject(error);}
+async function compute(operation:string,input:Data){
+ if(!worker){worker=new Worker('workers/allocation-auditor.worker.js');worker.onmessage=({data})=>{const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);};worker.onerror=()=>{const e=Error('Falha no processamento. A análise parcial permanece disponível.');const all=[...pending.values()];pending.clear();for(const p of all)p.reject(e);worker?.terminate();worker=null;};}
+ const id=++serial,started=Date.now(),target=worker;
+ try{
+  const result=await withDeadline<any>(operation,()=>new Promise<any>((resolve,reject)=>{pending.set(id,{resolve,reject});target!.postMessage({id,operation,input});}),
+   {overrides:deadlineOverrides,registry:ops,onTimeout:()=>{pending.delete(id);if(worker===target)abortWorker(new OperationError('TIMEOUT','Tempo esgotado na operação '+operation+'.',operation));}});
+  logOp(operation,started);return result;
+ }catch(e){
+  pending.delete(id);
+  // Prazo ou cancelamento: o Worker pode estar no meio do trabalho; encerra-o. A resposta que chegar depois é ignorada (id removido).
+  if(e instanceof OperationError&&worker===target)abortWorker(e);
+  logOp(operation,started,e);throw e;
+ }
+}
+const WRITE_OPS=new Set(['begin','chunk','input-chunk','finish','event']);
+async function rpc(operation:string,input:Data={}){
+ const c=requireSession(),t=epoch,started=Date.now(),write=WRITE_OPS.has(operation);
+ try{
+  const r=await withDeadline<any>(write?'rpc-write':'rpc',signal=>{const b:any=c.client.rpc('grcon_allocation_auditor',{target_workspace:c.membership.workspace_id,operation,input});if(b&&typeof b.abortSignal==='function')b.abortSignal(signal);return Promise.resolve(b);},{overrides:deadlineOverrides,registry:ops});
+  current(t);
+  if(r.error){const message=r.error.message||'Não foi possível acessar o histórico do auditor.';throw write?new OperationError('SAVE_FAILED',message,operation):Error(message);}
+  logOp('rpc:'+operation,started);return r.data;
+ }catch(e){logOp('rpc:'+operation,started,e);throw e;}
+}
+async function task(action:()=>Promise<unknown>){if(state.busy)throw Error('Aguarde a operação atual.');requireSession();const t=epoch;emit({busy:true,error:'',errorCode:'',message:''});try{return await action();}catch(e){if(t===epoch){const code=(e as Data)?.code||'';if(code==='CANCELLED')emit({message:'Operação cancelada. O que já foi analisado ou salvo foi preservado.'});else emit({error:(e as Error).message||String(e),errorCode:code});}throw e;}finally{if(t===epoch)emit({busy:false});}}
+function reset(){baseline=null;sourceFiles.clear();identity=scope();epoch++;cancelled=true;ops.cancelAll('Contexto alterado.');abortWorker(new OperationError('STALE_CONTEXT','Contexto alterado.'));saveRequest='';savedEvents=0;saveMetadata=null;emit({comparison:null,groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',errorCode:'',message:'',runId:'',selected:[]});}
 // Nome seguro e legível da cópia; o hash curto só entra se houver colisão.
 function outName(folder:string,original:string,sha:string,existing:Data[]){
  const base=original.replace(/\.xlsx$/i,'').replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/^\.+/,'').slice(0,80)||'ARQUIVO';
@@ -74,7 +146,7 @@ export const service={
  // o histórico já salvo no servidor é imutável (trilha de auditoria) e permanece.
  async discard(includeLds=false){
   if(state.busy)throw Error('Pause a análise e aguarde a operação atual antes de iniciar outra auditoria.');
-  epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise excluída.')));pending.clear();
+  epoch++;cancelled=true;ops.cancelAll('Análise excluída.');abortWorker(new OperationError('STALE_CONTEXT','Análise excluída.'));
   const keep=includeLds?[]:((state.context.sources||[]) as Data[]).filter(x=>x.kind==='ld');
   for(const key of [...sourceFiles.keys()])if(!keep.some(x=>x.sha256===key))sourceFiles.delete(key);
   baseline=null;saveRequest='';savedEvents=0;saveMetadata=null;
@@ -246,7 +318,7 @@ export const service={
   }
   for(const e of approved)if(!files.some(f=>f.changes?.some((x:Data)=>x.lineage===e.lineage&&x.field===e.field&&x.after===e.after)))exceptions.push(e.document+' / '+e.field+': decisão registrada sem cópia produzida.');
   let plan:Data={items:[]};try{plan=await service.correctionPlan();}catch{plan={items:[]};}
-  const result=await compute('assistant-package',{...state.context,rows:state.rows,events:state.events,progress:state.progress,total:state.total,sessionId,runId:state.runId,files,exceptions,comparison:state.comparison,plan:{items:plan.items}});current(t);
+  let result:Data;try{result=await compute('assistant-package',{...state.context,rows:state.rows,events:state.events,progress:state.progress,total:state.total,sessionId,runId:state.runId,files,exceptions,comparison:state.comparison,plan:{items:plan.items}});}catch(e){throw e instanceof OperationError?e:new OperationError('EXPORT_FAILED',(e as Error).message||'Falha ao gerar o pacote.','assistant-package');}current(t);
   save(result.bytes,'GRCON_Auditoria_Preventiva.zip');emit({message:exceptions.length?'Pacote parcial verificado; consulte as exceções no relatório.':'Pacote verificado e pronto para download.'});return result.manifest;
  });},
  async acceptGroup(group:Data){
@@ -285,15 +357,19 @@ export const service={
   const total=resume?state.total:state.records.length;
   if(!resume)clearResults();emit({context,total});await compute('context',context);current(t);
   let rows=resume?state.rows.slice():[];
-  for(let i=rows.length;i<context.records.length;i+=100){if(cancelled)break;const next=await compute('batch',{first:i,count:100});current(t);rows=[...rows,...next];emit({rows,progress:rows.length,selected:rows.map((_,i)=>i)});await new Promise(resolve=>setTimeout(resolve,0));}
-  const grouped=await compute('summarize',{rows});current(t);
+  for(let i=rows.length;i<context.records.length;i+=100){if(cancelled)break;let next:Data[];try{next=await compute('batch',{first:i,count:100});}catch(e){if((e as Data)?.code==='CANCELLED'){cancelled=true;break;}throw e;}current(t);rows=[...rows,...next];emit({rows,progress:rows.length,selected:rows.map((_,i)=>i)});await new Promise(resolve=>setTimeout(resolve,0));}
+  let grouped:Data={};try{grouped=await compute('summarize',{rows});}catch(e){if((e as Data)?.code!=='CANCELLED')throw e;cancelled=true;}current(t);
   // Reauditoria: compara o resultado anterior com o atual (só documentos presentes nos dois lados). A comparação é a prova de resolução.
   let comparison:Data|null=null;
   if(!cancelled&&baseline&&rows.length===total&&g.GrconAllocationAuditorReaudit){const cmp=g.GrconAllocationAuditorReaudit.compare(baseline,rows);comparison=cmp.comparable?cmp:null;}
   if(!cancelled&&rows.length===total)baseline=null;
   emit({...grouped,comparison,selected:rows.map((_,i)=>i),message:cancelled?'Análise pausada. Os registros concluídos podem ser retomados.':contextWarning?'Auditoria parcial concluída. '+contextWarning:'Auditoria concluída. Confira as pendências e evidências.'});
  });},
- cancel(){cancelled=true;},
+ // Cancelamento real: interrompe a operação em andamento (Worker, RPC ou IA) na hora; resultados já obtidos são preservados.
+ cancel(){cancelled=true;const n=ops.cancelAll();if(worker)abortWorker(new OperationError('CANCELLED','Operação cancelada a seu pedido.'));return n;},
+ setDeadlines(overrides:Record<string,number>){deadlineOverrides={...overrides};},
+ // Diagnóstico técnico seguro (sem documentos, sem nomes de arquivo, sem credenciais) para enviar ao suporte.
+ diagnostics(){const E=errorsApi();return JSON.stringify({generatedAt:new Date().toISOString(),engine:g.GrconAllocationAuditorCore?.VERSION,errors:E?.VERSION,progress:state.progress,total:state.total,busy:state.busy,lastError:E?E.sanitize(state.error):'',lastErrorCode:state.errorCode,operations:ops.log.slice(-50)},null,1);},
  select(indices:number[]){emit({selected:indices});},
  async review(index:number,input:Data){const c=requireSession();if(state.busy)throw Error('Aguarde a operação atual.');if(!['owner','admin','operator'].includes(c.membership.role))throw Error('Perfil sem permissão de revisão.');const row=state.rows[index];if(input.field==='databook'&&input.value&&!state.context.bases?.databook?.some((p:Data)=>p.databook===input.value))throw Error('Escolha um caminho existente na base ativa.');
   const event={...g.GrconAllocationAuditorCore.reviewEvent(row,input,c.session.user.id),requestId:crypto.randomUUID()};
@@ -346,7 +422,20 @@ export const service={
   return result;
  });},
  async revisedLd(file:File){return task(async()=>{const t=epoch,ui=await generator();const events=g.GrconAllocationAuditorCore.approvedChanges(state.events).filter((e:Data)=>e.field==='title');if(!events.length)throw Error('Aprove uma proposta de título primeiro.');const result=await ui.reviseAuditLd(file,state.rows,events);current(t);save(result.buffer,result.fileName);emit({message:`Cópia revisada gerada; ${result.count} títulos alterados e preservação verificada.`});});},
- async ai(index:number,question=''){return task(async()=>{const c=requireSession(),t=epoch,r=state.rows[index];if(r.ai&&!question)return;if(!r.findings.length)throw Error('Não há apontamentos para esta consulta.');const response=await fetch('/api/document-vault/allocation-audit-ai',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+c.session.access_token},body:JSON.stringify({workspaceId:c.membership.workspace_id,document:r.document,title:r.title,question,proposals:(r.recommendations||[]).slice(0,8).map((p:Data,i:number)=>({id:'proposal:'+i,field:p.field,before:p.before,after:p.after,evidence:p.evidence.slice(0,2)})),findings:r.findings.slice(0,8).map((f:Data,i:number)=>({id:'finding:'+i,field:f.field,message:f.message,evidence:f.evidence.slice(0,2)}))})});const d=await response.json();current(t);if(!response.ok)throw Error(d.message||'IA indisponível.');const rows=state.rows.slice();rows[index]={...r,ai:d};emit({rows});});},clear:reset,
+ // Explicação por IA: contrato de campos compartilhado, prazo e cancelamento próprios. Falha da IA nunca apaga o resultado determinístico.
+ async ai(index:number,question=''){return task(async()=>{
+  const c=requireSession(),t=epoch,r=state.rows[index];if(r.ai&&!question)return;
+  if(!r.findings.length)throw Error('Não há apontamentos para esta consulta.');
+  const Fields=g.GrconAllocationAuditorFields;if(!Fields)throw new OperationError('AI_FAILED','O contrato de campos da consulta por IA não está carregado.','ai');
+  const built=Fields.buildAuditRequest(r,question);
+  if(!built.usable)throw new OperationError('AI_FAILED','Nenhum apontamento desta linha cabe na consulta por IA ('+built.omitted.map((o:Data)=>o.reason).join('; ')+').','ai');
+  let response:Response;
+  try{response=await withDeadline<Response>('ai',signal=>fetch('/api/document-vault/allocation-audit-ai',{method:'POST',signal,headers:{'content-type':'application/json',authorization:'Bearer '+c.session.access_token},body:JSON.stringify({workspaceId:c.membership.workspace_id,...built.body})}),{overrides:deadlineOverrides,registry:ops});}
+  catch(e){if(e instanceof OperationError&&e.code==='CANCELLED')throw e;throw new OperationError('AI_FAILED',e instanceof OperationError?'A IA excedeu o tempo de resposta.':'Não foi possível consultar a IA.','ai');}
+  const d=await response.json().catch(()=>({}));current(t);
+  if(!response.ok)throw new OperationError('AI_FAILED',d.message||'IA indisponível.','ai');
+  const rows=state.rows.slice();rows[index]={...r,ai:{...d,omitted:built.omitted}};emit({rows});
+ });},clear:reset,
 };
 for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])window.addEventListener(event,reset);
 window.addEventListener('grcon:cloud-ready',()=>{if(identity!==scope())reset();});

@@ -7,7 +7,7 @@ import {AllocationAssistant} from './AllocationAssistant';
 import {RobotAuditorLauncher} from './RobotAuditorLauncher';
 import {service} from './service';
 const g=window as unknown as Record<string,any>;
-g.GrconAllocationAuditorUi=Object.freeze({activate:()=>{void service.activate().catch(()=>{});},open:(seed:Record<string,any>)=>service.open(seed),showAssistant:assistant.show,mountIntelligence:(host:HTMLElement,workspace:string)=>{const root=createRoot(host);root.render(<IntelligencePanel workspace={workspace}/>);return ()=>root.unmount();},clear:service.clear});
+g.GrconAllocationAuditorUi=Object.freeze({activate:()=>{void service.activate().catch(()=>{});},open:(seed:Record<string,any>)=>service.open(seed),showAssistant:assistant.show,setDeadlines:(o:Record<string,number>)=>service.setDeadlines(o),mountIntelligence:(host:HTMLElement,workspace:string)=>{const root=createRoot(host);root.render(<IntelligencePanel workspace={workspace}/>);return ()=>root.unmount();},clear:service.clear});
 function mount(){
  const host=document.getElementById('grcon-allocation-auditor-root');
  // The old full-screen surface remains mountable only for isolated legacy regression tests.

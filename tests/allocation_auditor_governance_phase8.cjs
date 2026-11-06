@@ -49,7 +49,7 @@ const cat=C.catalogComments([{document:'D1',revision:'0',fiscalComment:original,
 assert.equal(cat[0].originals[0],original);assert.equal(cat[0].normativeProof,false);assert.notEqual(cat[0].learning,'regra-operacional-homologada');
 
 // Segurança estática: sem R2/cofre/armazenamento local de binários no Auditor.
-const auditorFiles=['allocation_auditor_references.js','allocation_auditor_opinion.js','allocation_auditor_reaudit.js','allocation_auditor_report.js','allocation_auditor_core.js','allocation_auditor_assistant.js','allocation_auditor_revision.js','allocation_auditor_package.js','allocation_auditor_corrections.js','allocation_auditor_learning.js','workers/allocation-auditor.worker.js',...fs.readdirSync(path.join(root,'src/react/allocation-auditor')).map(f=>'src/react/allocation-auditor/'+f)];
+const auditorFiles=['allocation_auditor_references.js','allocation_auditor_opinion.js','allocation_auditor_reaudit.js','allocation_auditor_report.js','allocation_auditor_fields.js','allocation_auditor_errors.js','allocation_auditor_core.js','allocation_auditor_assistant.js','allocation_auditor_revision.js','allocation_auditor_package.js','allocation_auditor_corrections.js','allocation_auditor_learning.js','workers/allocation-auditor.worker.js',...fs.readdirSync(path.join(root,'src/react/allocation-auditor')).map(f=>'src/react/allocation-auditor/'+f)];
 for(const f of auditorFiles){
  const src=read(f);
  assert.ok(!/\bR2\b|r2_|putObject|\.put\(|createSignedUploadUrl|storage\.from|indexedDB|localStorage|sessionStorage/.test(src.replace(/Error\([^)]*\)/g,'')),f+' não grava documentos em R2/cofre/armazenamento local');

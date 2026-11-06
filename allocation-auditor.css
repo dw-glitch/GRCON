@@ -327,3 +327,7 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 .aac-filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.aac-chip{white-space:nowrap;flex:none}
 .aac-search{grid-template-columns:1fr auto;align-items:center;gap:8px}.aac-search input[type=search]{padding:7px 10px}.aac-check{white-space:nowrap;font-size:.76rem}
 @media(max-width:760px){.aac-search{grid-template-columns:1fr}}
+
+/* Etapa 8: mensagens de recuperação por gravidade (informação não é alarme). */
+.aac-error-info{background:var(--brand-50,#e5f3fa);color:var(--text-1,#172c39)}.aac-error-warning{background:#fff4d6;color:#5c3b00}
+.aac-error-detail{display:flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.85}.aac-error-detail button{padding:3px 8px!important;font-size:.72rem!important}

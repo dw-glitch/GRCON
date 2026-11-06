@@ -52,6 +52,7 @@ assert.equal(V.nextAction({...base,busy:true,records:[1]}).id,'busy');
 assert.equal(V.nextAction(base).id,'start');
 assert.equal(V.nextAction({...base,records:[1]}).id,'audit');
 assert.equal(V.nextAction({...base,records:[1],rows:[{}],total:5,progress:2}).id,'resume');
+assert.equal(V.nextAction({...base,records:[1,2],rows:[],total:2,progress:0}).id,'audit','nada analisado (ex.: prazo no primeiro lote): auditar de novo, não retomar');
 assert.equal(V.nextAction({...base,records:[1],rows:rows,total:3,progress:3,opinion}).id,'review','com impedimentos: ver pendências');
 assert.equal(V.nextAction({...base,records:[1],rows:[row(2)],total:1,progress:1,opinion:O.build({rows:[row(2)]})}).id,'report');
 assert.equal(V.nextAction({...base,records:[1],rows:rows,total:3,progress:3,opinion:null}).id,'review','sem parecer nunca vira "pronto"');
@@ -63,8 +64,12 @@ const clean=V.buildStages({...base,records:[1],rows:[row(2)],total:1,progress:1,
 assert.equal(clean[4].state,'done');assert.equal(clean[5].state,'current');
 assert.equal(V.buildStages({...base,records:[1],rows:rows,total:3,progress:3,opinion:null})[4].state,'attention','sem parecer: atenção');
 assert.equal(V.buildStages(base)[0].state,'current');
-// 8. Mensagens de recuperação: o que aconteceu, o que ficou comprometido, o que fazer.
-for(const m of ['Falha ao salvar a análise','Tempo esgotado na leitura','Sessão expirada','Planilha inválida: aba ausente','O motor mudou. Inicie uma nova auditoria','Erro qualquer']){
- const r=V.friendlyError(m);assert.equal(r.what,m);assert.ok(r.compromised.length>15&&r.todo.length>15,m);}
-assert.match(V.friendlyError('Tempo esgotado').todo,/Retomar/);assert.match(V.friendlyError('Falha ao salvar').todo,/Tentar salvar/);
+// 8. Mensagens de recuperação: vêm do catálogo compartilhado; sem ele, mensagem genérica (nunca quebra).
+{
+ const generic=V.friendlyError('Erro qualquer');assert.equal(generic.code,'UNKNOWN');assert.ok(generic.compromised.length>15&&generic.todo.length>15);
+ globalThis.GrconAllocationAuditorErrors=require(path.resolve(__dirname,'..','allocation_auditor_errors.js'));
+ const cases=[['Falha ao salvar a análise','','SAVE_FAILED',/Tentar salvar/],['Tempo esgotado na leitura','','TIMEOUT',/Retomar/],['Sessão expirada','','AUTH',/Entre novamente/],['Arquivo XLSX inválido ou corrompido','','FILE_INVALID',/\.xlsx/],['O motor mudou. Inicie uma nova auditoria','','RESUME_INCOMPATIBLE',/nova auditoria/i],['qualquer coisa','AI_FAILED','AI_FAILED',/orientação por item/]];
+ for(const [m,code,expected,todo] of cases){const r=V.friendlyError(m,code);assert.equal(r.code,expected,m);assert.match(r.todo,todo,m);assert.equal(r.detail,m);}
+ delete globalThis.GrconAllocationAuditorErrors;
+}
 console.log('allocation_auditor_chat_view_stage6: items, guidance, filters, lifecycle, next action, stages and recovery messages passed');

@@ -93,7 +93,8 @@ export function nextAction(i:Input):NextAction{
  if(i.pendingAllocations)return {id:'confirm-identity',label:'Confirmar identificação',hint:'Informe o número da alocação ou confirme rascunho.'};
  if(i.busy)return {id:'busy',label:'Processando…',hint:'Acompanhe o progresso abaixo.'};
  if(!i.records.length&&!i.rows.length)return {id:'start',label:'Auditar alocação',hint:'Informe o número, use a alocação atual ou envie uma planilha.'};
- if(i.total>0&&i.progress<i.total)return {id:'resume',label:'Retomar análise',hint:'A análise parou em '+i.progress+' de '+i.total+' documentos.'};
+ // Retomar só faz sentido se algo já foi analisado; com 0 documentos analisados (ex.: prazo estourado no primeiro lote) o caminho é auditar de novo.
+ if(i.total>0&&i.progress>0&&i.progress<i.total)return {id:'resume',label:'Retomar análise',hint:'A análise parou em '+i.progress+' de '+i.total+' documentos.'};
  if(!i.rows.length)return {id:'audit',label:'Auditar alocação',hint:'Os documentos foram recebidos; falta executar a auditoria.'};
  const o=i.opinion;
  if(!o)return {id:'review',label:'Ver pendências',hint:'O parecer consolidado não está disponível nesta tela; confira as pendências antes de concluir.'};
@@ -115,15 +116,12 @@ export function buildStages(i:Input):Stage[]{
  ];
 }
 
-// Mensagens de recuperação: o que aconteceu, o que ficou comprometido e o que fazer. A cobertura completa é a Etapa 8.
-export function friendlyError(message:string):{what:string;compromised:string;todo:string}{
- const m=text(message),n=m.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
- const pick=(compromised:string,todo:string)=>({what:m,compromised,todo});
- if(/salvar|conversa ainda nao salva|nao foi possivel acessar o historico/.test(n))return pick('A conversa pode não estar salva; a análise na tela continua disponível.','Use "Tentar salvar conversa". Se persistir, baixe o relatório antes de sair.');
- if(/sessao|permissao|autentic|login|perfil sem/.test(n))return pick('A operação não foi executada; nada foi alterado.','Entre novamente no GRCON e confira seu perfil neste contrato.');
- if(/tempo|timeout|expirou/.test(n))return pick('A etapa não terminou; o que já foi analisado foi preservado.','Use "Retomar análise". Se repetir, divida o lote ou tente mais tarde.');
- if(/cancel|paus/.test(n))return pick('A etapa foi interrompida a seu pedido; o progresso foi preservado.','Use "Retomar análise" quando quiser continuar.');
- if(/planilha|xlsx|arquivo|aba|leitura|ler /.test(n))return pick('Este arquivo não foi analisado; os demais seguem intactos.','Confira se é um .xlsx válido e reenvie. O original não foi alterado.');
- if(/motor mudou|incompat|retomada|entrada incompleta/.test(n))return pick('Os resultados antigos não podem ser misturados aos novos.','Inicie uma nova auditoria anexando todas as fontes; o histórico permanece preservado.');
- return pick('A etapa não foi concluída; os arquivos originais foram preservados.','Tente novamente. Se persistir, informe a mensagem acima à equipe do GRCON.');
+// Mensagens de recuperação: o que aconteceu, o que ficou comprometido e o que fazer. Vêm do catálogo compartilhado
+// (allocation_auditor_errors.js); sem ele, vale a mensagem genérica. `code` vem de erros tipados (prazo, cancelamento, IA, gravação).
+export type Recovery={what:string;compromised:string;todo:string;detail:string;code:string;severity:string;retryable:boolean};
+export function friendlyError(message:string,code=''):Recovery{
+ const E=(globalThis as any).GrconAllocationAuditorErrors;
+ const m=text(message);
+ if(E){const d=E.describe({message:m,code});return {what:d.what,compromised:d.compromised,todo:d.todo,detail:d.detail,code:d.code,severity:d.severity,retryable:d.retryable};}
+ return {what:'A etapa não foi concluída.',compromised:'Os arquivos originais foram preservados e os resultados já calculados continuam na tela.',todo:'Tente novamente. Se persistir, informe a mensagem à equipe do GRCON.',detail:m,code:'UNKNOWN',severity:'error',retryable:true};
 }

@@ -82,7 +82,8 @@ export function AllocationAssistant(){
  const stages=buildStages({records:s.records,rows:s.rows,progress:s.progress,total:s.total,busy,sources,pendingSheets:chat.pendingSheets.length,pendingAllocations:chat.pendingAllocations.length,opinion,contextWarning:s.context.contextWarning});
  const next=nextAction({records:s.records,rows:s.rows,progress:s.progress,total:s.total,busy,sources,pendingSheets:chat.pendingSheets.length,pendingAllocations:chat.pendingAllocations.length,opinion});
  const describe=opinion&&O?O.describe(opinion.counts):null;
- const errorText=chat.error||s.error,recovery=errorText?friendlyError(errorText):null;
+ const errorText=chat.error||s.error,recovery=errorText?friendlyError(errorText,chat.error?chat.errorCode:s.errorCode):null;
+ const copyDiagnostics=async()=>{const text=service.diagnostics();try{await navigator.clipboard.writeText(text);assistant.notice('Diagnóstico técnico copiado (sem documentos, nomes de arquivo ou credenciais).');}catch{assistant.notice('Não foi possível copiar automaticamente. Selecione o texto do detalhe técnico e copie manualmente.');}};
  const runNext=()=>{
   if(next.id==='audit')void assistant.auditFiles();
   else if(next.id==='resume')void assistant.resume();
@@ -196,8 +197,9 @@ export function AllocationAssistant(){
   <div ref={end}/>
   </div>
   {chat.tab!=='conversa'&&lastReply&&toastId===lastReply.id&&<p className="aac-toast" role="status">{lastReply.text}</p>}
-  {recovery&&<div className="aac-error" role="alert"><p><b>O que aconteceu:</b> {recovery.what}</p><p><b>O que ficou comprometido:</b> {recovery.compromised}</p><p><b>O que fazer:</b> {recovery.todo}</p></div>}
-  {busy&&<div className="aac-progress" role="status">{s.total>0?<><progress max={s.total} value={s.progress}/><span>{s.progress} / {s.total} documentos</span></>:<span>Processando a operação solicitada…</span>}{s.total>0&&s.progress<s.total&&<button type="button" onClick={()=>assistant.pause()}>Pausar análise</button>}</div>}
+  {recovery&&<div className={'aac-error aac-error-'+recovery.severity} role="alert"><p><b>O que aconteceu:</b> {recovery.what}</p><p><b>O que ficou comprometido:</b> {recovery.compromised}</p><p><b>O que fazer:</b> {recovery.todo}</p>
+   <p className="aac-error-detail"><small>Detalhe técnico: {recovery.detail||'—'} · código {recovery.code}</small>{' '}<button type="button" onClick={()=>void copyDiagnostics()}>Copiar diagnóstico</button></p></div>}
+  {busy&&<div className="aac-progress" role="status">{s.total>0?<><progress max={s.total} value={s.progress}/><span>{s.progress} / {s.total} documentos</span></>:<span>Processando a operação solicitada…</span>}{s.total>0&&s.progress<s.total?<button type="button" onClick={()=>assistant.pause()}>Pausar análise</button>:<button type="button" onClick={()=>assistant.cancelOperation()}>Cancelar operação</button>}</div>}
   <div className={'aac-next'+(chat.tab==='conversa'?'':' aac-next-compact')} aria-label="Próxima ação">
    <p title={next.hint} className="aac-next-hint">{next.hint}</p>
    <div className="aac-next-actions">
