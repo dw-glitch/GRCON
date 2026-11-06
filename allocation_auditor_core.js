@@ -1,6 +1,8 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.4.0';
+ const VERSION='1.5.0';
+ // Catálogo de referências (Etapa 3): opcional e aditivo. Sem context.references o motor se comporta como antes.
+ const References=(()=>{try{if(typeof module==='object'&&module.exports&&typeof require==='function')return require('./allocation_auditor_references.js');}catch(_){}return typeof globalThis!=='undefined'?globalThis.GrconAllocationAuditorReferences:undefined;})();
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
  const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet,text(r.sourceFile),text(r.sourceSheet),text(r.sourceRow),text(r.allocation),text(r.sourceHash)]);
@@ -377,8 +379,17 @@
       {severity:'suggestion',source:'Recorrência histórica Fiscal 01 (não normativa)',origin:'Precedentes da família',normativeProof:false,humanReview:true});
    }
   }
+  // Referência ausente, não carregada ou não validada NUNCA vira conformidade: a verificação fica inconclusiva, com o motivo.
+  let verification;
+  if(context.references&&References){
+   const v=References.verification({...r,docKind:kind},context.references);
+   const groups=References.groupBlocks(v);
+   // Um único apontamento por registro (não um por referência), para não afogar os problemas reais; o detalhe vai na evidência.
+   if(groups.length)add('REF-BLOCKED','reference','document','Verificação incompleta: '+groups.length+' referência(s) sem o nível exigido, '+v.blocked.length+' regra(s) bloqueada(s). Referência necessária: '+groups.map(g=>g.reference+(g.revision&&g.revision!=='qualquer'?' (rev. '+g.revision+')':'')+' — '+g.needed).join('; ')+'. Estas verificações não foram feitas; ausência de apontamento nelas não significa conformidade.',groups.map(g=>({code:g.code,reference:g.reference,revision:g.revision,needed:g.needed,rules:g.rules,fields:g.fields})),{severity:'pending',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
+   verification={status:v.status,verified:v.verified,blocked:v.blocked.map(b=>({rule:b.rule,field:b.field,codes:b.blockers.map(x=>x.code),reference:b.reference})),catalog:context.references.fingerprint};
+  }
   const status=f.some(x=>x.severity==='error')?'Correções pendentes':f.some(x=>x.severity==='pending')?'Verificações inconclusivas':f.some(x=>x.severity==='suggestion')?'Sugestões de melhoria':'Sem não conformidades detectadas';
-  return {...r,docKind:kind,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto'};
+  return {...r,docKind:kind,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto',...(verification?{verification}:{})};
  }
  function compare(a,b){const changes=[],unknown=[];for(const k of ['document','revision','title','tag','discipline','eap','databook','levels','workflow']){if(a[k]==null||b[k]==null||a[k]===''||b[k]===''){unknown.push(k);continue;}if(JSON.stringify(a[k])!==JSON.stringify(b[k]))changes.push({field:k,before:a[k],after:b[k]});}return {changes,unknown,resolved:false};}
  function reviewEvent(row,{state,field,value,justification,evidence=[],decision='proposed'},actor){
