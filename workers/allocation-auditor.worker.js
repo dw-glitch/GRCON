@@ -2,7 +2,7 @@
 importScripts('../xlsx.full.min.js','../jszip.min.js',
  '../vendor/recon/document_title_standard.js','../vendor/recon/document_title_standard_r.js',
  '../vendor/recon/allocation_normative_catalogs.js','../vendor/recon/allocation_normative_rules.js',
- '../allocation_auditor_references.js','../allocation_auditor_opinion.js','../allocation_auditor_core.js','../allocation_auditor_revision.js','../allocation_auditor_assistant.js','../allocation_auditor_corrections.js','../allocation_auditor_package.js');
+ '../allocation_auditor_references.js','../allocation_auditor_opinion.js','../allocation_auditor_reaudit.js','../allocation_auditor_report.js','../allocation_auditor_core.js','../allocation_auditor_revision.js','../allocation_auditor_assistant.js','../allocation_auditor_corrections.js','../allocation_auditor_package.js');
 const C=self.GrconAllocationAuditorCore;
 let context=null,prepared=null;
 const cache=new Map();

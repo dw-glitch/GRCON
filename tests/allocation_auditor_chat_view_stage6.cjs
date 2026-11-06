@@ -37,6 +37,13 @@ assert.equal(V.filterItems(items,{kind:'todas',query:'zzz',onlyOpen:false}).leng
  const op=O.build({rows,events,files});const next=V.buildItems(rows,op,events);
  const p=next.find(i=>i.kind==='proposta');assert.equal(p.statusCode,'aplicada');assert.equal(p.open,false);assert.equal(p.decision,'accepted');
 }
+// 5c. Reauditoria: o que persiste ou surgiu depois da correção ganha o rótulo da comparação.
+{
+ const cmp={items:[{kind:'ocorrencia',status:'persiste',allocation:'ALOC-1',document:'DOC-1',revision:'0',id:'E1',field:'title'},{kind:'ocorrencia',status:'nova',allocation:'ALOC-1',document:'DOC-1',revision:'0',id:'P1',field:'workflow'}]};
+ const labelled=V.buildItems(rows,opinion,[],cmp);
+ assert.equal(labelled.find(i=>i.ruleId==='E1').status,'Persiste após a correção');assert.equal(labelled.find(i=>i.ruleId==='P1').status,'Nova após a correção');
+ assert.equal(labelled.find(i=>i.ruleId==='X').status,'Pendente de verificação','itens fora da comparação mantêm o status do parecer');
+}
 // 6. Próxima ação: ordem de prioridade, sem declarar prontidão sem parecer.
 const base={records:[],rows:[],progress:0,total:0,busy:false,sources:[],pendingSheets:0,pendingAllocations:0,opinion:null};
 assert.equal(V.nextAction({...base,pendingSheets:1}).id,'confirm-sheets');

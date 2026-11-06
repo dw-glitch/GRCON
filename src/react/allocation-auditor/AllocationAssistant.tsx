@@ -75,7 +75,7 @@ export function AllocationAssistant(){
   if(!chat.open||!O||!s.rows.length)return null;
   try{return O.build({rows:s.rows,events:s.events,files:[],exceptions:[],contextWarning:s.context.contextWarning||''});}catch{return null;}
  },[chat.open,O,s.rows,s.events,s.context.contextWarning]);
- const items=useMemo(()=>chat.open?buildItems(s.rows,opinion,s.events):[],[chat.open,s.rows,opinion,s.events]);
+ const items=useMemo(()=>chat.open?buildItems(s.rows,opinion,s.events,s.comparison):[],[chat.open,s.rows,opinion,s.events,s.comparison]);
  const kinds=countKinds(items),shown=useMemo(()=>filterItems(items,filter),[items,filter]);
  if(!chat.open)return null;
  const sources=(s.context.sources||[]) as Data[];
@@ -156,6 +156,7 @@ export function AllocationAssistant(){
    {s.rows.length>0&&<section className={'aac-result'+(chat.plan?' aac-plan':'')} aria-label="Resultado da auditoria preventiva">
     <strong>{s.progress} de {s.total} documentos analisados</strong>
     <p>{s.summary.errors||0} documento(s) com erro confirmado · {s.summary.pending||0} documento(s) com verificação pendente · {s.summary.suggestions||0} documento(s) com sugestão preventiva</p>
+    {s.comparison&&g.GrconAllocationAuditorReaudit&&<p className={s.comparison.regressions?'aac-warn':'aac-ok'} role="status">{g.GrconAllocationAuditorReaudit.describe(s.comparison)}{s.comparison.regressions?' Há apontamento(s) novo(s) após a correção: revise-os.':''}</p>}
     {describe&&opinion&&<dl className="aac-indicators">
      <div><dt>Documentos</dt><dd>{opinion.counts.documents}</dd><small>{opinion.counts.documentsClear} sem apontamentos</small></div>
      <div><dt>Erros confirmados</dt><dd>{opinion.counts.occurrences.errors}</dd><small>ocorrências</small></div>

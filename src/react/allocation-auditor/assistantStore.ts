@@ -69,7 +69,8 @@ const opinionLines=():string=>{
  try{
   const o=O.build({rows:s.rows,events:s.events,files:[],exceptions:[],contextWarning:s.context.contextWarning||''}),d=O.describe(o.counts);
   const impedimentos=o.blockers.length?' Impedimentos para concluir: '+o.blockers.map((b:Data)=>b.count+' '+b.message).join('; ')+'.':'';
-  return ' '+d.documents+'. '+d.occurrences+'. '+d.proposals+'.'+impedimentos;
+  const R=(window as unknown as Data).GrconAllocationAuditorReaudit,reaudit=R&&s.comparison?' '+R.describe(s.comparison):'';
+  return ' '+d.documents+'. '+d.occurrences+'. '+d.proposals+'.'+reaudit+impedimentos;
  }catch{return '';}
 };
 const snapshotStatus=()=>{

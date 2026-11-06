@@ -1,7 +1,9 @@
 export type Data=Record<string,any>;
-type Snapshot={groups:Data[];summary:Data;rows:Data[];records:Data[];history:Data[];events:Data[];runs:Data[];context:Data;busy:boolean;progress:number;total:number;error:string;message:string;runId:string;selected:number[]};
+type Snapshot={groups:Data[];summary:Data;rows:Data[];records:Data[];history:Data[];events:Data[];runs:Data[];context:Data;busy:boolean;progress:number;total:number;error:string;message:string;runId:string;selected:number[];comparison:Data|null};
 const g=window as unknown as Data;
-let state:Snapshot={groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[]};
+let state:Snapshot={groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[],comparison:null};
+// Resultado anterior (concluído) da mesma sessão, guardado ao limpar os resultados para reauditar: serve só para a comparação antes × depois.
+let baseline:Data[]|null=null;
 const listeners=new Set<()=>void>(),emit=(p:Partial<Snapshot>)=>{state={...state,...p};listeners.forEach(f=>f());};
 const cloud=()=>g.GrconCloud?.state;
 const scope=()=>JSON.stringify([cloud()?.session?.user?.id,cloud()?.membership?.workspace_id,cloud()?.membership?.contract_id]);
@@ -13,7 +15,7 @@ function current(t:number){if(t!==epoch||identity!==scope())throw Error('Conta o
 async function compute(operation:string,input:Data){if(!worker){worker=new Worker('workers/allocation-auditor.worker.js');worker.onmessage=({data})=>{const p=pending.get(data.id);if(!p)return;pending.delete(data.id);data.error?p.reject(Error(data.error)):p.resolve(data.result);};worker.onerror=()=>{pending.forEach(p=>p.reject(Error('Falha no processamento. A análise parcial permanece disponível.')));pending.clear();worker?.terminate();worker=null;};}const id=++serial;return new Promise<any>((resolve,reject)=>{pending.set(id,{resolve,reject});worker!.postMessage({id,operation,input});});}
 async function rpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_auditor',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message||'Não foi possível acessar o histórico do auditor.');return r.data;}
 async function task(action:()=>Promise<unknown>){if(state.busy)throw Error('Aguarde a operação atual.');requireSession();const t=epoch;emit({busy:true,error:'',message:''});try{return await action();}catch(e){if(t===epoch)emit({error:(e as Error).message||String(e)});throw e;}finally{if(t===epoch)emit({busy:false});}}
-function reset(){sourceFiles.clear();identity=scope();epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();saveRequest='';savedEvents=0;saveMetadata=null;emit({groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[]});}
+function reset(){baseline=null;sourceFiles.clear();identity=scope();epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();saveRequest='';savedEvents=0;saveMetadata=null;emit({comparison:null,groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[]});}
 // Nome seguro e legível da cópia; o hash curto só entra se houver colisão.
 function outName(folder:string,original:string,sha:string,existing:Data[]){
  const base=original.replace(/\.xlsx$/i,'').replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/^\.+/,'').slice(0,80)||'ARQUIVO';
@@ -22,13 +24,13 @@ function outName(folder:string,original:string,sha:string,existing:Data[]){
  return name;
 }
 function remainingGroups(events:Data[],rows:Data[]=state.rows){const latest=new Map(events.map(e=>[JSON.stringify([e.lineage,e.field]),e]));return g.GrconAllocationAssistant?.groups(rows.map(row=>({...row,recommendations:(row.recommendations||[]).filter((p:Data)=>!['accepted','rejected'].includes(latest.get(JSON.stringify([row.lineage,p.field]))?.decision||''))})))||[];}
-function clearResults(){saveRequest='';savedEvents=0;saveMetadata=null;emit({groups:[],summary:{},rows:[],events:[],progress:0,total:0,runId:'',selected:[],context:{...state.context,saved:false,checkpoint:false,history:undefined}});}
+function clearResults(){if(state.rows.length&&state.total>0&&state.progress===state.total&&!state.context.partial)baseline=state.rows;saveRequest='';savedEvents=0;saveMetadata=null;emit({comparison:null,groups:[],summary:{},rows:[],events:[],progress:0,total:0,runId:'',selected:[],context:{...state.context,saved:false,checkpoint:false,history:undefined}});}
 const canonical=(value:any):string=>value&&typeof value.toJSON==='function'?canonical(value.toJSON()):JSON.stringify(value===undefined?null:value&&typeof value==='object'?Array.isArray(value)?value.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,JSON.parse(canonical(value[k]))])):value);
 const digest=async(value:any)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(value))))).map(x=>x.toString(16).padStart(2,'0')).join('');
 const sameInput=(input:Data,result:Data)=>['document','sourceHash','sourceFile','sourceSheet','sourceRow','allocation'].every(k=>String(input[k]??'')===String(result[k]??''))&&(!input.revision||String(input.revision)===String(result.revision));
 async function referenceDigest(context:Data){return digest({versions:context.versions||{},applicability:context.applicability||{},bases:context.bases||{},history:context.history||[],ldRecords:(context.ldRecords||[]).map(({sourceTimestamp,...r}:Data)=>r)});}
 function stopWorker(){epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise substituída.')));pending.clear();}
-function emptySnapshot():Partial<Snapshot>{return {groups:[],summary:{},rows:[],records:[],history:[],events:[],context:{},progress:0,total:0,error:'',message:'Conversa sem análise vinculada. Anexe as fontes para começar.',runId:'',selected:[]};}
+function emptySnapshot():Partial<Snapshot>{return {comparison:null,groups:[],summary:{},rows:[],records:[],history:[],events:[],context:{},progress:0,total:0,error:'',message:'Conversa sem análise vinculada. Anexe as fontes para começar.',runId:'',selected:[]};}
 function commitRestore(snapshot:Partial<Snapshot>,meta:Data|null,t:number){current(t);stopWorker();sourceFiles.clear();g.GrconAllocationGeneratorUi?.clearAuditLd?.();saveRequest='';savedEvents=snapshot.events?.length||0;saveMetadata=meta;emit(snapshot);}
 async function stageRestore(run:Data){
  const t=epoch,rows:Data[]=[],records:Data[]=[];let meta:Data=run.metadata||{},events:Data[]=[];
@@ -75,9 +77,9 @@ export const service={
   epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise excluída.')));pending.clear();
   const keep=includeLds?[]:((state.context.sources||[]) as Data[]).filter(x=>x.kind==='ld');
   for(const key of [...sourceFiles.keys()])if(!keep.some(x=>x.sha256===key))sourceFiles.delete(key);
-  saveRequest='';savedEvents=0;saveMetadata=null;
+  baseline=null;saveRequest='';savedEvents=0;saveMetadata=null;
   if(includeLds){try{(await generator()).clearAuditLd?.();}catch{/* o Gerador pode não estar carregado */}}
-  emit({groups:[],summary:{},rows:[],records:[],history:[],events:[],busy:false,progress:0,total:0,error:'',runId:'',selected:[],
+  emit({comparison:null,groups:[],summary:{},rows:[],records:[],history:[],events:[],busy:false,progress:0,total:0,error:'',runId:'',selected:[],
    context:{sources:keep,ldHashes:Object.fromEntries(keep.map((x:Data)=>[x.name,x.sha256]))},
    message:includeLds?'Análise e LDs removidas desta sessão. Seus arquivos originais não foram alterados.':'Análise excluída. As LDs continuam disponíveis. Seus arquivos originais não foram alterados.'});
  },
@@ -244,7 +246,7 @@ export const service={
   }
   for(const e of approved)if(!files.some(f=>f.changes?.some((x:Data)=>x.lineage===e.lineage&&x.field===e.field&&x.after===e.after)))exceptions.push(e.document+' / '+e.field+': decisão registrada sem cópia produzida.');
   let plan:Data={items:[]};try{plan=await service.correctionPlan();}catch{plan={items:[]};}
-  const result=await compute('assistant-package',{...state.context,rows:state.rows,events:state.events,progress:state.progress,total:state.total,sessionId,runId:state.runId,files,exceptions,plan:{items:plan.items}});current(t);
+  const result=await compute('assistant-package',{...state.context,rows:state.rows,events:state.events,progress:state.progress,total:state.total,sessionId,runId:state.runId,files,exceptions,comparison:state.comparison,plan:{items:plan.items}});current(t);
   save(result.bytes,'GRCON_Auditoria_Preventiva.zip');emit({message:exceptions.length?'Pacote parcial verificado; consulte as exceções no relatório.':'Pacote verificado e pronto para download.'});return result.manifest;
  });},
  async acceptGroup(group:Data){
@@ -285,7 +287,11 @@ export const service={
   let rows=resume?state.rows.slice():[];
   for(let i=rows.length;i<context.records.length;i+=100){if(cancelled)break;const next=await compute('batch',{first:i,count:100});current(t);rows=[...rows,...next];emit({rows,progress:rows.length,selected:rows.map((_,i)=>i)});await new Promise(resolve=>setTimeout(resolve,0));}
   const grouped=await compute('summarize',{rows});current(t);
-  emit({...grouped,selected:rows.map((_,i)=>i),message:cancelled?'Análise pausada. Os registros concluídos podem ser retomados.':contextWarning?'Auditoria parcial concluída. '+contextWarning:'Auditoria concluída. Confira as pendências e evidências.'});
+  // Reauditoria: compara o resultado anterior com o atual (só documentos presentes nos dois lados). A comparação é a prova de resolução.
+  let comparison:Data|null=null;
+  if(!cancelled&&baseline&&rows.length===total&&g.GrconAllocationAuditorReaudit){const cmp=g.GrconAllocationAuditorReaudit.compare(baseline,rows);comparison=cmp.comparable?cmp:null;}
+  if(!cancelled&&rows.length===total)baseline=null;
+  emit({...grouped,comparison,selected:rows.map((_,i)=>i),message:cancelled?'Análise pausada. Os registros concluídos podem ser retomados.':contextWarning?'Auditoria parcial concluída. '+contextWarning:'Auditoria concluída. Confira as pendências e evidências.'});
  });},
  cancel(){cancelled=true;},
  select(indices:number[]){emit({selected:indices});},

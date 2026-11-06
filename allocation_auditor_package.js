@@ -27,6 +27,8 @@
  // Estado final: considera achados do motor e correções efetivamente verificadas.
  // Estado final: delega ao parecer canônico (allocation_auditor_opinion.js), a mesma fonte do chat e do relatório.
  const opinion=()=>root.GrconAllocationAuditorOpinion||(typeof require==='function'?require('./allocation_auditor_opinion.js'):null);
+ const reportModel=()=>root.GrconAllocationAuditorReport||(typeof require==='function'?require('./allocation_auditor_report.js'):null);
+ const reauditModel=()=>root.GrconAllocationAuditorReaudit||(typeof require==='function'?require('./allocation_auditor_reaudit.js'):null);
  function finalState(rows,files,exceptions,contextWarning,events,reaudit){
   const o=opinion().build({rows,files,exceptions,contextWarning,events,reaudit});
   return {state:STATES[o.state],uncorrectedErrors:o.uncorrectedErrors,inconclusive:o.inconclusive,pendingFindings:o.pendingFindings,openProposals:o.openProposals,blockers:o.blockers,counts:o.counts,lifecycle:o.lifecycle};
@@ -40,7 +42,25 @@
   if(!root.ExcelJS)importScripts('../exceljs.min.js');
   const rows=input.rows,events=C.approvedChanges(input.events||[]),exceptions=(input.exceptions||[]).map(String),files=input.files||[];
   const plan=input.plan||{items:[]},planByKey=new Map((plan.items||[]).filter(i=>i.field&&i.after!==undefined).map(i=>[JSON.stringify([i.lineage,i.field,i.after]),i]));
-  const summary=C.summary(rows),state=finalState(rows,files,exceptions,input.contextWarning,input.events||[],input.reaudit);
+  // Reauditoria: cada cópia oficial corrigida é lida de volta e auditada de novo; só essa segunda auditoria comprova a resolução.
+  // Correções em LD não têm segunda auditoria aqui: ficam "aplicadas — falta reauditar" até o usuário reexecutar com a LD corrigida.
+  const secondAuditFor=(file)=>{
+   if(!file.official)return null;
+   const wb=XLSX.read(file.bytes,{type:'array',cellFormula:true});if(!wb.Sheets.GERAL)return null;
+   const parsed=C.parseRows(XLSX.utils.sheet_to_json(wb.Sheets.GERAL,{header:1,defval:'',raw:true}),{contract:input.contract});if(parsed.model!=='official-16')return null;
+   const ctx={...input,records:parsed.records},index=C.prepare(ctx);return parsed.records.map(r=>C.auditRecord(r,ctx,index));
+  };
+  const reaudit=input.reaudit?input.reaudit.slice():[];
+  if(!input.reaudit)for(const file of files){
+   const second=secondAuditFor(file);if(!second)continue;
+   for(const lineage of new Set((file.changes||[]).map(c=>c.lineage))){
+    const before=rows.find(r=>r.lineage===lineage);if(!before)continue;
+    const after=second.find(r=>r.document===before.document&&String(r.revision??'')===String(before.revision??''));
+    if(after)reaudit.push({lineage,findings:after.findings||[],recommendations:after.recommendations||[]});
+   }
+  }
+  const comparison=input.comparison&&input.comparison.comparable?input.comparison:null;
+  const summary=C.summary(rows),state=finalState(rows,files,exceptions,input.contextWarning,input.events||[],reaudit);
   const opinionText=opinion().describe(state.counts);
   const generatedAt=new Date();
   const verifiedChanges=files.flatMap(f=>(f.changes||[]).map(c=>({...c,file:f.name})));
@@ -70,17 +90,64 @@
   };
   const used=new Set(),labelsByAllocation=new Map([...groups.keys()].map(k=>[k,tabLabel(k,used)]));
 
-  const resumo=book.addWorksheet('RESUMO',{views:[{showGridLines:false}]});
+  const resumo=book.addWorksheet('LEIA PRIMEIRO',{views:[{showGridLines:false}],pageSetup:{fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  const model=reportModel().build({rows,events:input.events||[],approved:events,files,opinion:state,plan,comparison,sources:input.sources||[],versions:input.versions||{},exceptions,contract:input.contract});
+  const H=reportModel().HEADERS;
+  // Tabelas didáticas: cabeçalho fixo, filtro e texto quebrado. Tabela vazia diz o motivo, sem linhas fictícias.
+  const table=(name,headers,data,widths,emptyText,fill='FF1F4E78')=>{
+   const ws=book.addWorksheet(name,{views:[{state:'frozen',ySplit:1}],pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});sheetNames.push(name);
+   ws.addRow(headers.map(safe));header(ws,fill);
+   if(!data.length){const r=ws.addRow([emptyText]);r.getCell(1).font={italic:true,color:{argb:'FF51667A'}};ws.mergeCells(2,1,2,Math.min(headers.length,6));r.alignment={vertical:'top',wrapText:true};r.height=34;}
+   else for(const cells of data){const r=ws.addRow(cells.map(safe));r.alignment={vertical:'top',wrapText:true};r.font={color:{argb:'FF20384D'}};}
+   ws.columns=widths.map(width=>({width}));
+   if(data.length)ws.autoFilter={from:{row:1,column:1},to:{row:ws.rowCount,column:headers.length}};
+   return ws;
+  };
   let proposalsOpen=0,clearDocs=0;
   const allocationStats=[];
   const detailHeaders=['Alocação','Código do documento','Revisão','Norma','Categoria','Regra / critério','Classificação','Descrição do apontamento','Campo','Valor atual','Valor sugerido','Valor corrigido (aplicado)','Evidência','Arquivo de origem','Aba','Local (linha/célula)','Situação','Tipo de tratamento','Fundamento','Requer decisão humana'];
   const detailWidths=[22,38,9,12,18,26,24,60,18,30,30,28,44,28,12,16,28,26,50,20];
-  const sheetNames=['RESUMO'];
+  const sheetNames=['LEIA PRIMEIRO'];
   const fills={error:'FFFDE2E1',pending:'FFFFF3D6',proposal:'FFFFF3D6',suggestion:'FFE6F0FA',done:'FFE3F4E8',authorized:'FFEAF4E4',clear:'FFFFFFFF'};
   const order={error:0,pending:1,proposal:2,authorized:3,done:4,suggestion:5,clear:6};
   const editable=['workflow','databook','N1','N2','N3','N4','N5','N6'],cellOf={workflow:3,databook:10,N1:11,N2:12,N3:13,N4:14,N5:15,N6:16};
+  // Valor atual do campo apontado, mesmo sem sugestão: a evidência do motor (alocação/atual) ou o valor da linha recebida.
+  const foundValue=(row,f)=>{
+   const ev=(f.evidence||[]).find(e=>e&&typeof e==='object')||{};
+   const fromEvidence=ev.alocacao??ev.actual??ev.informada;
+   if(fromEvidence!==undefined&&fromEvidence!==null&&String(fromEvidence)!=='')return String(fromEvidence);
+   if(f.field==='levels')return (row.levels||[]).filter(Boolean).join(' > ');
+   const v=/^N[1-6]$/.test(f.field||'')?(row.levels||[])[Number((f.field||'').slice(1))-1]:row[f.field];
+   return typeof v==='string'||typeof v==='number'?String(v):'';
+  };
   const current=(row,f)=>/^N[1-6]$/.test(f)?String((row.levels||[])[Number(f.slice(1))-1]??''):String(row[f]??'');
 
+  {
+   const fixSheet=table('O QUE CORRIGIR',H.toFix,model.toFix,[16,16,30,8,44,38,24,24,28,34,32,34,18,38,22],'Nenhum erro confirmado ou verificação pendente em aberto nas referências disponíveis. Isto não equivale à aprovação da fiscalização.','FFB3261E');
+   fixSheet.eachRow((r,i)=>{if(i>1){const c=r.getCell(1);c.font={bold:true,color:{argb:'FF20384D'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:String(c.value).startsWith('Corrigir')?'FFFDE2E1':'FFFFF3D6'}};}});
+   const propSheet=table('PROPOSTAS PARA REVISÃO',H.proposals,model.proposals,[22,16,30,8,18,26,30,38,32,12,20,14,18,28,30,28,40],'Nenhuma proposta de correção ou sugestão preventiva. Nada aqui é correção realizada: propostas só viram correção depois de autorizadas, aplicadas na cópia e reauditadas.','FFB7791F');
+   propSheet.eachRow((r,i)=>{if(i>1){r.getCell(7).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3D6'}};r.getCell(7).font={bold:true,color:{argb:'FF20384D'}};}});
+   const verSheet=table('CORREÇÕES VERIFICADAS',H.verified,model.verified,[22,16,30,8,18,26,26,26,10,8,20,28,30],'Nenhuma correção verificada nesta auditoria. Valores corrigidos só aparecem aqui depois de lidos de volta na cópia gerada ou comprovados por reauditoria.','FF1B6B3A');
+   verSheet.eachRow((r,i)=>{if(i>1)r.getCell(7).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFC8E6C9'}};});
+   // REFERÊNCIAS E DECISÕES: fontes, versões, decisões humanas e exceções, em blocos sob um mesmo cabeçalho de aba.
+   const refs=book.addWorksheet('REFERÊNCIAS E DECISÕES',{views:[{showGridLines:false}],pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});sheetNames.push('REFERÊNCIAS E DECISÕES');
+   refs.columns=[28,26,26,22,24,36,36,18,22,40,40,24].map(width=>({width}));
+   let rr=0;
+   const block=(title,headers,data,empty)=>{
+    const t=refs.getRow(++rr);t.getCell(1).value=title.toUpperCase();t.font={bold:true,color:{argb:'FF15546E'}};t.border={bottom:{style:'thin',color:{argb:'FF15546E'}}};
+    const h=refs.getRow(++rr);headers.forEach((x,i)=>{h.getCell(i+1).value=x;});h.font={bold:true,color:{argb:'FFFFFFFF'}};h.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F4E78'}};});
+    if(!data.length){refs.getRow(++rr).getCell(1).value=empty;refs.getRow(rr).getCell(1).font={italic:true,color:{argb:'FF51667A'}};}
+    for(const cells of data){const r=refs.getRow(++rr);cells.forEach((v,i)=>{r.getCell(i+1).value=safe(String(v));});r.alignment={vertical:'top',wrapText:true};}
+    rr++;
+   };
+   block('Decisões humanas registradas (quem, quando e por quê)',H.decisions,model.references.decisions,'Nenhuma decisão registrada nesta auditoria.');
+   block('Fontes recebidas (arquivo e SHA-256)',H.sources,model.references.sources,'Nenhum arquivo externo registrado.');
+   block('Versões das referências consultadas',H.versions,model.references.versions,'Versões não informadas.');
+   if(model.references.exceptions.length)block('Arquivos não produzidos',['Motivo'],model.references.exceptions,'');
+   if(comparison){
+    table('REAUDITORIA',H.reaudit,model.reaudit,[36,9,22,30,22,36,56,32,32],'Sem apontamentos comparáveis.','FF15546E');
+   }
+  }
   for(const [allocationName,groupRows] of groups){
    const tag=multiple?' '+labelsByAllocation.get(allocationName):'';
    const detailRows=[];let groupClear=0;
@@ -88,7 +155,7 @@
     const [file,sheet]=where(row),line=row.sourceRow?'linha '+row.sourceRow:'',norm=normOf(row);
     for(const f of row.findings||[]){
      const sug=f.suggestion;
-     detailRows.push({tone:f.severity,cells:[allocationOf(row),row.document,row.revision,norm,labels[f.category]||f.category,f.id+' · motor '+(f.ruleVersion||row.ruleVersion),SEVERITY[f.severity]||f.severity,f.message,labelOf(f.field),sug?sug.before:'',sug?sug.after:'','',evidenceText(f.evidence)||f.source,file,sheet,line,f.severity==='suggestion'?'Sugestão a avaliar':f.severity==='pending'?'Aguardando verificação':'Aguardando correção',sug?'Correção sugerida (a confirmar)':'—',f.source||'',f.humanReview===false?'Não':'Sim']});
+     detailRows.push({tone:f.severity,cells:[allocationOf(row),row.document,row.revision,norm,labels[f.category]||f.category,f.id+' · motor '+(f.ruleVersion||row.ruleVersion),SEVERITY[f.severity]||f.severity,f.message,labelOf(f.field),sug?sug.before:foundValue(row,f),sug?sug.after:'','',evidenceText(f.evidence)||f.source,file,sheet,line,f.severity==='suggestion'?'Sugestão a avaliar':f.severity==='pending'?'Aguardando verificação':'Aguardando correção',sug?'Correção sugerida (a confirmar)':'—',f.source||'',f.humanReview===false?'Não':'Sim']});
     }
     for(const rec of row.recommendations||[]){
      const key=JSON.stringify([row.lineage,rec.field,rec.after]),item=planByKey.get(key);
@@ -117,29 +184,31 @@
 
    // ALOCAÇÃO CORRIGIDA desta alocação
    const corrected=book.addWorksheet((multiple?'ALOC. CORRIGIDA':'ALOCAÇÃO CORRIGIDA')+tag);sheetNames.push(corrected.name);
-   corrected.addRow(['Nome do documento','Data prevista','Workflow','Documento ativo','Ação','Data da linha base','Propósito de emissão original','Documento crítico','Observação','Caminho do Data Book','N1','N2','N3','N4','N5','N6','Revisão','Norma','Código sugerido (conferir)','Alterações nesta linha','Situação das alterações'].map(safe));
+   corrected.addRow(['Nome do documento','Data prevista','Workflow','Documento ativo','Ação','Data da linha base','Propósito de emissão original','Documento crítico','Observação','Caminho do Data Book','N1','N2','N3','N4','N5','N6','Revisão','Norma','Código sugerido (não aplicado)','Alterações verificadas nesta linha','Situação das alterações','Propostas não aplicadas (valor atual preservado)'].map(safe));
    header(corrected,'FF1F4E78');
    const highlights=[],codeCells=[];
    groupRows.forEach(row=>{
     const values=[row.document,fmtDate(row.plannedDate),row.workflow,row.activeDocument,row.action,fmtDate(row.baselineDate),row.purpose,row.criticalDocument,row.observation,row.databook,...Array.from({length:6},(_,i)=>(row.levels||[])[i]??'')].map(v=>v??'');
-    const changed=[];
+    const changed=[],notApplied=[];
     for(const f of editable){
+     // Só entra na célula o valor lido de volta na cópia gerada (alteração verificada). Proposta ou autorização NÃO preenchem a célula.
+     const appliedChange=verifiedChanges.filter(c=>c.lineage===row.lineage&&c.field===f&&c.verified!==false).pop();
+     if(appliedChange&&appliedChange.after!==current(row,f)){values[cellOf[f]-1]=appliedChange.after;changed.push({f,before:current(row,f),after:appliedChange.after,applied:true});continue;}
      const decided=events.filter(e=>e.lineage===row.lineage&&e.field===f).pop();
      const afters=[...new Set((row.recommendations||[]).filter(x=>x.field===f).map(x=>x.after))];
-     const after=decided?decided.after:afters.length===1?afters[0]:null;
-     if(after==null||after===current(row,f))continue;
-     const applied=appliedKey.has(JSON.stringify([row.lineage,f,after]));
-     values[cellOf[f]-1]=after;changed.push({f,before:current(row,f),after,applied,authorized:Boolean(decided)});
+     const proposed=decided?decided.after:afters.length===1?afters[0]:null;
+     if(proposed!=null&&proposed!==current(row,f))notApplied.push({f,after:proposed,authorized:Boolean(decided)});
     }
     const codeSuggestion=(row.findings||[]).map(x=>x.suggestion).find(x=>x&&x.field==='document');
-    const status=!changed.length?'—':changed.every(c=>c.applied)?'Aplicadas em cópia verificada':changed.some(c=>c.authorized)?'Autorizadas; cópia pendente':'Sugeridas — aguardam decisão';
-    const r=corrected.addRow([...values,row.revision,normOf(row),codeSuggestion?codeSuggestion.after:'',changed.map(c=>labelOf(c.f)+': «'+c.before+'» → «'+c.after+'»').join('\n'),status].map(safe));
+    const status=changed.length?(notApplied.length?'Parte aplicada em cópia verificada; '+notApplied.length+' alteração(ões) ainda não aplicada(s)':'Aplicadas em cópia verificada')
+     :notApplied.length?(notApplied.every(c=>c.authorized)?'Nada aplicado: '+notApplied.length+' alteração(ões) autorizada(s), cópia pendente':'Nada aplicado: '+notApplied.length+' proposta(s) aguardam decisão'):'—';
+    const r=corrected.addRow([...values,row.revision,normOf(row),codeSuggestion?codeSuggestion.after:'',changed.map(c=>labelOf(c.f)+': «'+c.before+'» → «'+c.after+'»').join('\n'),status,notApplied.map(c=>labelOf(c.f)+': proposto «'+c.after+'» (valor atual preservado)').join('\n')].map(safe));
     for(const c of changed)highlights.push([r.number,cellOf[c.f],c.applied]);
     if(codeSuggestion)codeCells.push(r.number);
    });
-   corrected.columns=[44,13,40,12,12,14,22,12,30,60,14,14,14,14,14,14,9,12,44,60,28].map(width=>({width}));
+   corrected.columns=[44,13,40,12,12,14,22,12,30,60,14,14,14,14,14,14,9,12,44,60,40,60].map(width=>({width}));
    corrected.views=[{state:'frozen',ySplit:1,xSplit:1}];
-   corrected.autoFilter={from:{row:1,column:1},to:{row:Math.max(1,corrected.rowCount),column:21}};
+   corrected.autoFilter={from:{row:1,column:1},to:{row:Math.max(1,corrected.rowCount),column:22}};
    corrected.eachRow((r,i)=>{if(i>1){r.alignment={vertical:'top',wrapText:true};r.font={color:{argb:'FF20384D'}};}});
    for(const rn of codeCells)corrected.getRow(rn).getCell(19).font={bold:true,color:{argb:'FFB3261E'}};
    for(const [rn,cn,applied] of highlights){const c=corrected.getRow(rn).getCell(cn);c.fill={type:'pattern',pattern:'solid',fgColor:{argb:applied?'FFC8E6C9':'FFFFE08A'}};c.font={bold:true,color:{argb:'FF20384D'}};}
@@ -187,7 +256,9 @@
    // Mesma fonte do chat e do manifesto (allocation_auditor_opinion.js). Cada número diz a unidade: linha/documento, ocorrência ou proposta.
    ['Contagens por unidade',[['Linhas de alocação / documentos distintos',opinionText.documents],['Ocorrências (apontamentos do motor)',opinionText.occurrences],['Propostas de correção',opinionText.proposals],['Impedimentos para concluir',state.blockers.length?state.blockers.map(b=>b.count+' '+b.message).join('; '):'Nenhum']]],
    ...(multiple?[['Resultado por alocação',perAllocation]]:[]),
-   ['Como usar este relatório',[multiple?['Abas por alocação','Cada alocação tem as suas próprias abas (DETALHAMENTO, ALOC. CORRIGIDA e, quando houver, TÍTULOS LD), identificadas pelo número, para não misturar documentos de normas diferentes.']:['DETALHAMENTO','Todos os apontamentos, com valor atual, valor sugerido, evidência e situação.'],['ALOCAÇÃO CORRIGIDA','A alocação com as correções sugeridas ou aplicadas. Células destacadas foram alteradas; a coluna "Alterações nesta linha" mostra o valor anterior.'],['TÍTULOS DA LD','Quando houver, o título atual e o título sugerido para ajuste na LD de origem.'],['Escopo por norma','Documentos N-1710: auditados apenas quanto a Data Book, níveis (EAP) e título. Documentos ET-5290: também código/TAG (nt-) e demais regras da ET.']]],
+   ['Por onde começar',[['1. O QUE CORRIGIR','Erros confirmados e verificações pendentes em aberto: '+model.counts.toFix+' item(ns) ('+model.counts.toFixErrors+' erro(s) confirmado(s)). Cada linha diz o problema, por que importa, o valor encontrado, onde corrigir e como verificar.'],['2. PROPOSTAS PARA REVISÃO',model.counts.proposals+' proposta(s) de correção e '+model.counts.preventive+' sugestão(ões) preventiva(s). Nada ali é correção realizada: o valor sugerido só vira correção depois de autorizado, aplicado na cópia e reauditado.'],['3. CORREÇÕES VERIFICADAS',model.counts.verifiedCopies+' correção(ões) lida(s) de volta na cópia gerada e '+model.counts.verifiedByReaudit+' resolução(ões) comprovada(s) pela comparação com a auditoria anterior.'],['4. REFERÊNCIAS E DECISÕES',model.counts.decisions+' decisão(ões) humana(s) registrada(s), fontes com SHA-256 e versões das referências.'],['5. Depois de corrigir','Anexe o arquivo corrigido (alocação e/ou LD) e use "Reexecutar auditoria" no chat. A aba REAUDITORIA compara o resultado anterior com o novo: só ela comprova que o apontamento deixou de existir.']]],
+   ...(comparison?[['Reauditoria (anterior × atual)',[['Resultado',reauditModel().describe(comparison)],['Regressões',comparison.regressions?comparison.summary.introduced+' apontamento(s) novo(s) após a correção — veja a aba REAUDITORIA.':'Nenhum apontamento novo.']]]]:[]),
+   ['Abas técnicas',[multiple?['Abas por alocação','Cada alocação tem as suas próprias abas técnicas (DETALHAMENTO, ALOC. CORRIGIDA e, quando houver, TÍTULOS LD), identificadas pelo número, para não misturar documentos de normas diferentes.']:['DETALHAMENTO','Trilha completa: todos os apontamentos, com valor atual, valor sugerido, evidência, local e situação.'],['ALOCAÇÃO CORRIGIDA','A alocação como recebida, com SOMENTE as correções verificadas preenchidas (células verdes). Propostas e autorizações não alteram as células: ficam na última coluna, com o valor atual preservado.'],['TÍTULOS DA LD','Quando houver, o título atual e o título sugerido para ajuste na LD de origem (sugestão, não correção).'],['Escopo por norma','Documentos N-1710: auditados apenas quanto a Data Book, níveis (EAP) e título. Documentos ET-5290: também código/TAG (nt-) e demais regras da ET.']]],
    ['Fontes e referências',[['Fontes utilizadas',(input.sources||[]).map(s=>s.name+' ('+(s.kind==='ld'?'LD':'alocação')+', SHA-256 '+String(s.sha256||'').slice(0,12)+'…)').join('\n')||'—'],['Versões das referências',Object.entries(input.versions||{}).map(([k,v])=>k+': '+v).join('\n')||'Não informadas'],['Bases complementares',input.contextWarning||'Consultadas']]],
    ['Limitações',[['Observações importantes',[...LIMITS,...(input.contextWarning?[input.contextWarning]:[]),...exceptions.map(e=>'Arquivo não produzido: '+e)].join('\n')]]]
   ];

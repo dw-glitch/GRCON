@@ -89,7 +89,7 @@
       const second=reaudit.get(row.lineage);
       if(second&&!(second.recommendations||[]).some(p=>p.field===rec.field&&text(p.after)===text(rec.after))){entry.state='resolvida-comprovada';counts.proposals.resolvedProven++;}
       else if(second){entry.state='contradita';counts.proposals.contradicted++;}
-      else{entry.state='aplicada';counts.proposals.applied++;}
+      else{entry.state='aplicada';entry.unproven=true;counts.proposals.applied++;} // aplicada, mas a reauditoria não cobriu esta linha
      }
     }else if(latest&&latest.decision==='accepted'){entry.state='autorizada';counts.proposals.authorized++;}
     else if(latest&&latest.decision==='rejected'){entry.state='recusada';counts.proposals.rejected++;}
@@ -109,6 +109,7 @@
   add('PENDENCIA-ABERTA',lifecycle.filter(x=>x.kind==='ocorrencia'&&x.state==='pendente').length,'verificação(ões) pendente(s) ou bloqueada(s) por falta de referência');
   add('PROPOSTA-ABERTA',lifecycle.filter(x=>x.kind==='proposta'&&(x.state==='sugerida'||x.state==='autorizada')).length,'proposta(s) de correção sem alteração verificada');
   add('SEM-REAUDITORIA',counts.occurrences.appliedUnproven,'correção(ões) aplicada(s) ainda sem reauditoria que comprove a resolução');
+  add('SEM-REAUDITORIA-PROPOSTA',lifecycle.filter(x=>x.kind==='proposta'&&x.unproven).length,'proposta(s) aplicada(s) ainda sem reauditoria que comprove a resolução');
   add('PROPOSTA-CONTRADITA',counts.proposals.contradicted,'proposta(s) aplicada(s) que continuam aparecendo na reauditoria');
   add('EXCECAO-JUSTIFICADA',counts.occurrences.exceptions,'exceção(ões) justificada(s) que exigem conferência humana final');
   add('ARQUIVO-NAO-PRODUZIDO',exceptions,'arquivo(s) não produzido(s)');

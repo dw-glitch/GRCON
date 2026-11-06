@@ -16,7 +16,7 @@ class TestWorker{
  terminate(){this.stopped=true;}
 }
 w.Worker=TestWorker;
-for(const f of ['allocation_auditor_references.js','allocation_auditor_opinion.js','allocation_auditor_core.js','allocation_auditor_assistant.js','allocation_auditor_corrections.js','allocation_auditor_learning.js','react-dist/allocation-auditor-app.js'])w.eval(fs.readFileSync(path.join(root,f),'utf8'));
+for(const f of ['allocation_auditor_references.js','allocation_auditor_opinion.js','allocation_auditor_reaudit.js','allocation_auditor_core.js','allocation_auditor_assistant.js','allocation_auditor_corrections.js','allocation_auditor_learning.js','react-dist/allocation-auditor-app.js'])w.eval(fs.readFileSync(path.join(root,f),'utf8'));
 const wait=async fn=>{for(let i=0;i<300;i++){if(fn())return;await new Promise(r=>setTimeout(r,10));}throw Error('DOM wait timed out');};
 const button=t=>[...w.document.querySelectorAll('button')].find(b=>b.textContent===t);
 let failSessionWrite=true;
