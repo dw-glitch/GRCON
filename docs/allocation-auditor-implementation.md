@@ -58,7 +58,7 @@ ET N/P/Q/R, N-1710, Workflows, Apêndice de bens tagueados e caminhos foram loca
 - Importação real das 15.441 linhas da Central, preservação das 436 variantes de comentários e distinção entre datas e textos: aprovada.
 - A interface com React e Worker reais foi exercitada para análise, busca exata 121/122, seleção, detalhes, ZIP e limpeza de contexto. Catálogo do Gerador e RPC foram controlados nesse teste; a autorização real do banco foi testada separadamente em PGlite.
 - O impedimento da imagem original do mascote foi removido em 28/10: cópia recuperada com SHA Git `d9e87bcdda99aebfebccd83968f5ee71054c3367`, idêntica à do repositório. Os testes do mascote passaram na nova execução de regressão.
-- Gerador, seu banco, Central compartilhada, API de alocação, Corretor de Títulos e navegação também passaram nas verificações direcionadas.
+- Gerador, seu banco, Central compartilhada, API de alocação, Auditor de Títulos e navegação também passaram nas verificações direcionadas.
 - Sintaxe, Workers externos, hashes das dependências e verificação Supabase: aprovados.
 - As duas migrations foram aplicadas ao projeto existente. Introspecção confirmou RLS nas três tabelas, ausência de leitura direta para `anon`/`authenticated`, RPC negado a `anon`, execução permitida a `authenticated` e zero análises operacionais inseridas.
 - O advisor apresenta INFO de RLS sem policies nas tabelas privadas: é a arquitetura de acesso exclusivamente pela função privada, sem grants diretos. Não foi adicionada policy permissiva para eliminar esse aviso.

@@ -1,4 +1,4 @@
-/* GRCON — corretor de títulos: densidade de uso desktop, sem sobrescrever temas globais. */
+/* GRCON — auditor de títulos: densidade de uso desktop, sem sobrescrever temas globais. */
 .tc-root{max-width:1580px;margin:auto;padding:24px 30px 52px;color:var(--text,#244158);font-size:14px}
 .tc-root *{box-sizing:border-box}
 .tc-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:24px}

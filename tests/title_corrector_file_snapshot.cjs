@@ -1,5 +1,5 @@
 "use strict";
-// Corretor de títulos: o arquivo é lido UMA vez, ao ser escolhido. A análise usa a cópia em memória e nunca relê o disco
+// Auditor de títulos: o arquivo é lido UMA vez, ao ser escolhido. A análise usa a cópia em memória e nunca relê o disco
 // (o navegador recusa a referência antiga — "The requested file could not be read" — se o arquivo mudou ou foi bloqueado).
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

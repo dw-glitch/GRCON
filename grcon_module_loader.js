@@ -282,7 +282,7 @@
     "docx-to-pdf": "Converter PDF em DOCX",
     "allocation-generator": "Gerador de Alocação",
     "allocation-auditor": "Auditor de Alocações",
-    "title-corrector": "Corretor Inteligente de Títulos",
+    "title-corrector": "Auditor de Títulos",
     "allocation-dashboard": "Dashboard de Alocação",
   };
 
