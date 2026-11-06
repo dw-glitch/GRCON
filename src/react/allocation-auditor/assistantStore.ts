@@ -147,7 +147,7 @@ export const assistant={
  // Aviso curto e transitório na janela (ex.: diagnóstico copiado), sem criar nova conversa.
  notice(text:string){say(text);},
  // Cancelamento real de qualquer operação em andamento (Worker, gravação, IA); o que já foi calculado é preservado.
- cancelOperation(){const n=service.cancel();say(n?'Cancelando a operação em andamento…':'Não há operação em andamento para cancelar.');},
+ cancelOperation(){const n=service.abort();say(n?'Cancelando a operação em andamento…':'Não há operação em andamento para cancelar.');},
  setTab(tab:Tab){emit({tab});},
  retrySave(){return execute(async(speak)=>speak('Vou tentar salvar a conversa novamente.'));},
  status(){return execute(async(speak)=>speak(snapshotStatus()));},

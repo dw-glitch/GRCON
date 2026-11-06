@@ -76,6 +76,8 @@ async function compute(operation:string,input:Data){
   logOp(operation,started,e);throw e;
  }
 }
+let pauseMark=0,analysisSerial=0,activeAnalysis=0; // a pausa só pode interromper a análise que foi pausada, nunca uma gravação ou exportação posterior
+function hardCancel(){const n=ops.cancelAll();if(worker)abortWorker(new OperationError('CANCELLED','Operação cancelada a seu pedido.'));return n;}
 const WRITE_OPS=new Set(['begin','chunk','input-chunk','finish','event']);
 async function rpc(operation:string,input:Data={}){
  const c=requireSession(),t=epoch,started=Date.now(),write=WRITE_OPS.has(operation);
@@ -339,7 +341,7 @@ export const service={
  async openAllocation(id:string){const ui=await generator();const run=state.context.allocationRuns?.find((r:Data)=>r.id===id);if(!run)throw Error('Selecione uma alocação disponível.');return ui.auditSavedRun(run);},
  async useLd(){return task(async()=>{const t=epoch,ctx=await getContext();current(t);clearResults();emit({records:ctx.ldRecords.map((r:Data)=>({...r,ld:r.source,ldSheet:r.sheet,sourceFile:r.source,sourceSheet:r.sheet,sourceRow:r.row,contract:cloud().membership.contract_id})),context:ctx,message:'Documentos da LD selecionados.'});});},
  setApplicability(revision:string,evidence:string){if(state.busy)return;clearResults();emit({context:{...state.context,applicability:{source:'ET-5290.00-22000-912-1LV-001',revision,evidence,contract:cloud()?.membership?.contract_id,confirmed:Boolean(evidence.trim()&&revision)}}});},
- async analyze(resume=false){return task(async()=>{
+ async analyze(resume=false){return task(async()=>{const run=++analysisSerial;activeAnalysis=run;try{
   const t=epoch;cancelled=false;
   if(resume&&(state.context.inputComplete===false||state.records.length!==state.total||!state.total))throw Error('A entrada completa não foi recuperada. O total esperado foi preservado; inicie uma nova auditoria com todas as fontes originais.');
   if(!state.records.length)throw Error('Importe uma alocação ou selecione os documentos da LD.');if(state.records.length>50000)throw Error('Limite de 50.000 documentos por análise.');
@@ -364,9 +366,12 @@ export const service={
   if(!cancelled&&baseline&&rows.length===total&&g.GrconAllocationAuditorReaudit){const cmp=g.GrconAllocationAuditorReaudit.compare(baseline,rows);comparison=cmp.comparable?cmp:null;}
   if(!cancelled&&rows.length===total)baseline=null;
   emit({...grouped,comparison,selected:rows.map((_,i)=>i),message:cancelled?'Análise pausada. Os registros concluídos podem ser retomados.':contextWarning?'Auditoria parcial concluída. '+contextWarning:'Auditoria concluída. Confira as pendências e evidências.'});
+ }finally{if(activeAnalysis===run)activeAnalysis=0;}
  });},
- // Cancelamento real: interrompe a operação em andamento (Worker, RPC ou IA) na hora; resultados já obtidos são preservados.
- cancel(){cancelled=true;const n=ops.cancelAll();if(worker)abortWorker(new OperationError('CANCELLED','Operação cancelada a seu pedido.'));return n;},
+ // Pausa graciosa: o lote em andamento termina e entra no progresso; se ele travar, passado o prazo de tolerância (pauseGrace) a operação é interrompida de verdade.
+ cancel(){cancelled=true;const mark=++pauseMark,run=activeAnalysis,grace=deadlineOverrides.pauseGrace??5000;if(!run)return;const timer:any=setTimeout(()=>{if(mark===pauseMark&&activeAnalysis===run&&cancelled)hardCancel();},grace);timer?.unref?.();},
+ // Cancelamento imediato (botão "Cancelar operação"): interrompe Worker, gravação ou IA na hora; resultados já obtidos são preservados.
+ abort(){cancelled=true;pauseMark++;return hardCancel();},
  setDeadlines(overrides:Record<string,number>){deadlineOverrides={...overrides};},
  // Diagnóstico técnico seguro (sem documentos, sem nomes de arquivo, sem credenciais) para enviar ao suporte.
  diagnostics(){const E=errorsApi();return JSON.stringify({generatedAt:new Date().toISOString(),engine:g.GrconAllocationAuditorCore?.VERSION,errors:E?.VERSION,progress:state.progress,total:state.total,busy:state.busy,lastError:E?E.sanitize(state.error):'',lastErrorCode:state.errorCode,operations:ops.log.slice(-50)},null,1);},

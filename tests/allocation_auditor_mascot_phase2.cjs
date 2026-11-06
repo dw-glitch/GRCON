@@ -33,7 +33,8 @@ assert.match(chat,/working\?'analyzing':'hello'/,'Official hello state when idle
 assert.match(chat,/show\?\.\('analyzing'/,'Official busy state');
 assert.match(chat,/show\?\.\('warning'/,'Official warning state');
 assert.match(chat,/show\?\.\('success'/,'Official success state');
-assert.match(chat,/viewport\.scrollTop=viewport\.scrollHeight/,'Chat scrolling must not reposition the Generator');
+assert.match(chat,/viewport\.scrollTop=[^;]*viewport\.scrollHeight/,'Chat scrolling must move only the chat viewport (Etapa 6: other tabs open at the top)');
+assert.ok(!/scrollIntoView|window\.scrollTo/.test(chat),'Chat scrolling must not reposition the Generator page');
 assert.doesNotMatch(chat,/key==='Tab'/,'No modal focus trap');
 
 assert.match(css,/\.aac-launcher-hidden\{visibility:hidden;pointer-events:none\}/);

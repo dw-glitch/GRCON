@@ -26,7 +26,7 @@ globalThis.__hang=new Set();
  const seed={rows:[{document:'IS-5290.00-22313-955-C1O-001',revision:'01',title:'DOCUMENTO TECNICO',record:{},output:{discipline:'ELE',workflow:'WF',databook:'',levels:[]},identity:{discipline:'ELE',eap:''}}]};
  const tab=id=>w.document.getElementById('aac-tab-'+id);
  // 1. Prazo (watchdog): o lote trava, o prazo estoura, a mensagem explica e a tela continua usável.
- w.GrconAllocationAuditorUi.setDeadlines({batch:150,context:2000});
+ w.GrconAllocationAuditorUi.setDeadlines({batch:150,context:2000,pauseGrace:150});
  await w.GrconAllocationAuditorUi.open(seed);await wait(()=>button('Auditar alocação')&&!button('Auditar alocação').disabled);
  globalThis.__hang.add('batch');button('Auditar alocação').click();
  await wait(()=>w.document.querySelector('.aac-error'));
@@ -39,7 +39,7 @@ globalThis.__hang=new Set();
  await wait(()=>w.document.querySelector('.aac-result'));assert.equal(w.document.querySelector('.aac-error'),null,'erro anterior limpo ao repetir');
  // 3. Cancelamento real: o lote travado é interrompido na hora (Pausar = cancelar o Worker); não aparece como erro.
  globalThis.__hang.add('batch');await wait(()=>button('Reexecutar auditoria')&&!button('Reexecutar auditoria').disabled);button('Reexecutar auditoria').click();
- w.GrconAllocationAuditorUi.setDeadlines({batch:60000,context:60000,'assistant-package':60000});
+ w.GrconAllocationAuditorUi.setDeadlines({batch:60000,context:60000,'assistant-package':60000,pauseGrace:150});
  await wait(()=>button('Pausar análise'));button('Pausar análise').click();
  await wait(()=>!w.document.querySelector('.aac-progress'));
  assert.equal(w.document.querySelector('.aac-error'),null,'pausa/cancelamento não é erro');
