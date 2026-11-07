@@ -1,5 +1,7 @@
 import {MODEL} from './document-ai.mjs';
-const FIELDS=new Set(['document','title','tag','eap','levels','discipline','databook','workflow','revision','fiscalComment','ld','allocation','unit','category','installation','activity','service','reportCode','sequence','origin']);
+import Fields from '../allocation_auditor_fields.js';
+// Contrato de campos compartilhado com o motor e o cliente (allocation_auditor_fields.js): a API não mantém lista própria.
+const FIELDS=new Set(Fields.FIELDS);
 export function prepareAuditPrompt(body){
  if(typeof body?.document!=='string'||!body.document.trim()||body.document.length>255||typeof body.title!=='string'||body.title.length>2000||!Array.isArray(body.findings)||!body.findings.length||body.findings.length>8)throw Error('AUDIT_INPUT_INVALID');
  const findings=body.findings.map((f,i)=>{

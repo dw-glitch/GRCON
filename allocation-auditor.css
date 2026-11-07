@@ -144,6 +144,10 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 .aac-panel button{cursor:pointer}.aac-panel button:disabled{opacity:.5;cursor:default}.aac-panel :focus-visible{outline:3px solid #2588b5;outline-offset:2px}.aac-panel details{font-size:.82rem;padding:8px 0}.aac-panel summary{cursor:pointer}.aac-result{padding:16px;border:1px solid var(--border-1,#cddbe2);border-radius:12px}.aac-result p{font-size:.85rem}.aac-result article{padding:10px 0;border-top:1px solid var(--border-1,#cddbe2)}.aac-result article small{display:block;margin-bottom:10px}.aac-error{margin:0;padding:10px 20px;background:#fff1ed;color:#963e25;font-size:.82rem}.aac-progress{display:flex;align-items:center;gap:12px;padding:8px 20px;font-size:.75rem}.aac-progress progress{flex:1;min-width:0}.aac-training{display:grid;gap:15px}.aac-training label{display:grid;gap:6px}.aac-training article{padding:14px;border:1px solid var(--border-1,#cddbe2);border-radius:10px}.aac-training textarea{width:100%}
 @media(max-width:760px){.aac-backdrop{padding:6px}.aac-panel,.aac-panel.aac-expanded{height:calc(100dvh - 12px)}.aac-header,.aac-panel footer,.aac-messages{padding:12px}.aac-header h2{font-size:.95rem}.aac-mascot{width:52px;height:52px}}
 .aac-training fieldset{border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin:18px 0}.aac-training-cases{max-height:360px;overflow:auto}.aac-training-cases article{display:flex;flex-direction:column;gap:6px;padding:12px;border-bottom:1px solid #e2e8f0}.aac-training-cases small{overflow-wrap:anywhere}
+.aac-learning-preparation{padding:14px;border:1px solid var(--border-1,#cddbe2);border-radius:10px;margin:14px 0;overflow-wrap:anywhere}
+.aac-learning-preparation label,.aac-learning-preparation form{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.aac-learning-preparation input,.aac-learning-preparation select{max-width:100%;min-width:0;box-sizing:border-box;font:inherit;color:inherit;background:var(--surface-1,#fff)}
+.aac-learning-preparation button{min-height:44px;white-space:normal;text-align:left}
 
 .aac-attachments label,.aac-options label{position:relative;cursor:pointer}.aac-attachments input[type=file],.aac-options label input[type=file]{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.aac-attachments label:focus-within,.aac-options label:focus-within{outline:2px solid #29749a;outline-offset:3px}
 .aac-training{font-family:Inter,Arial,sans-serif;color:#23384b;font-size:14px;line-height:1.5}.aac-training>label{display:flex;flex-direction:column;gap:6px;margin:14px 0}.aac-training input,.aac-training select,.aac-training textarea{font:inherit;color:inherit;background:#fff;border:1px solid #bfceda;border-radius:8px;padding:9px;max-width:100%;box-sizing:border-box}.aac-training textarea,.aac-training>label>select,.aac-training>label>input{width:100%}.aac-training button{font:inherit;border:1px solid #b7cbd9;background:#f3f8fb;color:#205471;border-radius:8px;padding:8px 12px;cursor:pointer}.aac-training button:disabled{opacity:.5;cursor:default}.aac-training>article{margin:16px 0;padding:18px;border:1px solid #cbd9e3;border-radius:12px;background:#fff}.aac-training .ag-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.aac-training [role=status]{border-left:3px solid #29749a;padding:10px;background:#edf6fb}.aac-training fieldset>label{display:flex;flex-direction:column;gap:6px}[data-theme=dark] .aac-training{color:#d8e6f0}[data-theme=dark] .aac-training>article,[data-theme=dark] .aac-training input,[data-theme=dark] .aac-training select,[data-theme=dark] .aac-training textarea{background:#172635;color:#e3eef6;border-color:#425c71}
@@ -234,3 +238,107 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 .aac-discard{display:grid;gap:8px;margin:10px 0;padding:12px;border:1px solid var(--border-1,#d8e1e7);border-left:4px solid #b3261e;border-radius:10px;background:var(--surface-1,#fff)}
 .aac-discard p{margin:0;font-size:.9rem}
 .aac-danger{color:#b3261e}
+
+/* Etapa 6 (RA-13) — chat com etapas, abas e pendências dentro da janela. Tokens do GRCON; sem acordeões nas ações essenciais. */
+.aac-panel .aac-mascot{width:56px;height:56px}
+.aac-panel .aac-header{padding:10px 16px;gap:10px}.aac-panel .aac-header>div:nth-child(2){flex:1;min-width:0}
+.aac-panel .aac-header button{border:1px solid var(--border-1,#cddbe2);background:var(--surface-1,#fff);color:inherit;border-radius:8px;min-width:34px;height:34px;font-size:1rem}
+.aac-stages{list-style:none;margin:0;padding:8px 14px;display:flex;gap:4px;border-bottom:1px solid var(--border-1,#d8e1e7);background:var(--surface-2,#f0f5f7);overflow-x:auto;flex:none}
+.aac-stage{display:flex;align-items:center;gap:6px;flex:1 1 0;min-width:0;opacity:.62}
+.aac-stage-current,.aac-stage-attention,.aac-stage-done{opacity:1}
+.aac-stage-dot{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;flex:none;font-size:.7rem;font-weight:700;background:var(--surface-1,#fff);border:1.5px solid var(--border-1,#9fb4c0);color:var(--text-2,#526777)}
+.aac-stage-done .aac-stage-dot{background:var(--brand-700,#125777);border-color:var(--brand-700,#125777);color:#fff}
+.aac-stage-current .aac-stage-dot{border-color:var(--brand-600,#28759b);color:var(--brand-700,#125777);box-shadow:0 0 0 3px rgb(40 117 155 / 18%)}
+.aac-stage-attention .aac-stage-dot{background:#fff4d6;border-color:#b7791f;color:#7a4b00}
+.aac-stage-text{display:grid;min-width:0;line-height:1.2}.aac-stage-text b{font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.aac-stage-text small{font-size:.6rem;color:var(--text-2,#526777);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aac-stage-compact{display:none;margin:0;padding:6px 14px;font-size:.75rem;background:var(--surface-2,#f0f5f7);border-bottom:1px solid var(--border-1,#d8e1e7)}
+.aac-tabs{display:flex;gap:2px;padding:0 10px;border-bottom:1px solid var(--border-1,#d8e1e7);flex:none;overflow-x:auto}
+.aac-tab{border:0;border-bottom:3px solid transparent;background:transparent;color:var(--text-2,#526777);padding:9px 12px;font:600 .8rem Inter,'Segoe UI',sans-serif;white-space:nowrap}
+.aac-tab-active{color:var(--brand-700,#125777);border-bottom-color:var(--brand-600,#28759b)}
+.aac-messages{padding:14px 16px;gap:12px}.aac-log{display:flex;flex-direction:column;gap:12px}
+.aac-start,.aac-files,.aac-history,.aac-pend{display:grid;gap:10px;align-content:start}
+.aac-start{padding:14px;border:1px solid var(--border-1,#cddbe2);border-radius:12px;background:var(--surface-1,#fff)}
+.aac-start-number{display:grid;gap:8px}.aac-start-number label,.aac-search label{display:grid;gap:4px;font-size:.78rem;font-weight:650}
+.aac-panel input[type=text],.aac-panel input:not([type]),.aac-panel input[type=search]{border:1px solid var(--border-1,#cddbe2);border-radius:8px;padding:9px 10px;background:var(--surface-1,#fff);color:inherit;font:inherit;font-size:.85rem;min-width:0;width:100%;box-sizing:border-box}
+.aac-panel .primary-button{background:var(--brand-700,#125777);color:#fff;border:1px solid transparent;border-radius:8px;padding:9px 14px;font-weight:650}
+.aac-panel button:not(.primary-button):not(.aac-tab):not(.aac-chip){border:1px solid var(--border-1,#c9d7df);border-radius:8px;padding:8px 12px;background:var(--surface-1,#fff);color:inherit;font-size:.8rem}
+.aac-result{display:grid;gap:10px}.aac-indicators small{font-size:.65rem;color:var(--text-2,#526777)}
+.aac-blockers{margin:0;padding-left:18px;font-size:.8rem}.aac-ok{color:#1b6b3a;font-weight:600}.aac-warn{padding:8px 10px;border-radius:8px;background:#fff4d6;color:#6b4300;font-size:.8rem}
+.aac-next{flex:none;padding:10px 16px;border-top:1px solid var(--border-1,#d8e1e7);background:var(--surface-2,#f6f9fb);display:grid;gap:8px}
+.aac-next>p{margin:0;font-size:.78rem;color:var(--text-2,#3f5667)}.aac-next-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.aac-next .aac-quick-actions{margin-left:auto}
+.aac-filters{display:flex;flex-wrap:wrap;gap:6px}.aac-chip{border:1px solid var(--border-1,#c9d7df);border-radius:999px;background:var(--surface-1,#fff);color:inherit;padding:6px 11px;font:600 .75rem Inter,'Segoe UI',sans-serif}
+.aac-chip-on{background:var(--brand-700,#125777);color:#fff;border-color:var(--brand-700,#125777)}
+.aac-search{display:grid;gap:8px}.aac-check{display:flex!important;flex-direction:row;align-items:center;gap:8px!important;font-weight:500!important}
+.aac-count{margin:0;font-size:.75rem;color:var(--text-2,#526777)}
+.aac-item{display:grid;gap:7px;padding:12px;border:1px solid var(--border-1,#cddbe2);border-left:4px solid var(--border-1,#9fb4c0);border-radius:10px;background:var(--surface-1,#fff)}
+.aac-item-erro{border-left-color:#b3261e}.aac-item-pendencia{border-left-color:#b7791f}.aac-item-proposta{border-left-color:var(--brand-600,#28759b)}.aac-item-sugestao{border-left-color:#7a8a96}
+.aac-item header{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.aac-tag{font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.aac-status{font-size:.7rem;padding:2px 8px;border-radius:999px;background:var(--surface-2,#eef3f6)}.aac-status-open{background:#fff4d6;color:#6b4300}
+.aac-item h4{margin:0;font-size:.85rem;overflow-wrap:anywhere}.aac-item h4 small{font-weight:400;color:var(--text-2,#526777)}
+.aac-item-title{margin:0;font-size:.82rem;line-height:1.45;overflow-wrap:anywhere}
+.aac-item dl{display:grid;gap:5px;margin:0}.aac-item dl div{display:grid;grid-template-columns:minmax(96px,32%) 1fr;gap:8px;font-size:.76rem}
+.aac-item dt{color:var(--text-2,#526777);font-weight:650}.aac-item dd{margin:0;overflow-wrap:anywhere}
+.aac-decision{display:grid;gap:8px;padding:10px;border-radius:8px;background:var(--surface-2,#f0f5f7)}.aac-decision label{display:grid;gap:4px;font-size:.76rem;font-weight:650}
+.aac-groups{display:grid;gap:8px;padding-top:6px}.aac-groups article{padding:10px;border:1px solid var(--border-1,#cddbe2);border-radius:8px}
+.aac-error p{margin:2px 0}.aac-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.aac-panel footer form{align-items:flex-end;margin:0 0 6px}.aac-clip{position:relative;display:inline-grid;place-items:center;min-width:38px;height:38px;border:1px solid var(--border-1,#c9d7df);border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:700;background:var(--surface-1,#fff);flex:none}
+.aac-clip input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;max-width:none;margin:0}
+.aac-clip:focus-within{outline:3px solid #2588b5;outline-offset:2px}
+.aac-launcher-badge{display:inline-block;margin-left:6px;min-width:18px;padding:0 6px;border-radius:999px;background:#b3261e;color:#fff;font-size:.7rem;font-weight:700;line-height:18px}
+@media(max-width:760px){
+ .aac-stages{display:none}.aac-stage-compact{display:block}
+ .aac-item dl div{grid-template-columns:1fr;gap:1px}
+ .aac-next .aac-quick-actions{margin-left:0}
+ .aac-panel .primary-button,.aac-panel button:not(.aac-tab):not(.aac-chip){min-height:40px}
+}
+.aac-toast{margin:0;padding:8px 16px;font-size:.78rem;background:var(--brand-50,#e5f3fa);border-top:1px solid var(--border-1,#d8e1e7);max-height:84px;overflow:auto;overflow-wrap:anywhere}
+.aac-clips{display:flex;gap:6px;flex-wrap:nowrap;flex:none}.aac-clips .aac-clip{padding:0}
+
+/* Etapas: pontos conectados + uma linha de texto com a etapa atual (sem rótulos truncados). */
+.aac-stages{padding:9px 18px 2px;gap:0;overflow:visible;background:var(--surface-2,#f0f5f7);border-bottom:0}
+.aac-stage{flex:1 1 0;opacity:1;justify-content:center;position:relative}
+.aac-stage+.aac-stage::before{content:'';position:absolute;left:-50%;right:50%;top:50%;height:2px;background:var(--border-1,#c9d7df);z-index:0}
+.aac-stage-done+.aac-stage::before,.aac-stage-attention+.aac-stage::before{background:var(--brand-700,#125777)}
+.aac-stage-dot{position:relative;z-index:1}.aac-stage:not(.aac-stage-done):not(.aac-stage-attention):not(.aac-stage-now) .aac-stage-dot{opacity:.7}
+.aac-stage-now .aac-stage-dot{transform:scale(1.15)}
+.aac-stage-compact{display:block;padding:4px 18px 8px;font-weight:600;border-bottom:1px solid var(--border-1,#d8e1e7)}
+.aac-next-actions{gap:6px}
+.aac-next .aac-quick-actions{flex-basis:100%;margin:0;gap:2px 4px}
+.aac-next .aac-quick-actions button{border:0!important;background:transparent!important;color:var(--brand-700,#125777);text-decoration:underline;padding:4px 6px!important;font-weight:600;min-height:0!important}
+.aac-next .aac-quick-actions .aac-danger{color:#b3261e}
+@media(max-width:760px){.aac-stages{display:flex}.aac-stage-compact{display:block}.aac-next .aac-quick-actions button{min-height:36px!important}}
+.aac-panel{box-sizing:border-box}
+
+/* Compactação: mais área útil para a lista de pendências. */
+.aac-next-hint,.aac-toast{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.aac-next-hint{margin:0}.aac-toast{max-height:none;padding:6px 16px}
+.aac-stage-compact{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aac-next{padding:8px 16px;gap:6px}.aac-panel footer{padding:8px 16px 10px}
+.aac-panel footer textarea{min-height:38px;resize:none}
+.aac-search{grid-template-columns:1fr auto;align-items:end}
+.aac-chip{padding:5px 9px;font-size:.72rem}
+@media(max-width:760px){
+ .aac-tab{padding:9px 8px;font-size:.76rem}.aac-tabs{padding:0 6px}.aac-search{grid-template-columns:1fr}
+ .aac-next .aac-quick-actions button{padding:2px 4px!important;min-height:30px!important;font-size:.76rem!important}
+ .aac-messages{padding:10px 12px}
+}
+
+.aac-next-compact .aac-next-hint{display:none}.aac-next-compact{padding:7px 16px}
+.aac-toast{position:relative}
+@media(max-width:400px){.aac-header small{display:none}.aac-panel .aac-mascot{width:44px;height:44px}.aac-panel .aac-header h2{font-size:.92rem}.aac-header{gap:8px!important}}
+
+.aac-filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.aac-chip{white-space:nowrap;flex:none}
+.aac-search{grid-template-columns:1fr auto;align-items:center;gap:8px}.aac-search input[type=search]{padding:7px 10px}.aac-check{white-space:nowrap;font-size:.76rem}
+@media(max-width:760px){.aac-search{grid-template-columns:1fr}}
+
+/* Etapa 8: mensagens de recuperação por gravidade (informação não é alarme). */
+.aac-error-info{background:var(--brand-50,#e5f3fa);color:var(--text-1,#172c39)}.aac-error-warning{background:#fff4d6;color:#5c3b00}
+.aac-error-detail{display:flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.85}.aac-error-detail button{padding:3px 8px!important;font-size:.72rem!important}
+
+/* RA-07: registro de validações de referências */
+.aac-validations{display:grid;gap:8px}.aac-validations p{margin:0;font-size:.8rem}
+.aac-validation-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.aac-validation-list li{display:grid;gap:3px;padding:8px 10px;border:1px solid var(--border-1,#cddbe2);border-radius:8px;font-size:.8rem}
+.aac-validation-list small{color:var(--text-2,#526777);overflow-wrap:anywhere}.aac-revoke{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.aac-validations select,.aac-validations textarea{border:1px solid var(--border-1,#cddbe2);border-radius:8px;padding:8px;background:var(--surface-1,#fff);color:inherit;font:inherit;font-size:.82rem;width:100%;box-sizing:border-box}

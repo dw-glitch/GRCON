@@ -44,8 +44,8 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
 
  // Relatório: duas abas, dados reais, separação entre erro, pendência e sugestão.
  const wb=X.read(await zip.file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array',cellDates:true});
- assert.deepEqual([...wb.SheetNames],['RESUMO','DETALHAMENTO','ALOCAÇÃO CORRIGIDA']);
- const resumo=Object.fromEntries(X.utils.sheet_to_json(wb.Sheets.RESUMO,{header:1,defval:''}).filter(r=>r[0]&&r[1]!=='').map(r=>[r[0],r[1]]));
+ assert.deepEqual([...wb.SheetNames],['LEIA PRIMEIRO','O QUE CORRIGIR','PROPOSTAS PARA REVISÃO','CORREÇÕES VERIFICADAS','REFERÊNCIAS E DECISÕES','DETALHAMENTO','ALOCAÇÃO CORRIGIDA']);
+ const resumo=Object.fromEntries(X.utils.sheet_to_json(wb.Sheets['LEIA PRIMEIRO'],{header:1,defval:''}).filter(r=>r[0]&&r[1]!=='').map(r=>[r[0],r[1]]));
  assert.equal(resumo['Documentos analisados'],5);assert.equal(resumo['Documentos sem apontamentos'],2);
  assert.equal(resumo['Não conformidades confirmadas sem correção'],1);assert.equal(resumo['Verificações pendentes'],1);
  assert.equal(resumo['Correções aplicadas e verificadas em cópia'],0);assert.equal(resumo['Estado da auditoria'],P.STATES.fix);
@@ -57,7 +57,7 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
  const sev=Object.fromEntries(detail.map(d=>[d['Regra / critério'].split(' ·')[0]||d['Regra / critério'],d['Classificação']]));
  assert.equal(sev['DATABOOK-NOT-FOUND'],'Não conformidade confirmada');assert.equal(sev['TAG-NOT-PROVEN'],'Verificação pendente');assert.equal(sev['FISCAL-FAMILY-title'],'Sugestão preventiva (não normativa)');
  assert.equal(detail[0]['Classificação'],'Não conformidade confirmada','erros confirmados vêm primeiro');
- assert.ok(wb.Sheets.DETALHAMENTO['!autofilter']);assert.ok(!wb.Sheets.RESUMO['!autofilter']);
+ assert.ok(wb.Sheets.DETALHAMENTO['!autofilter']);assert.ok(!wb.Sheets['LEIA PRIMEIRO']['!autofilter']);
  assert.match(String(detail[0]['Evidência']),/file: LD\.xlsx/,'evidência legível, não JSON bruto');
 
  // Cópia corrigida real: revisão do escritor → pacote → segunda auditoria.
@@ -78,6 +78,13 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
  const copy=X.read(copyBytes,{type:'array'});assert.equal(copy.Sheets.GERAL.C2.v,'WF NOVO');assert.equal(X.utils.decode_range(copy.Sheets.GERAL['!ref']).e.c,15,'modelo de 16 colunas preservado');
  assert.equal(pack.manifest.corrections.executed,1);assert.equal(pack.manifest.corrections.verified,1);assert.equal(pack.manifest.corrections.authorized,1);
  assert.equal(pack.manifest.corrections.applied[0].cell,'C2');assert.equal(pack.manifest.corrections.applied[0].ruleId,'rule-9');
+ // Etapa 7: a cópia verificada alimenta CORREÇÕES VERIFICADAS e ALOCAÇÃO CORRIGIDA; a segunda auditoria da cópia é a prova de resolução.
+ {const rw=X.read(await pz.file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array'});
+  const ver=X.utils.sheet_to_json(rw.Sheets['CORREÇÕES VERIFICADAS'],{defval:''});
+  assert.equal(ver.length,1);assert.equal(ver[0]['Valor corrigido'],'WF NOVO');assert.equal(ver[0]['Valor original (recebido)'],'WF ANTIGO');assert.equal(ver[0]['Célula'],'C2');assert.equal(ver[0]['Autorizado por'],'Regra ativa rule-9');
+  assert.equal(ver[0]['Prova de resolução'],'Resolvida (comprovada)');assert.match(ver[0]['Verificação feita'],/reauditoria da cópia/);
+  assert.equal(X.utils.sheet_to_json(rw.Sheets['ALOCAÇÃO CORRIGIDA'])[0]['Workflow'],'WF NOVO','valor verificado preenche a célula');
+  assert.ok(pack.manifest.opinion.counts.proposals.resolvedProven>=1);}
  assert.equal(pack.manifest.outputs.find(o=>o.name===copyName).sha256,sha(copyBytes),'hash de saída da cópia');
  assert.ok(!pack.manifest.omitted.some(o=>o.path.startsWith('03_')),'cópia produzida não é listada como omitida');
  assert.ok(pack.manifest.omitted.some(o=>o.path.startsWith('02_')),'LD não corrigida segue omitida');
@@ -101,7 +108,7 @@ const finding=(id,severity,field='title',category='title')=>({id,category,field,
  const partial=await call('assistant-package',{...base,rows:[mkRow(0,[]),mkRow(1,[])].slice(0,2),total:2,progress:2,exceptions:['LD.xlsx: reanexe a origem para produzir a cópia.']});
  assert.equal(partial.manifest.finalState,P.STATES.verify);assert.deepEqual(partial.manifest.exceptions,['LD.xlsx: reanexe a origem para produzir a cópia.']);
  const pw=X.read(await (await box.JSZip.loadAsync(partial.bytes)).file(ROOT+'01_Relatorio_Auditoria.xlsx').async('uint8array'),{type:'array'});
- assert.match(JSON.stringify(X.utils.sheet_to_json(pw.Sheets.RESUMO,{header:1})),/Arquivo não produzido: LD\.xlsx/);
+ assert.match(JSON.stringify(X.utils.sheet_to_json(pw.Sheets['LEIA PRIMEIRO'],{header:1})),/Arquivo não produzido: LD\.xlsx/);
 
  // Três estados finais.
  const clean=[mkRow(0,[]),mkRow(1,[finding('FISCAL-PRECEDENT','suggestion','fiscalComment','history')])];

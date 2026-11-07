@@ -1,6 +1,9 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.4.0';
+ const VERSION='1.6.2';
+ const MlModule=()=>{try{if(typeof module==='object'&&module.exports&&typeof require==='function')return require('./allocation_auditor_ml.js');}catch(_){}return typeof globalThis!=='undefined'?globalThis.GrconAllocationAuditorMl:null;};
+ // Catálogo de referências (Etapa 3): opcional e aditivo. Sem context.references o motor se comporta como antes.
+ const References=(()=>{try{if(typeof module==='object'&&module.exports&&typeof require==='function')return require('./allocation_auditor_references.js');}catch(_){}return typeof globalThis!=='undefined'?globalThis.GrconAllocationAuditorReferences:undefined;})();
  const text=v=>v==null?'':Object.prototype.toString.call(v)==='[object Date]'?v.toISOString():String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
  const key=r=>JSON.stringify([text(r.contract),text(r.document),text(r.revision),ldIdentity(r).id||text(r.ld),ldIdentity(r).sheet,text(r.sourceFile),text(r.sourceSheet),text(r.sourceRow),text(r.allocation),text(r.sourceHash)]);
@@ -40,20 +43,45 @@
   const h=row.map(norm),compact=v=>v.replace(/[^A-Z0-9]/g,''),find=(...names)=>{const exact=h.findIndex(v=>names.includes(v));if(exact>=0)return exact;const aliases=new Set(names.map(compact));return h.findIndex(v=>aliases.has(compact(v)));};
   return {document:find('NOMEDOCUMENTO','NOME DOCUMENTO','NOME DO DOCUMENTO','DOCUMENTO','CODIGO','CODIGO DO DOCUMENTO','CODIGO DOCUMENTAL','NUMERO DO DOCUMENTO','Nº DOCUMENTO','N° DOCUMENTO'),revision:find('REVISAO','REV.','REV'),title:find('TITULO','TITULO DO DOCUMENTO'),allocation:find('ALOCACAO','NUMERO DA ALOCACAO'),ld:find('LD','LD DE ORIGEM'),ldSheet:find('ABA'),ldVersion:find('VERSAO DA LD'),sentAt:find('DATA DO ENVIO DA ALOC','DATA DO ENVIO'),returnedAt:h.findIndex(v=>/^RETORNO DA FISCAL 01/.test(v)),fiscalComment:h.findIndex(v=>/^RESPOSTA DA FISCAL 01/.test(v)),fiscal02:h.findIndex(v=>/^RETORNO DA FISCAL 02/.test(v)),status:find('STATUS DA ALOCACAO','STATUS/ OBSERVACAO','STATUS'),databook:find('CAMINHO DATA BOOK','CAMINHO DATABOOK'),workflow:find('WORKFLOW'),discipline:find('DISCIPLINA'),eap:find('EAP'),tag:find('TAG'),plannedDate:find('DATA PREVISTA'),activeDocument:find('DOCUMENTO ATIVO'),action:find('ACAO'),baselineDate:find('DATA DA LINHA BASE'),purpose:find('PROPOSITO DE EMISSAO ORIGINAL'),criticalDocument:find('DOCUMENTO CRITICO'),observation:find('OBSERVACAO'),levels:Array.from({length:10},(_,i)=>find('N'+(i+1)))};
  }
- function parseRows(rows,meta={}){
+ function parseRows(rows,meta={},options={}){
   let header=-1,map,highestScore=-1;
-  for(let i=0;i<Math.min(200,rows.length);i++){
+  for(let i=0;i<Math.min(1000,rows.length);i++){
    const m=headerMap(rows[i]||[]);
    if(m.document<0)continue;
    const fields=['revision','title','allocation','ld','ldSheet','ldVersion','sentAt','returnedAt','fiscalComment','status','databook','workflow','discipline','eap','tag','plannedDate','activeDocument','action','baselineDate','purpose','criticalDocument','observation'];
    const score=fields.filter(k=>m[k]>=0).length+m.levels.filter(k=>k>=0).length;
    if(score>highestScore){header=i;map=m;highestScore=score;}
   }
-  if(header<0)throw Error('Cabeçalho documental não reconhecido. Nenhuma coluna foi presumida.');
+  if(header<0)throw Error('Cabeçalho documental não reconhecido nas primeiras 1.000 linhas. Nenhuma coluna foi presumida.');
+  for(const field of ['document','revision','allocation','ld','ldSheet','title','workflow','tag','eap','databook','discipline']){
+   const matches=(rows[header]||[]).map((value,i)=>headerMap([value])[field]===0?i:-1).filter(i=>i>=0);
+   if(matches.length>1)throw Error('Cabeçalho ambíguo: mais de uma coluna de '+({document:'documento',revision:'revisão',allocation:'alocação',ld:'LD',ldSheet:'aba da LD',title:'título',workflow:'workflow',tag:'TAG',eap:'EAP',databook:'Data Book',discipline:'disciplina'}[field])+' na linha '+(header+1)+'. Confirme o layout antes de importar.');
+  }
   const official=['NOMEDOCUMENTO','DATA PREVISTA','WORKFLOW','DOCUMENTO ATIVO','ACAO','DATA DA LINHA BASE','PROPOSITO DE EMISSAO ORIGINAL','DOCUMENTO CRITICO','OBSERVACAO','CAMINHO DATA BOOK','N1','N2','N3','N4','N5','N6'].every((h,i)=>norm(rows[header][i])===h);
    const records=[];for(let i=header+1;i<rows.length;i++){
-   const row=rows[i]||[],get=n=>map[n]>=0?text(row[map[n]]):'';if(!get('document'))continue;
-   const r={...meta,document:get('document'),rawDocument:row[map.document]==null?'':String(row[map.document]),officialAllocation:official,plannedDate:get('plannedDate'),activeDocument:get('activeDocument'),action:get('action'),baselineDate:get('baselineDate'),purpose:get('purpose'),criticalDocument:get('criticalDocument'),observation:get('observation'),revision:get('revision'),title:get('title'),allocation:get('allocation')||text(meta.allocation),ld:get('ld'),ldSheet:get('ldSheet'),ldVersion:get('ldVersion'),sentAt:get('sentAt'),returnedAt:get('returnedAt'),fiscalComment:get('fiscalComment'),fiscal02:get('fiscal02'),status:get('status'),databook:get('databook'),workflow:get('workflow'),discipline:get('discipline'),eap:get('eap'),tag:get('tag'),levels:map.levels.map(j=>j>=0?text(row[j]):''),sourceRow:i+1,columns:Object.fromEntries(Object.entries(map).filter(([_,v])=>typeof v==='number'&&v>=0).map(([k,v])=>[k,v+1]))};
+   const row=rows[i]||[],cellValues={},sourceIssues=[];
+   const get=n=>{
+    if(map[n]<0||map[n]===undefined)return '';
+    if(!options.cellAt)return text(row[map[n]]);
+    const value=options.cellAt(i,map[n]);cellValues[n]=value;
+    if(value.issue){
+     if(n==='document')throw Error('Falha de leitura do código documental em '+(meta.sourceSheet||'aba selecionada')+'!'+value.cell+': '+value.issue+'. Abra uma cópia no Excel, recalcule e salve antes de importar.');
+     if(!sourceIssues.some(x=>x.field===n))sourceIssues.push({field:n,cell:value.cell,message:value.issue});
+     return '';
+    }
+    return text(['document','revision','allocation','ld','ldSheet','ldVersion','tag','eap'].includes(n)?value.display:row[map[n]]);
+   };
+   const document=get('document');if(!document)continue;
+   // Repeated print headers are not document occurrences.
+   if((rows[header]||[]).every((value,col)=>norm(value)===norm(row[col])))continue;
+   const r={...meta,document,rawDocument:row[map.document]==null?'':String(row[map.document]),officialAllocation:official,plannedDate:get('plannedDate'),activeDocument:get('activeDocument'),action:get('action'),baselineDate:get('baselineDate'),purpose:get('purpose'),criticalDocument:get('criticalDocument'),observation:get('observation'),revision:get('revision'),title:get('title'),allocation:get('allocation')||text(meta.allocation),ld:get('ld'),ldSheet:get('ldSheet'),ldVersion:get('ldVersion'),sentAt:get('sentAt'),returnedAt:get('returnedAt'),fiscalComment:get('fiscalComment'),fiscal02:get('fiscal02'),status:get('status'),databook:get('databook'),workflow:get('workflow'),discipline:get('discipline'),eap:get('eap'),tag:get('tag'),levels:map.levels.map((j,n)=>{
+    if(j<0)return '';if(!options.cellAt)return text(row[j]);
+    const value=options.cellAt(i,j);cellValues['N'+(n+1)]=value;
+    if(value.issue){sourceIssues.push({field:'levels',cell:value.cell,message:value.issue});return '';}
+    return text(row[j]);
+   }),sourceRow:i+1,columns:Object.fromEntries(Object.entries(map).filter(([_,v])=>typeof v==='number'&&v>=0).map(([k,v])=>[k,v+1]))};
+   if(options.cellAt){r.cellValues=cellValues;r.sourceIssues=sourceIssues;r.sourceRowHidden=Boolean(options.rowHidden?.(i));}
+   r.allocationIdentity=r.allocation?'from-source':'unconfirmed';
    // Fiscal text is preserved verbatim, including spacing and line breaks.
    if(map.fiscalComment>=0){const raw=row[map.fiscalComment];r.fiscalComment=typeof raw==='string'?raw:'';if(raw!=null&&raw!==''&&typeof raw!=='string'){r.fiscalCommentRaw=raw;r.commentDataIssue='Resposta fiscal contém valor não textual.';}}
    // Status/observação in returned allocation workbooks is evidence; sheet names are not decisions.
@@ -63,10 +91,35 @@
   if(!records.length)throw Error('Cabeçalho encontrado na linha '+(header+1)+', mas nenhuma linha de documento foi reconhecida. Confira o modelo e a aba de origem.');
    return {records,headerRow:header+1,columns:map,model:official?'official-16':'mapped',documentCount:records.length};
  }
+ function cellSnapshot(sheet,xlsx,row,col){
+  const address=xlsx.utils.encode_cell({r:row,c:col}),cell=sheet[address];
+  if(!cell)return {cell:address,raw:null,display:'',type:'empty',format:'',formula:null,cache:'not-formula'};
+  const raw=cell.v==null?null:Object.prototype.toString.call(cell.v)==='[object Date]'?cell.v.toISOString():cell.v;
+  const missing=Boolean(cell.f)&&(cell.v==null||cell.t==='z');
+  let display=cell.w!==undefined?String(cell.w):text(cell.v);
+  if(cell.w===undefined&&cell.v!=null){try{display=xlsx.utils.format_cell(cell);}catch{/* raw representation remains available */}}
+  const issue=cell.t==='e'?'A célula contém erro do Excel ('+display+')':missing?'A fórmula não tem resultado calculado disponível':cell.t==='n'&&(!Number.isFinite(cell.v)||(Number.isInteger(cell.v)&&!Number.isSafeInteger(cell.v)))?'O número não pode ser preservado com segurança; confirme o identificador como texto':'';
+  return {cell:address,raw,display,type:cell.t||'unknown',format:cell.z||'',formula:cell.f||null,cache:cell.t==='e'?'error':cell.f?(missing?'missing':'available'):'not-formula',...(issue?{issue}:{})};
+ }
+ function parseWorksheet(sheet,xlsx,meta={}){
+  if(!sheet||!sheet['!ref'])throw Error('A aba não contém uma região documental legível.');
+  const range=xlsx.utils.decode_range(sheet['!ref']);
+  if(range.e.r>100000||range.e.c>200)throw Error('Planilha acima dos limites de 100.001 linhas ou 201 colunas. Divida a entrada antes de importar.');
+  const rows=xlsx.utils.sheet_to_json(sheet,{header:1,defval:'',raw:true,blankrows:true,range:{s:{r:0,c:0},e:range.e}});
+  const parsed=parseRows(rows,meta,{cellAt:(r,c)=>cellSnapshot(sheet,xlsx,r,c),rowHidden:r=>sheet['!rows']?.[r]?.hidden});
+  return {...parsed,readingPolicy:{includesHiddenRows:true,includesFilteredRows:true,formulaResults:'cached-only',hiddenDocumentRows:parsed.records.filter(r=>r.sourceRowHidden).length},sourceIssues:parsed.records.flatMap(r=>(r.sourceIssues||[]).map(issue=>({...issue,row:r.sourceRow})))};
+ }
  function parts(document){const p=text(document).split('_');return p.length>=7?{supplier:p[0],project:p[1],unit:p[2],eap:p[3],discipline:p[4],report:p[5],tag:p.slice(6).join('_')}:null;}
  function ldIdentity(r){const file=text(r.ld||r.origin?.file),sheet=norm(r.ldSheet||r.origin?.sheet);const id=file.match(/LD-[\d.]+-[\dA-Z]+-[\dA-Z]+-[\dA-Z]+-(\d{3})/i)?.[1]||sheet.match(/LD[_\s-]*(\d{3})/)?.[1]||'';return {id,sheet:sheet.replace(/[_\s-]*LD[_\s-]*\d{3}.*$/,'').trim()};}
- function sameLd(a,b){const x=ldIdentity(a),y=ldIdentity(b);if(x.id&&y.id&&x.id!==y.id)return false;if(x.sheet&&y.sheet&&x.sheet!==y.sheet)return false;return true;}
- function applicable(context){const a=context.applicability||{};return a.confirmed===true&&a.contract===context.contract&&a.source===ET&&['N','P','Q','R'].includes(a.revision)&&Boolean(text(a.evidence));}
+ function sameLd(a,b){const x=ldIdentity(a),y=ldIdentity(b);if(x.id&&y.id&&x.id!==y.id)return false;if(x.sheet&&y.sheet&&x.sheet!==y.sheet)return false;
+  const af=text(a.ld||a.origin?.file),bf=text(b.ld||b.origin?.file);
+  const fullId=value=>value.match(/LD-[\d.]+-[\dA-Z]+-[\dA-Z]+-[\dA-Z]+-\d{3}/i)?.[0]?.toUpperCase();
+  if(fullId(af)&&fullId(bf)&&fullId(af)!==fullId(bf))return false;
+  if(af&&bf&&(!x.id||!y.id)&&norm(af.split(/[\\/]/).pop())!==norm(bf.split(/[\\/]/).pop()))return false;
+  return true;
+ }
+ function applicable(context){const a=context.applicability||{};const declared=a.confirmed===true&&a.contract===context.contract&&a.source===ET&&['N','P','Q','R'].includes(a.revision)&&Boolean(text(a.evidence));if(!declared||!context.references||!References)return declared;const dep=References.DEPENDENCIES.find(d=>d.rule==='ET-7172-CHARACTERS');return References.ruleAvailability(dep,context.references).state==='verificavel';}
+ function referenceApproved(context,key){return context.references?Boolean(References&&References.approved(context.references,key)):Boolean(context.homologated?.[key]);}
  function finding(id,category,field,message,evidence,opts={}){return {id,category,field,message,evidence,ruleVersion:VERSION,source:opts.source||'Integridade operacional',severity:opts.severity||'pending',origin:opts.origin||'LD',humanReview:true,...opts};}
  function buildTree(paths,version){const nodes=new Map();for(const entry of paths||[]){const p=text(entry.databook||entry.path).split('|');if(p.some(x=>!x.trim()))continue;for(let i=0;i<p.length;i++){const full=p.slice(0,i+1).join('|');nodes.set(full,{id:JSON.stringify([version,full]),parent:i?JSON.stringify([version,p.slice(0,i).join('|')]):null,label:p[i],path:full,version});}}return nodes;}
  function fiscalFamily(document){
@@ -205,7 +258,7 @@
   for(const kind of ['appendix','li','scon'])for(const t of context.bases?.[kind]||[]) {const tag=text(t.tag||t.TAG);if(tag)tags.set(tag,{...t,kind});}
   for(const p of context.bases?.databook||[])paths.set(text(p.databook),p);
   for(const e of context.bases?.eap||[]){const code=text(e.code);if(!code)continue;const list=eaps.get(code)||[];list.push(e);eaps.set(code,list);}
-  for(const r of context.ldRecords||[]){const list=ld.get(text(r.document))||[];list.push(r);ld.set(text(r.document),list);}
+  for(const r of context.ldRecords||[]){if(r.contract&&r.contract!==context.contract)continue;const list=ld.get(text(r.document))||[];list.push(r);ld.set(text(r.document),list);}
   // Preaggregate historical recurrence once per audit. Large allocations must not
   // repeatedly scan thousands of fiscal comments for every document.
   const recurringFamilies=new Map();
@@ -241,13 +294,56 @@
  function auditRecord(input,context,index=prepare(context)){
   if(!text(context.contract))throw Error('Contrato obrigatório.');
   if(input.contract&&input.contract!==context.contract)throw Error('Documento de outro contrato.');
-  const r={...input,contract:context.contract},f=[],p=parts(r.document),add=(...a)=>f.push(finding(...a)),enforced=applicable(context);
+  const r={...input,document:text(input.document),revision:text(input.revision),contract:context.contract},f=[],p=parts(r.document),add=(...a)=>f.push(finding(...a)),enforced=applicable(context);
+  const invalidFields=new Set((r.sourceIssues||[]).map(x=>x.field));
+  for(const issue of r.sourceIssues||[])add('SOURCE-CELL-UNREADABLE','history',issue.field,'Não foi possível conferir o valor recebido: '+issue.message+'. Corrija a leitura na origem e reimporte o arquivo.',[{file:r.sourceFile,sheet:r.sourceSheet,row:r.sourceRow,cell:issue.cell}],{source:'Leitura do arquivo de origem',origin:'Alocação',severity:'pending',technicalFailure:true});
+  if(r.allocationIdentity==='unconfirmed'||r.allocationIdentity==='draft-confirmed')add('ALLOCATION-IDENTITY-UNCONFIRMED','history','allocation',r.allocationIdentity==='draft-confirmed'?'Entrada confirmada como rascunho sem numeração. A conferência não comprova a identificação de uma emissão final.':'O número da alocação não foi confirmado. Informe a identificação ou confirme o uso como rascunho.',[{file:r.sourceFile,sheet:r.sourceSheet}],{origin:'Alocação'});
   // Norma do código: ET-5290 (Grupo 7 com TAG, separado por _) ou N-1710. Em N-1710 só se auditam Data Book, níveis (EAP) e título.
   const kind=p?'ET':/^(?:[A-Z]-)?[A-Z]{2}-\d{4}\.\d{2}-/i.test(text(r.document))?'N-1710':'outro',isN1710=kind==='N-1710';
-  if(r.rawDocument&&r.rawDocument!==r.document)add('SOURCE-CODE-WHITESPACE','code','document','O código de origem contém espaços externos. Confira a fonte; o valor original foi preservado.',[{original:r.rawDocument,matchingKey:r.document}]);
-  const originals=index.ld.get(r.document)||[],compatible=originals.filter(x=>!r.revision||!x.revision||String(x.revision)===r.revision).filter(x=>sameLd(r,{ld:x.source||x.sourceFile,ldSheet:x.sheet||x.sourceSheet}));
+  if(r.rawDocument&&r.rawDocument!==r.document&&r.rawDocument.trim()===r.document)add('SOURCE-CODE-WHITESPACE','code','document','O código de origem contém espaços externos. Confira a fonte; o valor original foi preservado.',[{original:r.rawDocument,matchingKey:r.document}]);
+  const originals=index.ld.get(r.document)||[],scoped=originals.filter(x=>sameLd({ld:r.ld,ldSheet:r.ldSheet},{ld:x.source||x.sourceFile||x.ld,ldSheet:x.sheet||x.sourceSheet||x.ldSheet}));
+  const readable=scoped.filter(x=>!(x.sourceIssues||[]).some(issue=>['document','revision'].includes(issue.field)));
+  const compatible=invalidFields.has('revision')||invalidFields.has('ld')||invalidFields.has('ldSheet')?[]:readable.filter(x=>!r.revision||text(x.revision)===r.revision);
+  const originEvidence=items=>items.map(x=>({file:x.source||x.sourceFile||x.ld,sheet:x.sheet||x.sourceSheet||x.ldSheet,row:x.row||x.sourceRow,revision:text(x.revision)}));
+  if(!index.ld.size)add('LD-BASE-MISSING','history','ld','Nenhuma LD de referência está disponível para confirmar este documento. Anexe a LD correspondente e execute novamente.',[{document:r.document,revision:r.revision}],{origin:'LD'});
+  else if(!originals.length)add('DOCUMENT-NOT-IN-LD','history','ld','O código exato do documento não foi localizado nas LDs carregadas. Confira a origem correta; nenhum código semelhante foi associado automaticamente.',[{document:r.document,revision:r.revision,requestedLd:r.ld||'',requestedSheet:r.ldSheet||''}],{origin:'LD'});
+  else if(!scoped.length)add('LD-INCOMPATIBLE','history','ld','O documento foi localizado, mas não na LD ou aba informada. Confirme a origem antes de usar os valores encontrados.',[{requestedLd:r.ld||'',requestedSheet:r.ldSheet||'',candidates:originEvidence(originals)}],{origin:'LD'});
+  else if(!readable.length)add('LD-CELL-UNREADABLE','history','revision','As linhas da LD têm erro de leitura no código ou na revisão. Corrija as células indicadas e reimporte a referência.',scoped.map(x=>({...originEvidence([x])[0],issues:x.sourceIssues})),{origin:'LD',technicalFailure:true});
+  else if(!compatible.length&&!invalidFields.has('revision')&&!invalidFields.has('ld')&&!invalidFields.has('ldSheet'))add(readable.some(x=>text(x.revision))?'REVISION-MISMATCH':'LD-REVISION-UNKNOWN','history','revision',readable.some(x=>text(x.revision))?'A revisão informada não foi localizada nas linhas compatíveis da LD. Confira se a LD precisa ser atualizada ou se a revisão da alocação está incorreta.':'A LD não informa uma revisão que permita confirmar a revisão recebida. Não foi presumida equivalência.',[{found:r.revision,references:originEvidence(scoped)}],{origin:'LD'});
+  r.ldMatch={status:compatible.length===1?'matched':compatible.length>1?'ambiguous':!index.ld.size?'missing-base':!originals.length?'document-not-found':!scoped.length?'incompatible-source':'revision-unconfirmed',candidates:originEvidence(scoped),receivedRevision:r.revision};
   const source=compatible.length===1?compatible[0]:null,recommendations=[];
-  if(source){for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k])&&!(r.officialAllocation&&k==='workflow'))r[k]=text(source[k]);r.ld=r.ld||text(source.source);r.ldSheet=r.ldSheet||text(source.sheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={revision:text(source.revision),file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
+  if(!source)delete r.origin;
+  if(source)for(const issue of source.sourceIssues||[])add('LD-CELL-UNREADABLE','history',issue.field,'Não foi possível ler um valor da LD: '+issue.message+'. Corrija a célula na referência e reimporte antes de validar este campo.',[{file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,cell:issue.cell}],{origin:'LD',technicalFailure:true});
+  if(source){r.valueOrigins={...(r.valueOrigins||{})};for(const k of ['title','revision','discipline','workflow','eap','tag'])if(!text(r[k])&&!invalidFields.has(k)&&!(r.officialAllocation&&k==='workflow')){r[k]=text(source[k]);if(r[k])r.valueOrigins[k]={kind:'LD',received:'',file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow};}r.ld=r.ld||text(source.source||source.sourceFile);r.ldSheet=r.ldSheet||text(source.sheet||source.sourceSheet);r.ldVersion=r.ldVersion||text(source.ldVersion);r.origin={revision:text(source.revision),file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,titleColumn:source.titleColumn||source.columns?.title||source.ldColumns?.find(c=>norm(c.header)==='TITULO')?.column};}
+  // RA-02 — campo PREENCHIDO é comparado com a linha exata da LD (existir não basta). Quatro níveis, sempre com os dois valores e a origem:
+  // igual → nada; igual só na forma (maiúsculas, acentos, espaços) ou EQUIVALENTE por regra explícita (sigla × nome da disciplina,
+  // prefixo hierárquico da EAP) → sugestão; diferente → erro (título, TAG, disciplina, EAP) ou pendência a confirmar (Workflow, Data Book,
+  // que podem ter sido reclassificados de propósito). Valor copiado da LD (campo vazio na alocação) não é comparado consigo mesmo.
+  const DISCIPLINE_ALIAS={ELE:'ELETRICA',TUB:'TUBULACAO',HVAC:'HVAC',CVL:'CIVIL'};
+  const equivalent={
+   discipline:(a,b)=>{const x=norm(a),y=norm(b);return (DISCIPLINE_ALIAS[x]||x)===(DISCIPLINE_ALIAS[y]||y);},
+   eap:(a,b)=>{const x=text(a),y=text(b);return x.startsWith(y+'.')||y.startsWith(x+'.');}
+  };
+  const compared=[['title','Título','title','error'],['tag','TAG','tag','error'],['discipline','Disciplina','scope','error'],['eap','EAP','hierarchy','error'],['workflow','Workflow','workflow','pending'],['databook','Caminho do Data Book','databook','pending']];
+  if(source)for(const [k,label,category,severity] of compared){
+   const mine=text(r[k]),theirs=text(source[k]);
+   if(!mine||!theirs||mine===theirs||invalidFields.has(k)||r.valueOrigins?.[k]?.kind==='LD'||(k==='workflow'&&isN1710))continue;
+   const same=norm(mine)===norm(theirs),semantic=!same&&equivalent[k]&&equivalent[k](mine,theirs),where={file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow};
+   const evidence=[{field:k,alocacao:mine,ld:theirs,comparacao:same?'igual na forma normalizada':semantic?'equivalente por regra explícita':'divergente',...where}];
+   const id=k.toUpperCase();
+   if(same)add('LD-'+id+'-FORMAT',category,k,label+' da alocação difere da LD só na forma (maiúsculas, acentos ou espaços). Confirme o padrão exigido antes de enviar.',evidence,{severity:'suggestion',origin:'LD exata'});
+   else if(semantic)add('LD-'+id+'-SEMANTIC',category,k,label+' da alocação é equivalente ao da LD por regra explícita ('+(k==='discipline'?'sigla × nome da disciplina':'um código EAP contém o outro como prefixo hierárquico')+'), mas não é idêntico. Confirme se o nível de detalhe está correto.',evidence,{severity:'suggestion',origin:'LD exata'});
+   else{
+    add('LD-'+id+'-MISMATCH',category,k,label+' da alocação difere da linha exata da LD. Confirme qual valor está atualizado na origem antes de enviar; a LD é o primeiro documento contratual.',evidence,{severity,origin:'LD exata'});
+    // Workflow e Data Book já geram proposta própria (modelo oficial, com a base ativa) mais abaixo; aqui não se duplica.
+    if(!['workflow','databook'].includes(k))recommendations.push({field:k,before:mine,after:theirs,justification:label+' da linha exata da LD. Proposta, não correção: depende de confirmação na origem.',evidence:[JSON.stringify(where)],confidence:'media',proposal:true});
+   }
+  }
+  // ET 7.1.7 — a TAG informada precisa ser a do Grupo 7 do código ("_" e "/" valem como "-"). Item nt- não tem TAG para comparar.
+  if(kind==='ET'&&p&&text(r.tag)&&!/^nt-/i.test(p.tag)){
+   const flat=v=>text(v).replace(/[_/]/g,'-').toUpperCase();
+   if(flat(p.tag)!==flat(r.tag))add('TAG-GROUP7-MISMATCH','tag','tag','A TAG informada ('+text(r.tag)+') difere da TAG do Grupo 7 do código ('+p.tag+'). A ET exige a TAG exata da referência; confirme qual está errada, o código ou a TAG.',[{field:'tag',informada:text(r.tag),grupo7:p.tag,document:r.document}],{severity:'error',source:ET+' §7.1.7',origin:'Código do documento',normativeProof:enforced});
+  }
   if(source&&r.officialAllocation){
    const reference={origin:'LD exata',file:source.source||source.sourceFile,sheet:source.sheet||source.sourceSheet,row:source.row||source.sourceRow,version:source.ldVersion||''};
    if(!isN1710&&text(source.workflow)&&text(source.workflow)!==text(r.workflow))recommendations.push({field:'workflow',before:text(r.workflow),after:text(source.workflow),justification:'Diferença de Workflow frente à linha exata da LD. Verifique a versão e a disciplina antes de aprovar.',evidence:[JSON.stringify(reference)],confidence:'fonte documental exata',humanReview:true});
@@ -306,7 +402,7 @@
     const stripped=p.tag.replace(/^nt-/i,''),exact=index.tags.get(stripped);
     const partial=exact?null:[...index.tags.keys()].filter(k=>k.length>=6&&(stripped===k||stripped.startsWith(k+'-'))).slice(0,3);
     const suggestion=withNt(r.document,true);
-    if(exact)add('NT-PREFIX-IN-REFERENCE','tag','document','O código usa nt-, mas o TAG '+stripped+' consta no cadastro ('+(exact.kind||'referência')+'). Item cadastrado não deve levar nt-; remova o prefixo do Grupo 7.',[{tag:stripped,cadastro:exact.kind||'',versao:context.versions?.appendix||'',codigoSugerido:suggestion}],{severity:context.homologated?.appendix?'error':'pending',source:'Cadastro de TAGs × prefixo nt- (ET item 7.1.7.3)',origin:'Cadastro de TAGs / LD',normativeProof:false,suggestion:{field:'document',before:r.document,after:suggestion}});
+    if(exact)add('NT-PREFIX-IN-REFERENCE','tag','document','O código usa nt-, mas o TAG '+stripped+' consta no cadastro ('+(exact.kind||'referência')+'). Item cadastrado não deve levar nt-; remova o prefixo do Grupo 7.',[{tag:stripped,cadastro:exact.kind||'',versao:context.versions?.appendix||'',codigoSugerido:suggestion}],{severity:referenceApproved(context,'appendix')?'error':'pending',source:'Cadastro de TAGs × prefixo nt- (ET item 7.1.7.3)',origin:'Cadastro de TAGs / LD',normativeProof:false,suggestion:{field:'document',before:r.document,after:suggestion}});
     else if(partial&&partial.length)add('NT-PREFIX-PARTIAL-MATCH','tag','document','O código usa nt-, e parte dele coincide com TAG cadastrado ('+partial.join(', ')+'). Confira se o item é realmente não tagueado.',[{grupo7:p.tag,coincidencias:partial}],{severity:'suggestion',source:'Cadastro de TAGs × prefixo nt-',origin:'Cadastro de TAGs / LD',normativeProof:false});
    }
    if(!nonTagged){const tag=index.tags.get(p.tag);if(!tag){const suggestion=index.tags.size?withNt(r.document,false):'';add('TAG-NOT-PROVEN','tag','tag','TAG não comprovado nas referências carregadas.'+(suggestion?' Se o item não for tagueado, o Grupo 7 deve começar com nt- (código sugerido no detalhamento); caso contrário, confira o cadastro.':' Verifique outras fontes autorizadas.'),[{tag:p.tag,version:context.versions?.appendix,...(suggestion?{codigoSugerido:suggestion}:{})}],{origin:'Cadastro de TAGs / LD',...(suggestion?{suggestion:{field:'document',before:r.document,after:suggestion}}:{})});}}
@@ -320,20 +416,20 @@
   }else if(!/^\w+-\d{4}\.\d{2}-/.test(r.document))add('CODE-UNRECOGNIZED','code','document','Codificação não reconhecida pelo auditor. Requer conferência.',[{value:r.document}]);
   if(!index.paths.size)add('DATABOOK-BASE-MISSING','databook','databook','Base Data Book indisponível.',[],{origin:'Base Data Book'});
   else if(!text(r.databook))add('DATABOOK-MISSING','databook','databook','Caminho não informado.',[]);
-  else if(!index.paths.has(r.databook)){const near=closest(r.databook,[...index.paths.keys()],0.04);add('DATABOOK-NOT-FOUND','databook','databook','Caminho completo não encontrado na versão carregada.'+(near?' Existe um caminho muito parecido; confira possível erro de digitação.':''),[{path:r.databook,version:context.versions?.databook,...(near?{caminhoSemelhante:near.item}:{})}],{severity:context.homologated?.databook?'error':'pending',...(near?{suggestion:{field:'databook',before:r.databook,after:near.item}}:{})});}
+  else if(!index.paths.has(r.databook)){const near=closest(r.databook,[...index.paths.keys()],0.04);add('DATABOOK-NOT-FOUND','databook','databook','Caminho completo não encontrado na versão carregada.'+(near?' Existe um caminho muito parecido; confira possível erro de digitação.':''),[{path:r.databook,version:context.versions?.databook,...(near?{caminhoSemelhante:near.item}:{})}],{severity:referenceApproved(context,'databook')?'error':'pending',...(near?{suggestion:{field:'databook',before:r.databook,after:near.item}}:{})});}
   else {const entry=index.paths.get(r.databook);if(entry.discipline&&norm(entry.discipline)!==norm(r.discipline))add('PATH-DISCIPLINE','databook','databook','Disciplina incompatível com a classificação explícita do caminho.',[{path:r.databook,discipline:r.discipline,expected:entry.discipline}],{severity:'error'});}
   if(!index.eaps.size)add('EAP-BASE-MISSING','hierarchy','eap','EAP contratual não disponível. Hierarquia oficial não foi inferida do histórico.',[],{origin:'EAP'});
   else {
     const selection=chooseEap(r.eap,r.workflow,index),e=selection.entry;
     r.eapMatch={requested:r.eap,matchedCode:selection.matchedCode,discipline:selection.discipline,candidates:selection.candidates.length,ambiguous:selection.ambiguous};
-    if(!context.homologated?.eap)add('EAP-APPLICABILITY','hierarchy','eap','A hierarquia carregada não comprova a EAP contratual. Confirme o Anexo III — Apêndice A aplicável.',[{version:context.versions?.eap}],{origin:'EAP'});
+    if(!referenceApproved(context,'eap'))add('EAP-APPLICABILITY','hierarchy','eap','A hierarquia carregada não comprova a EAP contratual. Confirme o Anexo III — Apêndice A aplicável.',[{version:context.versions?.eap}],{origin:'EAP'});
     if(!selection.matchedCode)add('EAP-NOT-FOUND','hierarchy','eap','Nenhum prefixo do código EAP consta na base carregada.',[{eap:r.eap,version:context.versions?.eap}],{severity:'pending'});
     else if(selection.ambiguous)add('EAP-DISCIPLINE-AMBIGUOUS','hierarchy','eap','Há mais de uma hierarquia para o código EAP; o Workflow não selecionou uma disciplina única. Confira o Workflow e a fonte.',[{eap:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,discipline:selection.discipline,options:selection.candidates.map(c=>(c.levels||[]).filter(Boolean).slice(-1)[0])}],{severity:'pending'});
     else if(e&&Array.isArray(e.levels)&&Array.isArray(r.levels)){
       const differences=e.levels.map((expected,i)=>({index:i,expected:text(expected),actual:text(r.levels[i])})).filter(x=>x.expected&&x.actual!==x.expected);
       if(differences.length){
-       add('EAP-LEVEL-MISMATCH','hierarchy','levels','Os níveis disponíveis na EAP não coincidem com a alocação. Níveis adicionais sem referência na base não foram considerados erro.',[{requested:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,differences,source:e.source,version:context.versions?.eap}],{severity:context.homologated?.eap?'error':'pending'});
-       if(r.officialAllocation)for(const x of differences)if(x.index<6)recommendations.push({field:'N'+(x.index+1),before:x.actual,after:x.expected,justification:'Nível existente na EAP aplicável à disciplina do Workflow. Confirmar a evidência antes de aprovar.',evidence:[JSON.stringify({code:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,version:context.versions?.eap,source:e.source})],confidence:context.homologated?.eap?'EAP homologada':'Base EAP ativa; homologação pendente',humanReview:true});
+       add('EAP-LEVEL-MISMATCH','hierarchy','levels','Os níveis disponíveis na EAP não coincidem com a alocação. Níveis adicionais sem referência na base não foram considerados erro.',[{requested:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,differences,source:e.source,version:context.versions?.eap}],{severity:referenceApproved(context,'eap')?'error':'pending'});
+       if(r.officialAllocation)for(const x of differences)if(x.index<6)recommendations.push({field:'N'+(x.index+1),before:x.actual,after:x.expected,justification:'Nível existente na EAP aplicável à disciplina do Workflow. Confirmar a evidência antes de aprovar.',evidence:[JSON.stringify({code:r.eap,matchedCode:selection.matchedCode,workflow:r.workflow,version:context.versions?.eap,source:e.source})],confidence:referenceApproved(context,'eap')?'EAP homologada':'Base EAP ativa; homologação pendente',humanReview:true});
       }
     }
    }
@@ -342,7 +438,7 @@
   const workflowCategory=isN1710?'':workflowDiscipline(r.workflow);
   const documentCategory=alias[norm(r.discipline)]||'';
   if(workflowCategory&&documentCategory&&workflowCategory!==documentCategory){
-   add('WORKFLOW-DISCIPLINE-CONFLICT','workflow','workflow','A disciplina identificada no Workflow diverge da disciplina explicitamente codificada. Confira a LD e a tabela aplicável antes do envio.',[{document:r.document,codeDiscipline:r.discipline,workflow:r.workflow,workflowDiscipline:workflowCategory,sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow}],{severity:context.homologated?.workflows?'pending':'suggestion',origin:'Workflow / LD',normativeProof:false});
+   add('WORKFLOW-DISCIPLINE-CONFLICT','workflow','workflow','A disciplina identificada no Workflow diverge da disciplina explicitamente codificada. Confira a LD e a tabela aplicável antes do envio.',[{document:r.document,codeDiscipline:r.discipline,workflow:r.workflow,workflowDiscipline:workflowCategory,sourceFile:r.sourceFile,sourceSheet:r.sourceSheet,sourceRow:r.sourceRow}],{severity:referenceApproved(context,'workflows')?'pending':'suggestion',origin:'Workflow / LD',normativeProof:false});
   }
   const workflows=context.bases?.workflows||[];
   if(isN1710){/* Workflow não é auditado em N-1710 */}
@@ -377,8 +473,21 @@
       {severity:'suggestion',source:'Recorrência histórica Fiscal 01 (não normativa)',origin:'Precedentes da família',normativeProof:false,humanReview:true});
    }
   }
+  // Referência ausente, não carregada ou não validada NUNCA vira conformidade: a verificação fica inconclusiva, com o motivo.
+  let verification;
+  if(context.references&&References){
+   const v=References.verification({...r,docKind:kind},context.references);
+   const groups=References.groupBlocks(v);
+   // Um único apontamento por registro (não um por referência), para não afogar os problemas reais; o detalhe vai na evidência.
+   if(groups.length)add('REF-BLOCKED','reference','document','Verificação incompleta: '+groups.length+' referência(s) sem o nível exigido, '+v.blocked.length+' regra(s) bloqueada(s). Referência necessária: '+groups.map(g=>g.reference+(g.revision&&g.revision!=='qualquer'?' (rev. '+g.revision+')':'')+' — '+g.needed).join('; ')+'. Estas verificações não foram feitas; ausência de apontamento nelas não significa conformidade.',groups.map(g=>({code:g.code,reference:g.reference,revision:g.revision,needed:g.needed,rules:g.rules,fields:g.fields})),{severity:'pending',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
+   // Verificação que só se sustenta num sinalizador (sem responsável/data) é dita; "nunca forçar flags" = não tratar sinalizador como demonstração.
+   if(v.flagOnly.length)add('REF-FLAG-ONLY','reference','document','Esta verificação depende de sinalizador de homologação sem responsável e data ('+[...new Set(v.flagOnly.map(x=>x.name))].join('; ')+'). Registre a validação com evidência para demonstrar fonte, revisão e vigência.',v.flagOnly,{severity:'pending',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
+   verification={status:v.status,verified:v.verified,flagOnly:v.flagOnly.map(x=>x.rule),blocked:v.blocked.map(b=>({rule:b.rule,field:b.field,codes:b.blockers.map(x=>x.code),reference:b.reference})),catalog:context.references.fingerprint};
+  }
+  // Sugestões do modelo local (Etapas 9–10): opcionais e só "suggestion". Nunca alteram os achados acima; falha ou ausência do modelo não afeta a auditoria.
+  if(context.mlModel&&context.mlEnabled!==false){try{const Ml=MlModule();if(Ml)for(const s of Ml.suggest(context.mlModel,r,{enabled:true}))f.push(s);}catch(_){/* o modelo é opcional */}}
   const status=f.some(x=>x.severity==='error')?'Correções pendentes':f.some(x=>x.severity==='pending')?'Verificações inconclusivas':f.some(x=>x.severity==='suggestion')?'Sugestões de melhoria':'Sem não conformidades detectadas';
-  return {...r,docKind:kind,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto'};
+  return {...r,docKind:kind,findings:f,recommendations,history,status,lineage:key(r),ruleVersion:VERSION,versions:context.versions||{},state:'Aberto',...(verification?{verification}:{})};
  }
  function compare(a,b){const changes=[],unknown=[];for(const k of ['document','revision','title','tag','discipline','eap','databook','levels','workflow']){if(a[k]==null||b[k]==null||a[k]===''||b[k]===''){unknown.push(k);continue;}if(JSON.stringify(a[k])!==JSON.stringify(b[k]))changes.push({field:k,before:a[k],after:b[k]});}return {changes,unknown,resolved:false};}
  function reviewEvent(row,{state,field,value,justification,evidence=[],decision='proposed'},actor){
@@ -399,5 +508,5 @@
   return [...groups.values()].map(g=>({...g,learning:g.findings.length&&new Set(g.occurrences.map(o=>o.document)).size>=3?'criterio-fiscal-recorrente':g.findings.length?'precedente-especifico':'avaliacao-sem-apontamento',normativeProof:false,humanReview:true}));
  }
  function splitGroup(r){let h=2166136261;for(const c of text(r.contract)+'|'+text(r.document))h=Math.imul(h^c.charCodeAt(0),16777619);const n=(h>>>0)%10;return n<6?'development':n<8?'validation':'holdout';}
- return {VERSION,editDistance,checkTitle,withNt,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,applicable,buildTree,prepare,chooseEap,workflowDiscipline,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
+ return {VERSION,editDistance,checkTitle,withNt,ET,RULES,STATES,TAXONOMY:TAXONOMY.map(([id,label])=>({id,label})),text,norm,key,parts,ldIdentity,sameLd,classifyComment,decision,headerMap,parseRows,parseWorksheet,cellSnapshot,applicable,referenceApproved,buildTree,prepare,chooseEap,workflowDiscipline,auditRecord,compare,reviewEvent,summary,approvedChanges,mergeHistory,catalogComments,splitGroup};
 });

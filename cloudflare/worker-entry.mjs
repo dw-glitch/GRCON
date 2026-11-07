@@ -187,16 +187,20 @@ async function handleTitleAi(request,env){
  catch{return apiError('Não foi possível verificar a escolha da IA. Use a sugestão técnica.',503,'AI_UNAVAILABLE');}
 }
 async function handleAllocationAuditAi(request,env){
+ // Registro técnico seguro: só identificador do pedido, etapa e código. Nunca o conteúdo do documento, da pergunta ou credenciais.
+ const requestId=crypto.randomUUID().slice(0,8),log=(step,code)=>console.error('GRCON allocation-audit-ai',JSON.stringify({requestId,step,code}));
  const user=await authenticatedUser(request,env),body=await aiBody(request,9000),workspace=workspaceFrom(request,body);
  if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
- const prepared=prepareAuditPrompt(body);
+ let prepared;
+ try{prepared=prepareAuditPrompt(body);}
+ catch(error){const code=/^AUDIT_[A-Z_]+$/.test(error?.message)?error.message:'AUDIT_INPUT_INVALID';log('validate',code);return apiError('Os dados desta consulta não foram aceitos pela IA. A auditoria por regras e a orientação por item continuam disponíveis.',422,code,{requestId});}
  if(!aiEnabled(env))return apiError('IA indisponível. A auditoria por regras continua disponível.',503,'AI_NOT_CONFIGURED');
  const budget=await rpc(env,'grcon_document_ai_budget',{operation:'status',target_workspace:workspace,actor_id:user.id});
  if(!budget.available)return apiError('Limite da IA atingido. A revisão manual permanece disponível.',429,'AI_DAILY_LIMIT');
  const slot=await rpc(env,'grcon_document_ai_budget',{operation:'reserve',target_workspace:workspace,actor_id:user.id});
  if(!slot.allowed)return apiError('Limite individual da IA atingido.',429,'AI_LIMIT');
  try{return json({ok:true,analysis:await analyzeAudit(env.AI,prepared)});}
- catch(error){const failure=auditAiFailure(error);return apiError(failure.message,503,failure.code);}
+ catch(error){const failure=auditAiFailure(error);log('analyze',failure.code);return apiError(failure.message,503,failure.code,{requestId});}
 }
 async function handleDocumentAi(request,env,probe=false){
  if(probe){

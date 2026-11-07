@@ -52,7 +52,7 @@ const qaModule={exports:{}};
 vm.runInNewContext(script,{exports:qaModule.exports,module:qaModule,require:id=>{
  if(id==='./service')return {service};
  throw Error('Unexpected import '+id);
-},window,crypto:webCrypto,console,Promise});
+},window,crypto:webCrypto,console,TextEncoder,Promise});
 const assistant=qaModule.exports.assistant;
 const read=()=>assistant.snapshot().messages.map(x=>x.text).join('\n');
 (async()=>{
@@ -77,7 +77,7 @@ const read=()=>assistant.snapshot().messages.map(x=>x.text).join('\n');
  assert.equal(calls.includes('package:true'),true,'Official issuance stays a separate explicit action');
 
  await assistant.details();
- assert.match(read(),/detalhamento técnico/);
+ assert.match(read(),/lista de pendências/);
  // An uploaded external allocation must take precedence over a generator-history lookup.
  state.context.sources=[{kind:'allocation',name:'C1O-ALOC-CM-0372-2026.xlsx'}];
  state.records=[{document:'D-EXT',allocation:'C1O-ALOC-CM-0372-2026'}];

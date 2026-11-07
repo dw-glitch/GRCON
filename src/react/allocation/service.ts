@@ -89,7 +89,7 @@ export const service={
    return {bases:contextBases,versions:state.versions,baseMetadata:state.bases.filter(b=>b.status==='active'),ldRecords:ldRecords.length?ldRecords:shared?.records||[],rows:state.rows,centralHistory,allocationRuns:state.history};
   });
  },
- async importAuditLd(files:File[]){return await this.importSource('ld',files);},
+ async importAuditLd(files:File[]){return await this.importSource('audit-ld',files);},
  clearAuditLd(){ldRecords=[];},
  // O Robô Auditor Preventivo é parte do Gerador e vem habilitado para todos os contratos; as permissões de uso continuam no servidor.
  assistantEnabled(){return true;},
@@ -185,11 +185,12 @@ export const service={
   rememberUpload(null);emit({preview:null});await refreshInternal();
  });},
  restore:(base:Data)=>task('Restaurando versão da base',async()=>{await rpc('base-restore',{id:base.id,expectedActive:state.versions[base.kind]||null});await refreshInternal();}),
- async importSource(kind:'ld'|'central'|'history'|'confirmation'|'list',files:File[]){return task('Lendo fontes documentais',async()=>{
-  const ticket=epoch,rows:Data[]=[];
+ async importSource(requested:'ld'|'audit-ld'|'central'|'history'|'confirmation'|'list',files:File[]){return task('Lendo fontes documentais',async()=>{
+  // 'audit-ld' é a LD importada para o Auditor (leitura estrita); para o resto do Gerador ela vale como 'ld'. A importação de LD do próprio Gerador não mudou.
+  const kind=requested==='audit-ld'?'ld':requested,ticket=epoch,rows:Data[]=[];
   // Commit only after every file parses, so a failed multi-file import never
   // silently replaces valid sources with a partial set.
-  for(const file of files){current(ticket);emit({progress:`Lendo ${file.name}`});const parsed=await compute('parse',{kind,file});current(ticket);rows.push(...(kind==='ld'?parsed.records:parsed));}
+  for(const file of files){current(ticket);emit({progress:`Lendo ${file.name}`});const parsed=await compute('parse',{kind:requested,file});current(ticket);rows.push(...(kind==='ld'?parsed.records:parsed));}
   if(!files.length)return 0;
   if(kind==='ld')ldRecords=rows;else if(kind==='central')localCentral=rows;else if(kind==='history')localHistory=rows;else if(kind==='confirmation')confirmationRows=rows;
   emit({rows:[],plan:null,files:[],batchResults:[],sourceFiles:{...state.sourceFiles,[kind]:files.map(f=>f.name)}});

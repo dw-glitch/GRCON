@@ -25,7 +25,7 @@ const service={
 };
 const window={addEventListener:(key,cb)=>events.set(key,cb),GrconAllocationAssistant:{intent:()=> 'help',questionRows:()=>[]}};
 const qaModule={exports:{}};
-vm.runInNewContext(code,{exports:qaModule.exports,module:qaModule,require:id=>{if(id==='./service')return {service};throw Error(id);},window,crypto:require('node:crypto').webcrypto,console,Promise});
+vm.runInNewContext(code,{exports:qaModule.exports,module:qaModule,require:id=>{if(id==='./service')return {service};throw Error(id);},window,crypto:require('node:crypto').webcrypto,console,TextEncoder,Promise});
 const assistant=qaModule.exports.assistant,conversation=()=>assistant.snapshot().messages.map(m=>m.text).join('\n');
 (async()=>{
  const one={name:'PREVENTIVA-001.xlsx'};
