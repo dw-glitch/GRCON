@@ -55,8 +55,9 @@
    const second=secondAuditFor(file);if(!second)continue;
    for(const lineage of new Set((file.changes||[]).map(c=>c.lineage))){
     const before=rows.find(r=>r.lineage===lineage);if(!before)continue;
-    const after=second.find(r=>r.document===before.document&&String(r.revision??'')===String(before.revision??''));
-    if(after)reaudit.push({lineage,findings:after.findings||[],recommendations:after.recommendations||[]});
+    const candidates=second.filter(r=>r.document===before.document&&String(r.revision??'')===String(before.revision??''));
+    const matches=Number.isInteger(before.sourceRow)?candidates.filter(r=>r.sourceRow===before.sourceRow):candidates;
+    if(matches.length===1){const after=matches[0];reaudit.push({lineage,findings:after.findings||[],recommendations:after.recommendations||[]});}
    }
   }
   const comparison=input.comparison&&input.comparison.comparable?input.comparison:null;

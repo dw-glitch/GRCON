@@ -18,6 +18,7 @@
  const CONFLICT_IDS=new Set(['LD-AMBIGUOUS','EAP-DISCIPLINE-AMBIGUOUS','DUPLICATE-IN-BATCH','WORKFLOW-DISCIPLINE-CONFLICT']);
  const value=(row,field)=>/^N[1-6]$/.test(field)?text((row.levels||[])[Number(field.slice(1))-1]):text(row[field]);
  const hex64=v=>/^[a-f0-9]{64}$/.test(text(v));
+ const approved=(context,key)=>{const core=typeof module==='object'&&module.exports?require('./allocation_auditor_core.js'):globalThis.GrconAllocationAuditorCore;return Boolean(core&&core.referenceApproved(context,key));};
 
  // Portas de elegibilidade para execução automática. Retorna os motivos que a impedem.
  function automaticBlockers(row,rec,context,rule,assistant){
@@ -31,8 +32,8 @@
   if(!text(row.revision)||text(row.origin?.revision)!==text(row.revision))why.push('Revisão documental não confirmada');
   if(!rec.evidence||!rec.evidence.some(x=>text(x)))why.push('Sem evidência');
   if(rec.humanReview===true&&rec.confidence!=='fonte documental exata'&&rec.confidence!=='EAP homologada')why.push('Proposta depende de interpretação');
-  if(rec.field==='workflow'&&!context.homologated?.workflows&&rec.confidence!=='fonte documental exata')why.push('Workflow sem referência oficial');
-  if(/^N[1-6]$/.test(rec.field)&&!context.homologated?.eap)why.push('EAP contratual não homologada');
+  if(rec.field==='workflow'&&!approved(context,'workflows')&&rec.confidence!=='fonte documental exata')why.push('Workflow sem referência oficial');
+  if(/^N[1-6]$/.test(rec.field)&&!approved(context,'eap'))why.push('EAP contratual não homologada');
   if(assistant){const check=assistant.evaluate(row,rule,context);if(!check.eligible)why.push(...check.reasons);}
   return [...new Set(why)];
  }

@@ -383,7 +383,8 @@ export const service={
   if(resume&&state.rows.some((r,i)=>!sameInput(state.records[i],r)))throw Error('Os resultados parciais não correspondem à ordem da entrada.');
   context.inputComplete=true;context.engine=g.GrconAllocationAuditorCore.VERSION;context.createdBy=cloud().session.user.id;
   const total=resume?state.total:state.records.length;
-  if(!resume)clearResults();emit({context,total});await compute('context',context);current(t);
+  if(!resume)clearResults();context.references=undefined;emit({context,total});const preparedContext=await compute('context',context);current(t);
+  context.references=preparedContext?.references;emit({context});
   let rows=resume?state.rows.slice():[];
   for(let i=rows.length;i<context.records.length;i+=100){if(cancelled)break;let next:Data[];try{next=await compute('batch',{first:i,count:100});}catch(e){if((e as Data)?.code==='CANCELLED'){cancelled=true;break;}throw e;}current(t);rows=[...rows,...next];emit({rows,progress:rows.length,selected:rows.map((_,i)=>i)});await new Promise(resolve=>setTimeout(resolve,0));}
   let grouped:Data={};try{grouped=await compute('summarize',{rows});}catch(e){if((e as Data)?.code!=='CANCELLED')throw e;cancelled=true;}current(t);

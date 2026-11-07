@@ -77,7 +77,7 @@ async function operation(op,input){
   context.references=self.GrconAllocationAuditorReferences.buildCatalog({contract:context.contract,applicability:context.applicability,homologated:context.homologated,
    loadedBases:{tags:Boolean(context.bases?.appendix?.length),databook:Boolean(context.bases?.databook?.length),eap:Boolean(context.bases?.eap?.length),workflow:Boolean(context.bases?.workflows?.length)},
    validations:input.referenceValidations,homologations:input.referenceHomologations,referenceDate:input.referenceDate||new Date().toISOString().slice(0,10)});
-  prepared=C.prepare(context);return {records:context.records.length,treeNodes:prepared.tree.size};}
+  prepared=C.prepare(context);return {records:context.records.length,treeNodes:prepared.tree.size,references:context.references};}
  if(op==='batch'){if(!context)throw Error('Contexto ausente.');return Promise.all(context.records.slice(input.first,input.first+input.count).map(async r=>{
   const duplicateKey=JSON.stringify([r.document,r.revision||'',r.allocation||r.sourceFile||'']);
   const signature=JSON.stringify([C.VERSION,context.contract,context.versions,context.applicability,context.homologated,context.references&&context.references.fingerprint,r,prepared.ld.get(r.document),prepared.byDocument.get(r.document),prepared.batches.get(duplicateKey)]);

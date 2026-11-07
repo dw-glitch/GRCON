@@ -44,6 +44,14 @@ assert.equal(V.filterItems(items,{kind:'todas',query:'zzz',onlyOpen:false}).leng
  assert.equal(labelled.find(i=>i.ruleId==='E1').status,'Persiste após a correção');assert.equal(labelled.find(i=>i.ruleId==='P1').status,'Nova após a correção');
  assert.equal(labelled.find(i=>i.ruleId==='X').status,'Pendente de verificação','itens fora da comparação mantêm o status do parecer');
 }
+// Repeated documents carry the status of their own current occurrence.
+{
+ const duplicateRows=[row(1,[finding('E1','error','title')],[],{lineage:'CURRENT-2'}),row(1,[finding('E1','error','title')],[],{lineage:'CURRENT-3'})];
+ const cmp={items:[{kind:'ocorrencia',status:'persiste',allocation:'ALOC-1',document:'DOC-1',revision:'0',id:'E1',field:'title',afterLineage:'CURRENT-2'},{kind:'ocorrencia',status:'nova',allocation:'ALOC-1',document:'DOC-1',revision:'0',id:'E1',field:'title',afterLineage:'CURRENT-3'}]};
+ const items=V.buildItems(duplicateRows,O.build({rows:duplicateRows}),[],cmp);
+ assert.equal(items.find(i=>i.lineage==='CURRENT-2').status,'Persiste após a correção');
+ assert.equal(items.find(i=>i.lineage==='CURRENT-3').status,'Nova após a correção');
+}
 // 6. Próxima ação: ordem de prioridade, sem declarar prontidão sem parecer.
 const base={records:[],rows:[],progress:0,total:0,busy:false,sources:[],pendingSheets:0,pendingAllocations:0,opinion:null};
 assert.equal(V.nextAction({...base,pendingSheets:1}).id,'confirm-sheets');

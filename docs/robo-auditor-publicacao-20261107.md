@@ -31,3 +31,13 @@ Treinamento real desligado. A Central disponível tem 15.441 registros sem revis
 Fontes/revisão/vigência ainda exigem aprovação humana; sem evidência, o motor mantém pendências. Validação visual e aceite da Qualidade permanecem manuais: o Chromium local foi bloqueado pelo executor e o navegador compartilhado não acessou o servidor local. Os testes React/Worker e banco isolado não são apresentados como teste autenticado de usuário em produção.
 
 Se houver necessidade de reversão, preferir retornar o frontend à versão anterior e conservar os dados das tabelas novas. Os rollbacks de banco recusam apagar dados sem confirmação específica; não executá-los automaticamente com dados salvos.
+
+## Achados da revisão automática e correções
+
+A revisão do commit remoto `c54b23b49b1e93cf5b347b4957b511a1ea62acc6` apontou três falhas em escopo. Todas foram reproduzidas por testes que falhavam antes do reparo:
+
+1. Homologação registrada não alcançava as portas de elegibilidade do motor e das correções. Agora esses consumidores consultam o catálogo comprovado, e o Worker devolve esse mesmo catálogo ao serviço. Flags legadas não sobrepõem o catálogo.
+2. A comparação de reauditoria perdia ocorrências repetidas. Agora associa fontes/abas/linhas estáveis, conserva ocorrências distintas e recusa prova de resolução quando a identidade é ambígua, quando uma linha desaparece ou quando as versões do motor divergem. A comparação do pacote e os rótulos do chat também respeitam a ocorrência.
+3. Validação/homologação antiga podia sobrescrever a recente. O adaptador preserva a criação do registro e o catálogo aplica os registros do mais antigo para o mais recente, mantendo a precedência da evidência vigente.
+
+Regressões em `tests/allocation_auditor_review_regressions.cjs`, mais cobertura de rótulos no chat. Suíte do auditor ampliada para 43 comandos e aprovada; build geral aprovado. Motor 1.6.2 invalida retomadas com a versão antiga. Nenhuma nova alteração de banco foi necessária para estas três correções. A verificação externa focada deve avaliar o novo commit antes do merge.

@@ -3,7 +3,7 @@
  // Catálogo de referências normativas e documentais do Robô Auditor de Alocações (Etapa 3).
  // Princípio: LOCALIZADO ≠ CARREGADO ≠ VALIDADO ≠ HOMOLOGADO. Um arquivo encontrado nunca habilita, sozinho, uma regra normativa;
  // falta de referência nunca vira conformidade (a verificação fica "bloqueada" e o motivo é dito); revisões não se preenchem umas às outras.
- const VERSION='1.0.0';
+ const VERSION='1.0.1';
  const LEVELS=Object.freeze(['ausente','localizado','carregado','validado','homologado']);
  const text=v=>v==null?'':String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ');
@@ -71,21 +71,27 @@
  function entryId(kind,revision,sha){return kind+'@'+(revision||(sha?'sha:'+sha.slice(0,12):'sem-revisao'));}
 
  // ---- Construção do catálogo.
+ function oldestFirst(records){
+  const stamp=r=>{const value=text(r.createdAt||r.at),m=value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/),n=m?Date.UTC(+m[3],+m[2]-1,+m[1]):Date.parse(value);return Number.isFinite(n)?n:0;};
+  const explicit=r=>['applicability','sinalizador-existente'].includes(r.origin)?0:1;
+  return records.map((r,i)=>({r,i})).sort((a,b)=>explicit(a.r)-explicit(b.r)||stamp(a.r)-stamp(b.r)||b.i-a.i).map(x=>x.r);
+ }
  // inventory: {files:[{name,sha256,bytes}]}; validations/homologations: [{kind,revision,sha256?,by,at,evidence,effective?:{date,evidence}}]
  // applicability: confirmação humana da revisão da ET (já existente no GRCON); homologated: {eap,workflow,...}; loadedBases: {tags,databook,eap,workflow,pastas}
  function buildCatalog(options={}){
   const contract=text(options.contract),now=options.now||new Date().toISOString();
   const files=(options.inventory&&options.inventory.files)||[];
-  const validations=[...(options.validations||[])],homologations=[...(options.homologations||[])];
+  let validations=[...(options.validations||[])];const homologations=oldestFirst([...(options.homologations||[])]);
   const app=options.applicability||{};
   // A declaração de aplicabilidade seleciona a revisão; não substitui validação completa e vigência comprovada.
   if(app.confirmed===true&&text(app.evidence)&&text(app.revision)&&(!app.contract||app.contract===contract))validations.unshift({kind:'et-codificacao',revision:text(app.revision),by:text(app.confirmedBy)||'confirmação de aplicabilidade',at:text(app.confirmedAt)||'',evidence:text(app.evidence),origin:'applicability'});
+  validations=oldestFirst(validations);
   const entries=new Map();
   const ensure=(kind,revision,sha)=>{const id=entryId(kind,revision,sha);if(!entries.has(id))entries.set(id,{id,kind,name:KINDS[kind]||KINDS.desconhecido,revision:revision||null,contract,files:[],loadedScopes:[],loadedFrom:'',effective:{date:'',proof:'nenhuma',evidence:''},validated:null,homologated:null,notes:[],blockers:[]});return entries.get(id);};
   for(const file of files){
    const c=classifyFile(file),sha=text(file.sha256);
    // Revisão não identificada pelo nome: só um registro de validação por hash pode atribuí-la.
-   const byHash=validations.find(v=>text(v.sha256)&&text(v.sha256)===sha&&text(v.revision));
+   const byHash=validations.slice().reverse().find(v=>text(v.sha256)&&text(v.sha256)===sha&&text(v.revision));
    const revision=c.revision||(byHash?text(byHash.revision):null);
    const e=ensure(c.kind,revision,revision?'':sha);
    e.files.push({name:text(file.name),sha256:sha,bytes:Number(file.bytes)||0,revisionSource:c.revision?c.revisionSource:(byHash?'validação por hash':'')||'não identificada',dateInName:c.dateInName||''});
@@ -188,6 +194,13 @@
   return result;
  }
  function relevantRules(record){return DEPENDENCIES.filter(d=>applies(d,record));}
+ // The same proven catalog controls engine and correction eligibility. A legacy
+ // boolean is never enough when a catalog is available.
+ function approved(catalog,key){
+  const kinds={eap:'anexo-iii-apendice-a',workflows:'workflows-uhdt-d',workflow:'workflows-uhdt-d',appendix:'anexo-i-apendice-3',databook:'caminho-data-book'};
+  const dep=DEPENDENCIES.find(d=>d.requires.kind===kinds[key]);
+  return Boolean(dep&&catalog&&ruleAvailability({...dep,requires:{...dep.requires,min:'homologado'}},catalog).state==='verificavel');
+ }
 
  // ---- Verificação por registro: nunca "conforme" quando uma verificação aplicável está bloqueada.
  function verification(record,catalog){
@@ -233,11 +246,11 @@
   const validations=[],homologations=[];
   for(const r of Array.isArray(records)?records:[]){
    if(!r||!KINDS[r.kind]||!text(r.responsible)||!text(r.evidence)||!text(r.validated_on||r.validatedOn))continue;
-   const base={id:r.id,kind:r.kind,revision:text(r.revision),by:text(r.responsible),at:date(r.validated_on||r.validatedOn),evidence:text(r.evidence),...(text(r.sha256)?{sha256:text(r.sha256)}:{})};
+   const base={id:r.id,kind:r.kind,revision:text(r.revision),by:text(r.responsible),at:date(r.validated_on||r.validatedOn),createdAt:text(r.created_at||r.createdAt),evidence:text(r.evidence),...(text(r.sha256)?{sha256:text(r.sha256)}:{})};
    if(r.record_type==='homologacao'||r.recordType==='homologacao')homologations.push(base);
    else validations.push({...base,sha256:text(r.sha256),origin:'registro',...(text(r.effective_date||r.effectiveDate)&&text(r.effective_evidence||r.effectiveEvidence)?{effective:{date:text(r.effective_date||r.effectiveDate),evidence:text(r.effective_evidence||r.effectiveEvidence)}}:{})});
   }
   return {validations,homologations};
  }
- return Object.freeze({VERSION,LEVELS,KINDS,BUILT_IN,fromRecords,DEPENDENCIES,classifyFile,buildCatalog,ruleAvailability,relevantRules,verification,groupBlocks,traceMatrix,traceFinding,exportRows,rank});
+ return Object.freeze({VERSION,LEVELS,KINDS,BUILT_IN,fromRecords,DEPENDENCIES,classifyFile,buildCatalog,ruleAvailability,approved,relevantRules,verification,groupBlocks,traceMatrix,traceFinding,exportRows,rank});
 });

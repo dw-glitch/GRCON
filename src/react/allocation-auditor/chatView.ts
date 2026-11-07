@@ -40,7 +40,7 @@ const evidenceText=(ev:any)=>(Array.isArray(ev)?ev:[]).slice(0,3).map((e:Data)=>
 export function buildItems(rows:Data[],opinion:Data|null,events:Data[]=[],comparison:Data|null=null):Item[]{
  // Reauditoria: apontamentos que persistem ou surgiram depois da correção ganham o rótulo da comparação (chave: alocação · documento · revisão · regra · campo).
  const compared=new Map<string,string>();
- for(const c of (comparison&&comparison.items)||[])if(c.kind==='ocorrencia'&&c.status!=='resolvida')compared.set(JSON.stringify([c.allocation,c.document,c.revision,c.id,c.field]),c.status);
+ for(const c of (comparison&&comparison.items)||[])if(c.kind==='ocorrencia'&&c.status!=='resolvida')compared.set(JSON.stringify([c.allocation,c.document,c.revision,c.id,c.field,c.afterLineage||'']),c.status);
  const life=new Map<string,string>();
  for(const x of opinion?.lifecycle||[])life.set(x.kind==='ocorrencia'?JSON.stringify(['o',x.lineage,x.id]):JSON.stringify(['p',x.lineage,x.field,text(x.after)]),x.state);
  const latest=new Map<string,Data>();
@@ -58,7 +58,7 @@ export function buildItems(rows:Data[],opinion:Data|null,events:Data[]=[],compar
     where:text(f.origin)?'Corrigir em: '+text(f.origin)+'. '+g.where:g.where,
     verify:'Reexecute a auditoria: o apontamento deixa de aparecer. Só a reauditoria comprova a resolução.',
     status:STATUS_LABEL[code]||code,statusCode:code,open:OPEN.has(code),canDecide:kind!=='sugestao'&&REVIEWABLE.has(f.field||''),decision:''});
-   const cmp=compared.get(JSON.stringify([base.allocation,base.document,base.revision,text(f.id),text(f.field)]));
+   const cmp=compared.get(JSON.stringify([base.allocation,base.document,base.revision,text(f.id),text(f.field),row.lineage||'']))||compared.get(JSON.stringify([base.allocation,base.document,base.revision,text(f.id),text(f.field),'']));
    if(cmp){const it=items[items.length-1];it.status=cmp==='nova'?'Nova após a correção':'Persiste após a correção';it.statusCode=cmp==='nova'?'nova':'persiste';}
   }
   for(const rec of row.recommendations||[]){

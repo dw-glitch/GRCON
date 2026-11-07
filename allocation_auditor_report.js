@@ -129,7 +129,7 @@ const when=v=>{const t=text(v);if(!/^\d{4}-\d{2}-\d{2}T/.test(t))return t;const 
   }
   for(const i of (comparison&&comparison.items)||[]){
    if(i.status!=='resolvida')continue;
-   verified.push({cells:['Reauditoria (execução anterior × atual)',i.allocation,i.document,i.revision,labelOf(i.field),i.before,i.after,'—','—','—','—','Comparação entre os resultados anterior e posterior','Resolvida (comprovada pela reauditoria): '+i.id]});
+   verified.push({cells:['Reauditoria (execução anterior × atual)',i.allocation,i.document,i.revision,labelOf(i.field),i.before,i.after,i.sourceFile||'—',i.sourceSheet||'—',i.sourceRow?'Linha '+i.sourceRow:'—','—','Comparação entre as ocorrências correspondentes nos resultados anterior e posterior','Resolvida (comprovada pela reauditoria): '+i.id]});
   }
 
   // REFERÊNCIAS E DECISÕES
