@@ -76,6 +76,25 @@ async function compute(operation:string,input:Data){
   logOp(operation,started,e);throw e;
  }
 }
+// Compatibilidade com o banco: salvar o histórico completo (checkpoint) exige a migração 20261106104652 (operações input-chunk/input-detail).
+// Se o servidor ainda não a recebeu, o app NÃO falha no meio da gravação: diz que o histórico está indisponível e segue com análise e relatório.
+let checkpointSupport:'unknown'|'yes'|'no'='unknown',checkpointCheckedAt=0;
+async function requireCheckpointSupport(){
+ const ttl=deadlineOverrides.capabilityTtl??60000;
+ if(checkpointSupport==='yes')return;
+ if(checkpointSupport==='no'&&Date.now()-checkpointCheckedAt<ttl)throw new OperationError('CHECKPOINT_UNAVAILABLE','Histórico completo indisponível: o banco ainda não recebeu a atualização do checkpoint.','save');
+ // Sonda: input-detail numa análise JÁ existente do contrato. No banco antigo a operação cai em "Operação não reconhecida."; no atualizado, responde.
+ // (Com id inexistente os dois bancos respondem "Análise indisponível.", por isso a sonda precisa de uma análise real.)
+ let probeId='';
+ try{const h=await rpc('history',{});probeId=String(h?.runs?.[0]?.id||'');}catch{/* sem histórico legível: não há como sondar */}
+ if(!probeId)return; // primeira gravação do contrato: a falha, se houver, é tratada ao enviar a entrada
+ try{await rpc('input-detail',{id:probeId,after:0});checkpointSupport='yes';}
+ catch(e){
+  const m=String((e as Error)?.message||'');
+  if(/opera[cç][aã]o n[aã]o reconhecida/i.test(m)){checkpointSupport='no';checkpointCheckedAt=Date.now();throw new OperationError('CHECKPOINT_UNAVAILABLE','Histórico completo indisponível: o banco ainda não recebeu a atualização do checkpoint ('+m+').','save');}
+  /* outro erro: não conclui nada sobre a versão do banco; segue e deixa a gravação falhar normalmente se for o caso */
+ }
+}
 let pauseMark=0,analysisSerial=0,activeAnalysis=0; // a pausa só pode interromper a análise que foi pausada, nunca uma gravação ou exportação posterior
 function hardCancel(){const n=ops.cancelAll();if(worker)abortWorker(new OperationError('CANCELLED','Operação cancelada a seu pedido.'));return n;}
 const WRITE_OPS=new Set(['begin','chunk','input-chunk','finish','event']);
@@ -373,6 +392,8 @@ export const service={
  // Cancelamento imediato (botão "Cancelar operação"): interrompe Worker, gravação ou IA na hora; resultados já obtidos são preservados.
  abort(){cancelled=true;pauseMark++;return hardCancel();},
  setDeadlines(overrides:Record<string,number>){deadlineOverrides={...overrides};},
+ // Esquece o que já se sabe sobre o banco (ex.: depois que o administrador aplica a atualização do checkpoint).
+ resetCapabilities(){checkpointSupport='unknown';checkpointCheckedAt=0;},
  // Diagnóstico técnico seguro (sem documentos, sem nomes de arquivo, sem credenciais) para enviar ao suporte.
  diagnostics(){const E=errorsApi();return JSON.stringify({generatedAt:new Date().toISOString(),engine:g.GrconAllocationAuditorCore?.VERSION,errors:E?.VERSION,progress:state.progress,total:state.total,busy:state.busy,lastError:E?E.sanitize(state.error):'',lastErrorCode:state.errorCode,operations:ops.log.slice(-50)},null,1);},
  select(indices:number[]){emit({selected:indices});},
@@ -383,6 +404,7 @@ export const service={
  async save(){return task(async()=>{
   if(!state.rows.length)throw Error('Nenhuma análise para salvar.');
   if(state.records.length!==state.total||state.context.inputComplete===false)throw Error('Não é possível salvar uma entrada incompleta como análise completa.');
+  await requireCheckpointSupport();
   const t=epoch;saveRequest=saveRequest||crypto.randomUUID();
   const metadata=saveMetadata||{snapshotVersion:2,inputHash:await digest(state.records),referenceHash:state.context.referenceHash,engine:g.GrconAllocationAuditorCore.VERSION,contextWarning:state.context.contextWarning||'',sources:state.context.sources||[],ldHashes:state.context.ldHashes||{},versions:state.context.versions,applicability:state.context.applicability||{},sourceCount:(state.context.history||state.history).length,summary:g.GrconAllocationAuditorCore.summary(state.rows),kind:'audit'};
   current(t);saveMetadata=metadata;
@@ -390,7 +412,7 @@ export const service={
   const sendRows=async(operation:string,rows:Data[])=>{
    for(let first=0;first<rows.length;){let end=first,bytes=0;
     while(end<rows.length&&end-first<100){const size=new TextEncoder().encode(JSON.stringify(rows[end])).length;if(size>90000)throw Error('Um registro excede o limite de salvamento. Divida o conteúdo de evidências na origem.');if(end>first&&bytes+size>1000000)break;bytes+=size;end++;}
-    await rpc(operation,{id,first:first+1,rows:rows.slice(first,end)});current(t);first=end;
+    try{await rpc(operation,{id,first:first+1,rows:rows.slice(first,end)});}catch(e){if(operation==='input-chunk'&&/opera[cç][aã]o n[aã]o reconhecida/i.test(String((e as Error)?.message||''))){checkpointSupport='no';checkpointCheckedAt=Date.now();throw new OperationError('CHECKPOINT_UNAVAILABLE','Histórico completo indisponível: o banco ainda não recebeu a atualização do checkpoint ('+(e as Error).message+').','save');}throw e;}current(t);first=end;
    }
   };
   try{

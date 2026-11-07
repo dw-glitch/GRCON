@@ -8,10 +8,13 @@ const migration='20261106104652_allocation_auditor_complete_checkpoint.sql';
 const canonical=v=>v&&typeof v.toJSON==='function'?canonical(v.toJSON()):JSON.stringify(v===undefined?null:v&&typeof v==='object'?Array.isArray(v)?v.map(x=>JSON.parse(canonical(x))):Object.fromEntries(Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>[k,JSON.parse(canonical(v[k]))])):v);
 const digest=async v=>Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(v)))).toString('hex');
 const code=name=>ts.transpileModule(fs.readFileSync(path.join(root,'src/react/allocation-auditor',name),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const db=new PGlite();let actor=11,failOperation='',loseResponse='',faultPage='',pauseAt=0,batchCalls=0,service,reference={versions:{},bases:{},ldRecords:[],centralHistory:[]};
+const db=new PGlite();let actor=11,legacyServer=false,noHistory=false,beginCalls=0,failOperation='',loseResponse='',faultPage='',pauseAt=0,batchCalls=0,service,reference={versions:{},bases:{},ldRecords:[],centralHistory:[]};
 async function as(n){actor=n;await db.exec(`reset role;set request.jwt.claim.sub='${n?u(n):''}';set role authenticated;`);}
 async function rpc(operation,input={},ws=u(1),name='grcon_allocation_auditor'){
  if(failOperation===operation)throw Error('Falha sintética em '+operation);
+ if(legacyServer&&['input-chunk','input-detail'].includes(operation))throw Error('Operação não reconhecida.'); // servidor ainda sem a migração do checkpoint
+ if(operation==='history'&&noHistory)return {runs:[]};
+ if(operation==='begin')beginCalls++;
  const r=(await db.query('select public.'+name+'($1,$2,$3::jsonb) r',[ws,operation,JSON.stringify(input)])).rows[0].r;
  if(loseResponse===operation){loseResponse='';throw Error('Resposta perdida após gravar '+operation);}
  if(faultPage===operation&&r.rows?.length>1)r.rows.reverse();return r;
@@ -115,6 +118,17 @@ async function writeInputs(id,records){for(let i=0;i<records.length;i+=100)await
  });
  await check('Troca de contrato limpa contexto e descarta restauração atrasada',async()=>{
   service.clear();pauseAt=0;await service.open(seed(3));await service.analyze();await service.save();const id=service.snapshot().runId;const staged=await service.prepareRestoreById(id);for(const fn of listeners.get('grcon:contract-context-changed')||[])fn();assert.throws(()=>staged.commit(),/Conta ou contrato alterado/);assert.equal(service.snapshot().records.length,0);
+ });
+ await check('Banco ainda sem a migração do checkpoint: salvar falha com aviso claro, sem análise órfã e sem perder a tela; após atualizar o banco, salva',async()=>{
+  service.clear();pauseAt=0;service.setDeadlines({capabilityTtl:0});service.resetCapabilities();await service.open(seed(3));await service.analyze();
+  const before=beginCalls;legacyServer=true;
+  await assert.rejects(service.save(),e=>e.code==='CHECKPOINT_UNAVAILABLE'&&/atualização do checkpoint/.test(e.message));
+  assert.equal(beginCalls,before,'com análise para sondar, nenhuma análise órfã é criada no servidor');assert.equal(service.snapshot().progress,3,'resultados na tela intactos');assert.equal(service.snapshot().context.saved,false);assert.equal(service.snapshot().errorCode,'CHECKPOINT_UNAVAILABLE');
+  // Primeira gravação do contrato (sem análise para sondar): a falha vem ao enviar a entrada e também é explicada (a análise criada fica sem entrada).
+  noHistory=true;service.resetCapabilities();service.setDeadlines({capabilityTtl:0});
+  await assert.rejects(service.save(),e=>e.code==='CHECKPOINT_UNAVAILABLE');assert.equal(service.snapshot().progress,3);noHistory=false;service.resetCapabilities();
+  legacyServer=false;await service.save();assert.equal(service.snapshot().context.saved,true);assert.ok(!service.snapshot().error||service.snapshot().errorCode==='','erro anterior limpo');assert.ok(beginCalls>before,'com o banco atualizado a gravação acontece');
+  service.setDeadlines({});
  });
  await db.exec('reset role');const secure=await db.query("select relrowsecurity from pg_class where relname='grcon_allocation_audit_inputs'");assert.equal(secure.rows[0].relrowsecurity,true);
  console.log(JSON.stringify({suite:'allocation_auditor_checkpoint_phase2',passed:checks.length,checks,localDatabase:true,productionAccess:false,batchCalls},null,2));
