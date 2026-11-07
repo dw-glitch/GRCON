@@ -3,7 +3,7 @@
  // Infraestrutura de aprendizado do Robô Auditor (Etapas 9 e 10, RA-12). 100% local: nenhum dado sai deste módulo, não há chamada de rede
  // nem serviço pago. Não treina nada sozinho: exige acervo AUTORIZADO por um responsável e rótulos REVISADOS por humanos. Sem isso, o
  // treinamento fica BLOQUEADO. O modelo só produz SUGESTÃO (severidade "suggestion"); as regras determinísticas são independentes dele.
- const VERSION='1.0.0';
+ const VERSION='1.0.1';
  const text=v=>v==null?'':String(v).trim();
  const norm=v=>text(v).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ');
  // Categorias = taxonomia do motor (menos "não classificado", que nunca é rótulo de treino).
@@ -18,10 +18,13 @@
  const stable=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(key=>[key,x[key]])):x);
  function toTime(v){
   if(v instanceof Date)return Number.isNaN(v.getTime())?NaN:v.getTime();
-  if(typeof v==='number'&&v>30000&&v<80000)return Math.round((v-25569)*86400000);
+  if(typeof v==='number'&&v>30000&&v<80000)return Math.floor(v-25569)*86400000;
   const t=text(v);if(!t)return NaN;
-  let m=t.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return Date.UTC(+m[1],+m[2]-1,+m[3]);
-  m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return Date.UTC(+m[3],+m[2]-1,+m[1]);
+  let m=t.match(/^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/),y,month,day;
+  if(m){y=+m[1];month=+m[2];day=+m[3];if(t.includes('T')&&!Number.isFinite(Date.parse(t)))return NaN;}
+  else {m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(!m)return NaN;y=+m[3];month=+m[2];day=+m[1];}
+  const d=new Date(0);d.setUTCFullYear(y,month-1,day);d.setUTCHours(0,0,0,0);
+  if(y>=1900&&d.getUTCFullYear()===y&&d.getUTCMonth()===month-1&&d.getUTCDate()===day)return d.getTime();
   return NaN;
  }
  const iso=t=>Number.isFinite(t)?new Date(t).toISOString().slice(0,10):'';
@@ -39,9 +42,10 @@
   if(!text(auth.id))issues.push('AUTORIZACAO-SEM-IDENTIFICADOR');
   if(!text(auth.grantedBy)||isRobot(auth.grantedBy))issues.push('AUTORIZACAO-SEM-RESPONSAVEL-HUMANO');
   if(!Number.isFinite(toTime(auth.grantedAt)))issues.push('AUTORIZACAO-SEM-DATA');
+  else if(toTime(auth.grantedAt)>now)issues.push('AUTORIZACAO-DATA-FUTURA');
   if(!Array.isArray(auth.contracts)||!auth.contracts.length)issues.push('AUTORIZACAO-SEM-CONTRATOS');
   if(!Array.isArray(auth.scope)||!auth.scope.includes('treino-local'))issues.push('AUTORIZACAO-SEM-ESCOPO-TREINO-LOCAL');
-  if(auth.expiresAt&&Number.isFinite(toTime(auth.expiresAt))&&toTime(auth.expiresAt)<now)issues.push('AUTORIZACAO-EXPIRADA');
+  if(auth.expiresAt){const until=toTime(auth.expiresAt);if(!Number.isFinite(until))issues.push('AUTORIZACAO-VALIDADE-INVALIDA');else if(until+86400000<=now)issues.push('AUTORIZACAO-EXPIRADA');}
   return {valid:!issues.length,issues};
  }
 
@@ -75,13 +79,31 @@
    if(decision&&decision!=='aceito-sem-comentarios'&&text(e.fiscalComment)&&kinds.length&&kinds.every(k=>!CATEGORIES.includes(k)))inconclusive.push('COMENTARIO-NAO-CLASSIFICADO');
    const round=rounds.get([groupOf(e),text(e.revision),text(e.allocation),text(e.returnedAt)].join('|'));
    if(round&&round.size>1)inconclusive.push('RODADA-CONFLITANTE');
-   const dup=[groupOf(e),text(e.revision),text(e.allocation),norm(e.fiscalComment),decision].join('|');
+   const dup=[groupOf(e),text(e.revision),text(e.allocation),iso(t),norm(e.fiscalComment),decision].join('|');
    if(!reasons.length&&seen.has(dup))reasons.push('DUPLICADO');else if(!reasons.length)seen.set(dup,id);
    if(reasons.length){out.excluded.push({id,reasons});reasons.forEach(bump);}
    else if(inconclusive.length){out.inconclusive.push({id,reasons:inconclusive,event:e});inconclusive.forEach(bump);}
    else out.eligible.push({id,event:e});
   }
   return out;
+ }
+
+ // Preparação não é treinamento: inventaria lacunas sem autorizar o acervo,
+ // classificar exemplos como revisados ou buscar o estado atual numa LD posterior.
+ function prepareReview(events){
+  const gaps={revision:0,title:0,ld:0,returnedAt:0,allocation:0,decision:0,reading:0},rows=[];
+  for(const e of events||[]){const missing=[];
+   const need=(key,condition,label)=>{if(condition){gaps[key]++;missing.push(label);}};
+   need('revision',!text(e.revision),'Revisão enviada não informada');
+   need('title',!text(e.title),'Título da versão enviada não informado');
+   need('ld',!text(e.ldVersion)&&!text(e.ld),'LD/versão da submissão não informada');
+   need('returnedAt',!Number.isFinite(toTime(e.returnedAt)),'Data de retorno ausente ou inválida');
+   need('allocation',!text(e.allocation),'Alocação não identificada');
+   need('decision',!['recusado','aceito-com-ressalvas','aceito-sem-comentarios'].includes(text(e.fiscalDecision)),'Decisão fiscal não comprovada');
+   need('reading',Boolean(e.sourceIssues?.length),'Célula com falha de leitura');
+   rows.push({id:eventId(e),event:e,missing,suggested:weakLabel(e).categories});
+  }
+  return {summary:{total:rows.length,withGaps:rows.filter(r=>r.missing.length).length,withoutDetectedGaps:rows.filter(r=>!r.missing.length).length,gaps,trained:false,authorized:false,humanReviewed:0},rows};
  }
 
  // ---------- 5: rótulos (regra = palpite; só revisão humana vira rótulo) ----------
@@ -98,6 +120,7 @@
    const reasons=[];
    if(!text(r.reviewer)||isRobot(r.reviewer))reasons.push('REVISOR-NAO-HUMANO');
    if(!Number.isFinite(toTime(r.reviewedAt)))reasons.push('REVISAO-SEM-DATA');
+   else if(toTime(r.reviewedAt)>Date.now()||toTime(r.reviewedAt)<toTime(ev.returnedAt))reasons.push('REVISAO-DATA-INCOMPATIVEL');
    if(!['confirmado','corrigido'].includes(r.decision))reasons.push(r.decision==='rejeitado'?'ROTULO-REJEITADO':'ROTULO-INCONCLUSIVO');
    const cats=r.decision==='corrigido'?r.categories:weakLabel(ev).categories;
    if(!Array.isArray(cats)||cats.some(x=>!CATEGORIES.includes(x)))reasons.push('CATEGORIA-INVALIDA');
@@ -359,5 +382,5 @@
  const FIELD={title:'title',code:'document',tag:'tag',databook:'databook',hierarchy:'levels',workflow:'workflow',scope:'discipline',history:'allocation'};
  const fieldOfCategory=c=>FIELD[c]||'allocation';
 
- return Object.freeze({VERSION,CATEGORIES,THRESHOLDS,STATE_FIELDS,FORBIDDEN_FEATURE_FIELDS,LIMITATIONS,checkAuthorization,inventory,weakLabel,admitLabels,features,split,assertNoLeakage,trainClassifier,tuneThresholds,predict,buildRetriever,queryRetriever,evaluate,evaluateRetriever,modelCard,run,activationCheck,createRegistry,admitLearningExample,createLedger,suggest,eventId,toTime,fnv});
+ return Object.freeze({VERSION,CATEGORIES,THRESHOLDS,STATE_FIELDS,FORBIDDEN_FEATURE_FIELDS,LIMITATIONS,checkAuthorization,inventory,prepareReview,weakLabel,admitLabels,features,split,assertNoLeakage,trainClassifier,tuneThresholds,predict,buildRetriever,queryRetriever,evaluate,evaluateRetriever,modelCard,run,activationCheck,createRegistry,admitLearningExample,createLedger,suggest,eventId,toTime,fnv});
 });

@@ -1,4 +1,4 @@
--- ROLLBACK da migração 20261106104652_allocation_auditor_complete_checkpoint.sql
+-- ROLLBACK da migração 20261107120803_allocation_auditor_complete_checkpoint.sql
 -- NÃO está em supabase/migrations de propósito: nunca é aplicado automaticamente. Só roda com autorização explícita do proprietário.
 -- Desfaz exatamente o que a migração faz: (1) remove da função privada o bloco acrescentado (operações input-chunk/input-detail e a
 -- conferência de entrada em chunk/finish) e (2) remove a tabela de entradas. Execute numa transação e CONFIRA o resultado antes do COMMIT.

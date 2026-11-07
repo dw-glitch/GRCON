@@ -4,7 +4,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {PGlite}=require('@electric-sql/pglite'),root=path.resolve(__dirname,'..'),u=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const sql=f=>fs.readFileSync(path.join(root,f),'utf8');
-const UP='supabase/migrations/20261107090000_allocation_auditor_reference_validations.sql',DOWN='supabase/rollback/20261107090000_allocation_auditor_reference_validations.down.sql';
+const UP='supabase/migrations/20261107120824_allocation_auditor_reference_validations.sql',DOWN='supabase/rollback/20261107120824_allocation_auditor_reference_validations.down.sql';
 (async()=>{
  const db=new PGlite();
  await db.exec(`create schema private;create schema auth;create role anon;create role authenticated;grant usage on schema private,auth to authenticated;
@@ -39,6 +39,9 @@ const UP='supabase/migrations/20261107090000_allocation_auditor_reference_valida
  // idempotência: mesma requisição com o mesmo conteúdo devolve o mesmo id; com conteúdo diferente é recusada
  const same=rec({kind:'n-1710',revision:'N'});const a=await call(10,u(1),'register',same),b=await call(10,u(1),'register',same);assert.equal(a.id,b.id,'reenvio idêntico não duplica');
  await fails(10,u(1),'register',{...same,evidence:'Evidência diferente da original'},/Requisição já utilizada com conteúdo diferente/);
+ for(const change of [{revision:'P'},{sha256:'b'.repeat(64)},{validatedOn:'2026-11-04'},{effectiveDate:'24/08/2026',effectiveEvidence:'Nova vigência comprovada'}])await fails(10,u(1),'register',{...same,...change},/Requisição já utilizada com conteúdo diferente/);
+ await fails(10,u(1),'register',rec({effectiveDate:'31/02/2026',effectiveEvidence:'Evidência inválida para QA'}),/Data da vigência inválida/);
+ const tomorrow=(await db.query("select (current_date+1)::text d")).rows[0].d;await fails(10,u(1),'register',rec({validatedOn:tomorrow}),/Data da validação inválida/);
 
  // revogação: exige motivo e perfil; some da lista; não apaga (append-only)
  await fails(11,u(1),'revoke',{id:a.id,reason:'motivo suficiente'},/proprietário ou administrador/);await fails(10,u(1),'revoke',{id:a.id,reason:'x'},/Motivo da revogação/);
@@ -55,6 +58,14 @@ const UP='supabase/migrations/20261107090000_allocation_auditor_reference_valida
  await as(10);await assert.rejects(db.query('select * from private.grcon_allocation_reference_validations'),/permission denied|denied/i,'tabela privada não é lida direto');await db.exec('reset role');
  await fails(10,u(2),'list',{},/Sem acesso ao contrato/,'trocar o workspace não dá acesso');
  await fails(10,u(1),'operacao-inexistente',{},/Operação não reconhecida/);
+
+ // Atingir a capacidade não pode quebrar reenvios idênticos já confirmados.
+ const atLimit=rec({kind:'n-381',revision:'M'}),limitId=(await call(10,u(1),'register',atLimit)).id;
+ await db.exec(`insert into private.grcon_allocation_reference_validations(workspace_id,contract_id,request_id,record_type,kind,revision,responsible,validated_on,evidence,created_by)
+ select '${u(1)}','${u(3)}',gen_random_uuid(),'validacao','n-381','M','Qualidade QA',current_date,'Evidência sintética','${u(10)}'
+ from generate_series(1,500-(select count(*)::int from private.grcon_allocation_reference_validations where contract_id='${u(3)}' and revoked_at is null));`);
+ assert.equal((await call(10,u(1),'register',atLimit)).id,limitId);
+ await fails(10,u(1),'register',rec(),/Limite de registros ativos/);
 
  // rollback: recusa apagar registros sem confirmação, conclui com confirmação, é idempotente e a migração é reaplicável
  let refused='';try{await db.exec('begin;'+sql(DOWN)+'commit;');}catch(e){refused=e.message;await db.exec('rollback');}

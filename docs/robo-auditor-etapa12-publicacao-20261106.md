@@ -1,4 +1,10 @@
+> Estado atualizado do banco e da publicação: veja `docs/robo-auditor-publicacao-20261107.md`. As restrições e estados abaixo registram a preparação anterior.
+
 # Robô Auditor de Alocações — Etapa 12: preparação da publicação — 06/11/2026
+
+## Atualização de continuidade — 07/11/2026
+
+O PR #431 foi localizado aberto e em rascunho, head `8ffce5f5`, sem merge. A continuidade local foi feita na branch `fix/robo-auditor-conclusao-20261107`, preservando também a main `0c3572b1`. Não houve novo commit, push ou publicação nesta continuidade. Veja `docs/robo-auditor-conclusao-20261107.md` para correções, testes repetidos, dados reais e bloqueios atuais. As referências a “PR não criado” abaixo descrevem a preparação histórica e estão superadas pelo PR #431.
 
 ## Estado
 **PREPARADO. NÃO PUBLICADO.** Autorizado a **preparar**; nesta etapa **não** houve merge na `main`, push de publicação, PR, alteração de dados de produção nem aplicação de migração. As únicas consultas ao ambiente real foram **somente-leitura** (listar projetos/migrações/branches do Supabase, ler o texto da função RPC e listar as implantações do Worker na Cloudflare). O branch `claude/robo-auditor-etapas-1-3` permanece só no remoto, sem PR.
@@ -8,7 +14,7 @@
 |---|---|---|---|
 | 1 | Revisão do código do branch (PR em rascunho). A revisão do Codex está sem cota; o `CLAUDE.md` pede esperar a revisão antes de mesclar | proprietário | pendente |
 | 2 | **Homologar a migração e o rollback num banco de homologação** (hoje **não existe**: a conta tem só o projeto de produção; criar branch/projeto é serviço pago) | proprietário | **bloqueado** |
-| 3 | Aplicar **em ordem** `20261106104652_allocation_auditor_complete_checkpoint.sql` e `20261107090000_allocation_auditor_reference_validations.sql` (RA-07) em produção. Ambas ainda **não existem** em produção (consulta somente-leitura em 07/11/2026) e cada uma tem rollback em `supabase/rollback/` | proprietário | pendente |
+| 3 | Aplicar **em ordem** `20261107120803_allocation_auditor_complete_checkpoint.sql` e `20261107120824_allocation_auditor_reference_validations.sql` (RA-07) em produção. Ambas ainda **não existem** em produção (consulta somente-leitura em 07/11/2026) e cada uma tem rollback em `supabase/rollback/` | proprietário | pendente |
 | 4 | Merge na `main` → deploy automático (GitHub → Cloudflare Workers Builds) | proprietário | pendente |
 | 5 | Verificação pós-deploy (seção 5) | eu, após autorização | pendente |
 
@@ -31,7 +37,7 @@ Consulta somente-leitura em produção (06/11/2026): a função `private.grcon_a
 - Implantação em produção **antes** desta publicação (Worker `grcon-cloudflare`): **`7484cc7c-06df-4523-ac61-82937e289fd6`**, versão **`c7b2f4b3-cc92-47ca-b00a-6182e341e94a`** (06/11/2026 14:15 UTC). Anterior: `12e29476…`, versão `2d6abbba-ffd5-419e-a3d8-f17f3bedf398`.
 - Reverter: `npx wrangler rollback c7b2f4b3-cc92-47ca-b00a-6182e341e94a` (ou o botão de rollback da implantação no painel da Cloudflare). Para voltar o código: reverter o commit de merge pela interface do GitHub (gera novo deploy).
 ### 3.2 Banco
-- `supabase/rollback/20261106104652_allocation_auditor_complete_checkpoint.down.sql` (**fora** de `supabase/migrations`, nunca roda sozinho). Remove o bloco que a migração acrescentou (a função volta **byte a byte** ao texto anterior — md5 de produção antes da migração: `34c59c9fddfaade8ef378b54a6dfa470`, 7.318 caracteres) e remove a tabela de entradas **somente se vazia** (ou com `set local app.confirm_drop_inputs='sim'` depois de exportar). Idempotente e a migração pode ser reaplicada depois. Provado no PGlite, **não** em banco real.
+- `supabase/rollback/20261107120803_allocation_auditor_complete_checkpoint.down.sql` (**fora** de `supabase/migrations`, nunca roda sozinho). Remove o bloco que a migração acrescentou (a função volta **byte a byte** ao texto anterior — md5 de produção antes da migração: `34c59c9fddfaade8ef378b54a6dfa470`, 7.318 caracteres) e remove a tabela de entradas **somente se vazia** (ou com `set local app.confirm_drop_inputs='sim'` depois de exportar). Idempotente e a migração pode ser reaplicada depois. Provado no PGlite, **não** em banco real.
 - Gatilhos para reverter: erro de gravação do histórico em massa, falha de RLS/permissão, ou migração que degrade o desempenho das demais telas.
 
 ## 4. Preservação dos demais módulos
@@ -59,4 +65,4 @@ Pós-deploy (após autorização): `node scripts/verify-cloudflare-production.mj
 **Corpo:** resumo por etapa (1–12) com a matriz RA (13 resolvidos localmente, RA-07 parcial, RA-12 infraestrutura com treinamento bloqueado, RA-16 parcial), **pré-requisitos** (homologar a migração e o rollback; validar a importação de LD do Gerador; revisão humana), **ordem** (migração → merge → verificação pós-deploy), **rollback** (seção 3) e limitações (seção 6).
 
 ## 8. Matriz final
-**Resolvidos localmente (não em produção):** RA-01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 14, 15. **Resolvido localmente também:** RA-07 (registro de validações/homologações na tela, com responsável, data e evidência; migração e rollback testados em PGlite; depende da migração `20261107090000`, ainda não aplicada). **Parcial:** RA-16 (cobertura ponta a ponta local feita; falta dados reais/homologação). **Infraestrutura pronta, treinamento bloqueado:** RA-12.
+**Resolvidos localmente (não em produção):** RA-01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 14, 15. **Resolvido localmente também:** RA-07 (registro de validações/homologações na tela, com responsável, data e evidência; migração e rollback testados em PGlite; depende da migração `20261107120824`, ainda não aplicada). **Parcial:** RA-16 (cobertura ponta a ponta local feita; falta dados reais/homologação). **Infraestrutura pronta, treinamento bloqueado:** RA-12.

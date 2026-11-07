@@ -29,4 +29,19 @@ assert.equal(isTransientServerError({ message: "canceling statement due to state
 assert.equal(isTransientServerError({ status: 401, message: "JWT expired" }), false);
 assert.equal(isTransientServerError({ code: "42501", message: "permission denied for table" }), false);
 assert.equal(isTransientServerError(null), false);
+
+// Regressão "tela piscando": a consulta incremental usa `updated_at >= último`, logo o servidor sempre
+// devolve de volta a linha mais recente. Linhas já espelhadas (mesmo updated_at, syncState synced) não
+// podem regravar nem disparar `grcon:history-updated` a cada ciclo de 45 s.
+const incremental = cloud.slice(cloud.indexOf("const rows = await fetchHistoryChanges("), cloud.indexOf("return { records, removed };", cloud.indexOf("const rows = await fetchHistoryChanges(")));
+assert.match(incremental, /const alreadyMirrored = \(row\) =>/, "filtra linhas já espelhadas");
+assert.match(incremental, /local\.syncState === "synced"/);
+assert.match(incremental, /String\(local\.cloudUpdatedAt \|\| local\.syncedAt \|\| ""\) === String\(row\.updated_at \|\| ""\)/);
+assert.match(incremental, /!row\.deleted_at && !alreadyMirrored\(row\)/, "só grava o que de fato mudou");
+assert.match(incremental, /if \(!activeRows\.length && !deletedRows\.length\) return/, "nada novo: sem gravação nem evento");
+assert.match(incremental, /if \(!activeRows\.length && !removed\) return/, "tombstone sem efeito: sem evento");
+assert.ok(
+  incremental.indexOf("if (!activeRows.length && !removed) return") < incremental.indexOf('new CustomEvent("grcon:history-updated"'),
+  "o evento só é disparado depois das guardas"
+);
 console.log("history_pull_dedupe: OK");

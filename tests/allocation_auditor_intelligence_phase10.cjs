@@ -1,7 +1,7 @@
 'use strict';
 // Motor 1.4.0 — nt- × cadastro de TAGs, ortografia de título, código digitado e caminhos parecidos.
 const assert=require('node:assert/strict'),C=require('../allocation_auditor_core.js');
-assert.equal(C.VERSION,'1.6.0');
+assert.equal(C.VERSION,'1.6.1');
 const code=t=>'C1O_RNEST_U32_10.2.1.2_ELE_RIR_'+t;
 const filler=Array.from({length:120},(_,i)=>({document:'RL-5290.00-22313-91A-C1O-'+String(1000+i),revision:'0',title:'RELATORIO DE INSPECAO DE RECEBIMENTO DE TRANSFORMADOR DE POTENCIA '+i,source:'LD.xlsx',sheet:'ELE',row:i+2}));
 const base=(over={})=>({contract:'qa',versions:{},bases:{appendix:[{tag:'NF-123-BOBINA-121'},{tag:'TR-0001'}],databook:[{databook:'UHDTD U-32|DATA BOOK C&M|ELÉTRICA|RIR'}],workflows:[{workflow:'RNEST UHDTD U-32 C&M/ELETRICA'}]},ldRecords:filler,history:[],homologated:{},applicability:{},...over});

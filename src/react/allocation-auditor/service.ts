@@ -5,7 +5,7 @@ export class OperationError extends Error{
 }
 // Prazos por operação (ms). Valores generosos para arquivos grandes, mas finitos.
 export const DEADLINES:Record<string,number>={
- inspect:60_000,parse:120_000,context:60_000,batch:120_000,summarize:60_000,'revise-allocation':120_000,'assistant-package':180_000,export:180_000,
+ inspect:60_000,parse:120_000,context:60_000,batch:120_000,summarize:60_000,'revise-allocation':120_000,'assistant-package':180_000,export:180_000,'ml-inspect':120_000,'ml-prepare':180_000,
  rpc:30_000,'rpc-write':60_000,ai:35_000,default:90_000
 };
 export const deadlineFor=(operation:string,overrides:Record<string,number>={})=>overrides[operation]??DEADLINES[operation]??overrides.default??DEADLINES.default;
@@ -43,6 +43,7 @@ export const newOperationId=()=>'op-'+Math.random().toString(36).slice(2,8)+Date
 
 type Snapshot={groups:Data[];summary:Data;rows:Data[];records:Data[];history:Data[];events:Data[];runs:Data[];context:Data;busy:boolean;progress:number;total:number;error:string;message:string;runId:string;selected:number[];comparison:Data|null;errorCode:string;validations:Data[];validationsStatus:'unknown'|'ready'|'unavailable';canRegisterValidations:boolean};
 const g=window as unknown as Data;
+let referenceRegistration:{signature:string;requestId:string}|null=null;
 let state:Snapshot={groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[],comparison:null,errorCode:'',validations:[],validationsStatus:'unknown',canRegisterValidations:false};
 // Prazos e cancelamento por operação (RA-11) e registro técnico seguro: só identificadores, etapa, código e tempos.
 const ops=new OperationRegistry();let deadlineOverrides:Record<string,number>={};
@@ -76,7 +77,7 @@ async function compute(operation:string,input:Data){
   logOp(operation,started,e);throw e;
  }
 }
-// Compatibilidade com o banco: salvar o histórico completo (checkpoint) exige a migração 20261106104652 (operações input-chunk/input-detail).
+// Compatibilidade com o banco: salvar o histórico completo (checkpoint) exige a migração 20261107120803 (operações input-chunk/input-detail).
 // Se o servidor ainda não a recebeu, o app NÃO falha no meio da gravação: diz que o histórico está indisponível e segue com análise e relatório.
 let checkpointSupport:'unknown'|'yes'|'no'='unknown',checkpointCheckedAt=0;
 async function requireCheckpointSupport(){
@@ -121,8 +122,9 @@ function remainingGroups(events:Data[],rows:Data[]=state.rows){const latest=new 
 function clearResults(){if(state.rows.length&&state.total>0&&state.progress===state.total&&!state.context.partial)baseline=state.rows;saveRequest='';savedEvents=0;saveMetadata=null;emit({comparison:null,groups:[],summary:{},rows:[],events:[],progress:0,total:0,runId:'',selected:[],context:{...state.context,saved:false,checkpoint:false,history:undefined}});}
 const canonical=(value:any):string=>value&&typeof value.toJSON==='function'?canonical(value.toJSON()):JSON.stringify(value===undefined?null:value&&typeof value==='object'?Array.isArray(value)?value.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,JSON.parse(canonical(value[k]))])):value);
 const digest=async(value:any)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(value))))).map(x=>x.toString(16).padStart(2,'0')).join('');
+const referenceDay=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
 const sameInput=(input:Data,result:Data)=>['document','sourceHash','sourceFile','sourceSheet','sourceRow','allocation'].every(k=>String(input[k]??'')===String(result[k]??''))&&(!input.revision||String(input.revision)===String(result.revision));
-async function referenceDigest(context:Data){return digest({...((context.referenceValidations||[]).length||(context.referenceHomologations||[]).length?{validations:context.referenceValidations||[],homologations:context.referenceHomologations||[]}:{}),versions:context.versions||{},applicability:context.applicability||{},bases:context.bases||{},history:context.history||[],ldRecords:(context.ldRecords||[]).map(({sourceTimestamp,...r}:Data)=>r)});}
+async function referenceDigest(context:Data){return digest({referenceDate:context.referenceDate||'',...((context.referenceValidations||[]).length||(context.referenceHomologations||[]).length?{validations:context.referenceValidations||[],homologations:context.referenceHomologations||[]}:{}),versions:context.versions||{},applicability:context.applicability||{},bases:context.bases||{},history:context.history||[],ldRecords:(context.ldRecords||[]).map(({sourceTimestamp,...r}:Data)=>r)});}
 function stopWorker(){epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise substituída.')));pending.clear();}
 function emptySnapshot():Partial<Snapshot>{return {comparison:null,groups:[],summary:{},rows:[],records:[],history:[],events:[],context:{},progress:0,total:0,error:'',message:'Conversa sem análise vinculada. Anexe as fontes para começar.',runId:'',selected:[]};}
 function commitRestore(snapshot:Partial<Snapshot>,meta:Data|null,t:number){current(t);stopWorker();sourceFiles.clear();g.GrconAllocationGeneratorUi?.clearAuditLd?.();saveRequest='';savedEvents=snapshot.events?.length||0;saveMetadata=meta;emit(snapshot);}
@@ -151,7 +153,7 @@ async function stageRestore(run:Data){
   if(inputComplete&&rows.some((row,i)=>!sameInput(records[i],row)))throw Error('Os resultados não seguem a ordem da entrada salva.');
  }
  const grouped=await compute('summarize',{rows});current(t);
- const context={checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions||{},applicability:meta.applicability||{},contract:cloud().membership.contract_id,saved:Boolean(run.completed_at),engine:meta.engine,referenceHash:meta.referenceHash,inputHash:meta.inputHash,snapshotVersion:meta.snapshotVersion,inputComplete,createdBy:run.created_by,
+ const context={checkpoint:!run.completed_at,sources:meta.sources||[],ldHashes:meta.ldHashes||{},versions:meta.versions||{},applicability:meta.applicability||{},referenceDate:meta.referenceDate,contract:cloud().membership.contract_id,saved:Boolean(run.completed_at),engine:meta.engine,referenceHash:meta.referenceHash,inputHash:meta.inputHash,snapshotVersion:meta.snapshotVersion,inputComplete,createdBy:run.created_by,
   resume:{action:!inputComplete?'reanalyze':(meta.sources||[]).length?'reattach':'resume',message:!inputComplete?'Entrada completa não disponível nesta análise histórica. Inicie uma nova auditoria com todas as fontes originais.':'Entrada completa recuperada. Reanexe as fontes originais para confirmar referências e versões antes de continuar.'}};
  const snapshot:Partial<Snapshot>={...grouped,groups:remainingGroups(events,rows),history:[],rows,records:inputComplete?records:[],events,runId:run.id,selected:rows.map((_,i)=>i),progress:rows.length,total,context,error:'',message:'Análise histórica recuperada: '+rows.length+' de '+total+' documentos. '+context.resume.message};
  return {commit:()=>commitRestore(snapshot,meta,t)};
@@ -163,6 +165,8 @@ const unidentifiedAllocations=()=>((state.context.sources||[]) as Data[]).filter
 const inspectionFailure=(name:string,tabs:Data[])=>name+': não encontrei uma aba com códigos documentais e cabeçalhos reconhecíveis. '+tabs.filter(tab=>tab.warning).slice(0,3).map(tab=>tab.name+': '+tab.warning).join(' ')+' Confira o arquivo antes do envio.';
 const save=(bytes:Uint8Array,name:string)=>{const u=URL.createObjectURL(new Blob([bytes as BlobPart]));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),60000);};
 export const service={
+ async inspectLearningFile(file:File):Promise<Data[]>{return await task(async()=>{requireSession();const t=epoch;const result=await compute('ml-inspect',{file});current(t);return result;}) as Data[];},
+ async prepareLearningFile(file:File,sheet:string):Promise<Data>{return await task(async()=>{const c=requireSession(),t=epoch;const result=await compute('ml-prepare',{file,sheet,contract:c.membership.contract_id});current(t);save(result.bytes,'GRCON_Preparacao_Aprendizado.xlsx');return result.summary;}) as Data;},
  async assistantRpc(operation:string,input:Data={}){const c=requireSession(),t=epoch;const r=await c.client.rpc('grcon_allocation_assistant',{target_workspace:c.membership.workspace_id,operation,input});current(t);if(r.error)throw Error(r.error.message);return r.data;},
  // Exclui a análise atual para começar outra. Os arquivos originais do usuário nunca são tocados;
  // o histórico já salvo no servidor é imutável (trilha de auditoria) e permanece.
@@ -370,7 +374,7 @@ export const service={
   await service.loadReferenceValidations().catch(()=>{}); // melhor esforço: sem o registro, as referências ficam "carregadas" e nada é validado por omissão
   const refRecords=g.GrconAllocationAuditorReferences?.fromRecords?g.GrconAllocationAuditorReferences.fromRecords(state.validations):{validations:[],homologations:[]};
   let fresh:Data={},contextWarning='';try{fresh=await getContext();}catch(e){current(t);contextWarning='As bases complementares não puderam ser consultadas: '+((e as Error).message||String(e))+'. Auditoria parcial; verificações dependentes das bases permanecem inconclusivas.';}
-   current(t);const context:Data={...fresh,...state.context,saved:false,checkpoint:resume&&Boolean(state.context.checkpoint),ldRecords:fresh.ldRecords||state.context.ldRecords||[],bases:fresh.bases||state.context.bases||{},versions:fresh.versions||state.context.versions||{},baseMetadata:fresh.baseMetadata||[],contract:cloud().membership.contract_id,history:g.GrconAllocationAuditorCore.mergeHistory(fresh.centralHistory||[],state.history),records:state.records,homologated:{},referenceValidations:refRecords.validations,referenceHomologations:refRecords.homologations,contextWarning};
+   current(t);const context:Data={...fresh,...state.context,saved:false,checkpoint:resume&&Boolean(state.context.checkpoint),ldRecords:fresh.ldRecords||state.context.ldRecords||[],bases:fresh.bases||state.context.bases||{},versions:fresh.versions||state.context.versions||{},baseMetadata:fresh.baseMetadata||[],referenceDate:state.context.referenceDate||referenceDay(),contract:cloud().membership.contract_id,history:g.GrconAllocationAuditorCore.mergeHistory(fresh.centralHistory||[],state.history),records:state.records,homologated:{},referenceValidations:refRecords.validations,referenceHomologations:refRecords.homologations,contextWarning};
   if(resume&&contextWarning)throw Error('Não foi possível confirmar as referências para retomar. Tente novamente quando as bases estiverem disponíveis.');
   if(resume&&canonical(context.versions)!==canonical(state.context.versions||{}))throw Error('As bases mudaram. Inicie uma nova análise.');
   if(resume&&state.context.checkpoint&&(state.context.sources||[]).some((s:Data)=>!sourceFiles.has(s.sha256)))throw Error('Reanexe todas as alocações e LDs originais antes de retomar.');
@@ -403,13 +407,16 @@ export const service={
    const m=String((e as Error)?.message||'');
    if(/does not exist|could not find the function|schema cache|PGRST202/i.test(m)){emit({validations:[],validationsStatus:'unavailable',canRegisterValidations:false});return;}
    if((e as Data)?.code==='STALE_CONTEXT')throw e;
-   emit({validationsStatus:'unknown'});
+   // Never keep a previous approval when the current registry cannot be checked.
+   emit({validations:[],validationsStatus:'unknown',canRegisterValidations:false});
   }
  },
  async registerValidation(form:Data){return task(async()=>{
   const c=requireSession();
   if(state.validationsStatus==='unavailable')throw new OperationError('VALIDATIONS_UNAVAILABLE','Registro de validações indisponível: o banco ainda não recebeu a atualização.','validations');
-  try{await rpc('register',{requestId:crypto.randomUUID(),...form},VALIDATIONS_FN);}
+  const signature=canonical([scope(),form]);
+  if(referenceRegistration?.signature!==signature)referenceRegistration={signature,requestId:crypto.randomUUID()};
+  try{await rpc('register',{...form,requestId:referenceRegistration!.requestId},VALIDATIONS_FN);referenceRegistration=null;}
   catch(e){if(/does not exist|could not find the function|schema cache|PGRST202/i.test(String((e as Error)?.message||''))){emit({validationsStatus:'unavailable',canRegisterValidations:false});throw new OperationError('VALIDATIONS_UNAVAILABLE','Registro de validações indisponível: o banco ainda não recebeu a atualização.','validations');}throw e;}
   await service.loadReferenceValidations();
   emit({message:'Validação registrada por '+String(form.responsible||c.session.user.id)+'. Ela vale a partir de agora; reexecute a auditoria para aplicá-la aos resultados.'});
@@ -428,7 +435,7 @@ export const service={
   if(state.records.length!==state.total||state.context.inputComplete===false)throw Error('Não é possível salvar uma entrada incompleta como análise completa.');
   await requireCheckpointSupport();
   const t=epoch;saveRequest=saveRequest||crypto.randomUUID();
-  const metadata=saveMetadata||{snapshotVersion:2,inputHash:await digest(state.records),referenceHash:state.context.referenceHash,engine:g.GrconAllocationAuditorCore.VERSION,contextWarning:state.context.contextWarning||'',sources:state.context.sources||[],ldHashes:state.context.ldHashes||{},versions:state.context.versions,applicability:state.context.applicability||{},sourceCount:(state.context.history||state.history).length,summary:g.GrconAllocationAuditorCore.summary(state.rows),kind:'audit'};
+  const metadata=saveMetadata||{snapshotVersion:2,inputHash:await digest(state.records),referenceHash:state.context.referenceHash,referenceDate:state.context.referenceDate,engine:g.GrconAllocationAuditorCore.VERSION,contextWarning:state.context.contextWarning||'',sources:state.context.sources||[],ldHashes:state.context.ldHashes||{},versions:state.context.versions,applicability:state.context.applicability||{},sourceCount:(state.context.history||state.history).length,summary:g.GrconAllocationAuditorCore.summary(state.rows),kind:'audit'};
   current(t);saveMetadata=metadata;
   const {id}=state.runId?{id:state.runId}:await rpc('begin',{requestId:saveRequest,count:state.total,metadata});current(t);if(!id)throw Error('O servidor não confirmou a identificação da análise.');emit({runId:id});
   const sendRows=async(operation:string,rows:Data[])=>{

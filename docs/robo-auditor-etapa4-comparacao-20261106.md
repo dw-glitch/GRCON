@@ -6,7 +6,7 @@ Situação: **Etapas 1 e 2 recuperadas e verificadas; Etapa 3 parcial; Etapa 4 p
 - Pacotes recebidos (`Fase0_Pacote`, `Fase1_Evidencias`, `Fase2_Evidencias`, `Fase2_Alteracoes`). O `GRCON_Robo_Fase2.patch` é cumulativo (Etapas 1 e 2), foi feito sobre `b1b867c0` (#427) e **aplica sem conflitos sobre a `main` atual (`09de0a46`)**: os 17 arquivos resultantes têm SHA-256 **idêntico** ao manifesto do pacote (`bdf06cc8…` para o patch).
 - Verificações do próprio pacote sobre a `main` atual: `typecheck`, `vite build --mode allocation-auditor`, `vite build --mode allocation` e `test:allocation-auditor` — **aprovados**.
 - A Etapa 3 (branch `claude/robo-auditor-etapa3`, commit `fe873b34`) foi trazida por cima; conflitos só em `allocation_auditor_core.js` (cabeçalho) e `package.json` (lista de testes), resolvidos mantendo as duas partes. A versão do motor foi para **1.6.0** (a 1.5.0 é a da Etapa 2; a retomada de sessão recusa sessões de outro motor, o que é correto porque a Etapa 3 muda resultados).
-- A migração `20261106104652_allocation_auditor_complete_checkpoint.sql` está no repositório **mas não foi aplicada em nenhum banco** (testada só em PGlite no ambiente de origem). Precisa de homologação antes de o frontend que depende dela ir ao ar.
+- A migração `20261107120803_allocation_auditor_complete_checkpoint.sql` está no repositório **mas não foi aplicada em nenhum banco** (testada só em PGlite no ambiente de origem). Precisa de homologação antes de o frontend que depende dela ir ao ar.
 
 ## 2. Etapa 4 — o que foi feito
 **Escopo da Etapa 4 no backlog = RA-02** (T05 e T06). Concluído; RA-03 e RA-14 (Etapa 5) e RA-07 (Etapa 3) receberam avanços pontuais.

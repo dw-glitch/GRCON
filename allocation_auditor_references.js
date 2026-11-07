@@ -78,8 +78,8 @@
   const files=(options.inventory&&options.inventory.files)||[];
   const validations=[...(options.validations||[])],homologations=[...(options.homologations||[])];
   const app=options.applicability||{};
-  // A confirmação de aplicabilidade já existente é uma validação humana da REVISÃO informada, com evidência — e somente dela.
-  if(app.confirmed===true&&text(app.evidence)&&text(app.revision)&&(!app.contract||app.contract===contract))validations.push({kind:'et-codificacao',revision:text(app.revision),by:text(app.confirmedBy)||'confirmação de aplicabilidade',at:text(app.confirmedAt)||'',evidence:text(app.evidence),origin:'applicability'});
+  // A declaração de aplicabilidade seleciona a revisão; não substitui validação completa e vigência comprovada.
+  if(app.confirmed===true&&text(app.evidence)&&text(app.revision)&&(!app.contract||app.contract===contract))validations.unshift({kind:'et-codificacao',revision:text(app.revision),by:text(app.confirmedBy)||'confirmação de aplicabilidade',at:text(app.confirmedAt)||'',evidence:text(app.evidence),origin:'applicability'});
   const entries=new Map();
   const ensure=(kind,revision,sha)=>{const id=entryId(kind,revision,sha);if(!entries.has(id))entries.set(id,{id,kind,name:KINDS[kind]||KINDS.desconhecido,revision:revision||null,contract,files:[],loadedScopes:[],loadedFrom:'',effective:{date:'',proof:'nenhuma',evidence:''},validated:null,homologated:null,notes:[],blockers:[]});return entries.get(id);};
   for(const file of files){
@@ -96,22 +96,22 @@
   for(const [key,kind] of Object.entries(baseKinds)){const v=(options.loadedBases||{})[key];if(!v)continue;const e=[...entries.values()].find(x=>x.kind===kind&&!x.loadedFrom)||ensure(kind,null);e.loadedScopes=['base-carregada'];e.loadedFrom='base carregada nesta análise'+(typeof v==='object'&&v.name?': '+v.name:'');}
   for(const v of validations){
    if(!text(v.by)||!text(v.evidence))continue; // validação sem responsável ou sem evidência não vale
-   // Com revisão: só aquela revisão. Com hash: só a entrada que contém o arquivo. Sem nenhum dos dois: a base CARREGADA daquele tipo.
-   const targets=[...entries.values()].filter(e=>e.kind===v.kind&&(text(v.revision)?e.revision===text(v.revision):text(v.sha256)?e.files.some(f=>f.sha256===text(v.sha256)):e.loadedScopes.length>0));
+   // Revisão e hash são filtros cumulativos. Sem ambos, o registro se refere à base carregada daquele tipo.
+   const targets=[...entries.values()].filter(e=>e.kind===v.kind&&(!text(v.revision)||e.revision===text(v.revision))&&(!text(v.sha256)||e.files.some(f=>f.sha256===text(v.sha256)))&&(text(v.revision)||text(v.sha256)||e.loadedScopes.length>0));
    for(const e of targets){e.validated={by:text(v.by),at:text(v.at),evidence:text(v.evidence),origin:v.origin||'registro'};if(v.effective&&text(v.effective.date)&&text(v.effective.evidence))e.effective={date:text(v.effective.date),proof:'documentada',evidence:text(v.effective.evidence)};}
   }
   for(const h of homologations){
    if(!text(h.by)||!text(h.at))continue;
-   for(const e of entries.values())if(e.kind===h.kind&&(!text(h.revision)||e.revision===text(h.revision)))e.homologated={by:text(h.by),at:text(h.at),evidence:text(h.evidence)};
+   for(const e of entries.values())if(e.kind===h.kind&&(!text(h.revision)||e.revision===text(h.revision))&&(!text(h.sha256)||e.files.some(f=>f.sha256===text(h.sha256))))e.homologated={by:text(h.by),at:text(h.at),evidence:text(h.evidence)};
   }
   // Sinalizador de homologação que a tela JÁ grava (homologated.eap / homologated.workflow). É uma confirmação humana explícita do usuário:
-  // vale como validação + homologação da base CARREGADA daquele tipo, com a origem registrada. Registro completo (responsável/data) prevalece.
+  // é preservado como declaração legada, sem elevar o nível da base. Registro completo prevalece.
   const h=options.homologated||{};
   for(const [key,kind] of [['eap','anexo-iii-apendice-a'],['workflow','workflows-uhdt-d']]){
    const v=h[key];if(!v)continue;
    const rec=typeof v==='object'?{by:text(v.by),at:text(v.at),evidence:text(v.evidence),origin:'registro'}:{by:'usuário (sinalizador de homologação da análise)',at:'',evidence:'Confirmação registrada na análise (homologated.'+key+').',origin:'sinalizador-existente'};
    if(!rec.by)continue;
-   for(const e of entries.values())if(e.kind===kind&&e.loadedScopes.length>0){if(!e.validated)e.validated={...rec};e.homologated={...rec};}
+   for(const e of entries.values())if(e.kind===kind&&e.loadedScopes.length>0){if(!e.validated)e.validated={...rec};if(!e.homologated)e.homologated={...rec};}
   }
   // Referências esperadas e AUSENTES: aparecem no catálogo, com o bloqueio dito.
   for(const kind of ['et-codificacao','n-1710','n-381','anexo-i-apendice-3','anexo-iii-apendice-a','caminho-data-book','caminho-das-pastas','workflows-uhdt-d'])if(![...entries.values()].some(e=>e.kind===kind))ensure(kind,null);
@@ -125,14 +125,15 @@
  function finish(e,options){
   const located=e.files.length>0||Boolean(e.loadedFrom);
   const loaded=e.loadedScopes.length>0;
-  const validated=loaded&&Boolean(e.validated); // só se valida o que está carregado
-  const homologated=validated&&Boolean(e.homologated);
+  const complete=p=>p&&text(p.by)&&text(p.at)&&text(p.evidence)&&!['sinalizador-existente','applicability'].includes(p.origin);
+  const validated=loaded&&Boolean(complete(e.validated));
+  const homologated=validated&&Boolean(complete(e.homologated));
   e.level=homologated?'homologado':validated?'validado':loaded?'carregado':located?'localizado':'ausente';
   e.blockers=[];
   if(!located)e.blockers.push({code:'REF-AUSENTE',message:'Referência não localizada nas fontes disponíveis.'});
   else if(!loaded)e.blockers.push({code:'REF-NAO-CARREGADA',message:'Arquivo localizado, mas nenhum conteúdo foi carregado/validado pelo GRCON para esta referência.'});
   if(e.validated&&!loaded)e.blockers.push({code:'REF-VALIDACAO-SEM-CARGA',message:'Há validação registrada, mas o GRCON não possui dados carregados desta referência/revisão; a validação não habilita regras.'});
-  if(loaded&&!e.validated)e.blockers.push({code:'REF-NAO-VALIDADA',message:'Carregada, mas sem validação registrada (responsável e evidência).'});
+  if(loaded&&!validated)e.blockers.push({code:'REF-NAO-VALIDADA',message:'Carregada, mas sem validação completa registrada (responsável, data e evidência). Declaração de aplicabilidade e sinalizadores não a substituem.'});
   if(e.kind==='et-codificacao'&&!e.revision&&e.files.length)e.blockers.push({code:'REF-REVISAO-NAO-IDENTIFICADA',message:'O arquivo não informa a revisão e nenhuma validação por hash a atribuiu. Não usar como Rev. N, P, Q ou R.'});
   const ref=options&&options.referenceDate;
   if(ref&&e.effective.proof!=='nenhuma'&&/^\d{2}\/\d{2}\/\d{4}$/.test(e.effective.date)){const [d,m,y]=e.effective.date.split('/').map(Number);if(new Date(ref).getTime()<Date.UTC(y,m-1,d))e.blockers.push({code:'REF-FORA-VIGENCIA',message:'A data de referência é anterior à vigência informada ('+e.effective.date+').'});}
@@ -178,11 +179,12 @@
   else if(!entry||entry.level==='ausente')need('REF-AUSENTE','Referência necessária não localizada: '+KINDS[req.kind]+(result.requires.revision&&result.requires.revision!=='qualquer'?' Rev. '+result.requires.revision:'')+'.');
   else{
    if(rank(entry.level)<rank(min))need(entry.level==='localizado'?'REF-NAO-CARREGADA':rank(min)>=rank('homologado')&&entry.level==='validado'?'REF-NAO-HOMOLOGADA':'REF-NAO-VALIDADA','A referência está "'+entry.level+'"; esta verificação exige "'+min+'".');
+   if(req.kind==='et-codificacao'&&entry.effective.proof!=='documentada')need('REF-VIGENCIA-NAO-COMPROVADA','A data de emissão da ET não comprova sua vigência contratual. Registre a evidência da vigência antes de validar esta regra.');
    if(req.scope&&entry.loadedFrom==='embutido no GRCON'&&!entry.loadedScopes.includes(req.scope))need('REF-ESCOPO-NAO-CARREGADO','O escopo "'+req.scope+'" desta revisão não está carregado no GRCON (carregado: '+(entry.loadedScopes.join(', ')||'nenhum')+').');
    for(const b of entry.blockers)if(b.code==='REF-FORA-VIGENCIA'||b.code==='REF-REVISAO-NAO-IDENTIFICADA')result.blockers.push({...b,reference:KINDS[req.kind],revision:entry.revision||'não identificada',needed:'vigência/revisão comprovadas'});
   }
   result.state=result.blockers.length?'bloqueada':'verificavel';
-  result.demonstration=result.state==='verificavel'&&entry?entry.demonstration:'';
+  result.demonstration=entry?entry.demonstration:'';
   return result;
  }
  function relevantRules(record){return DEPENDENCIES.filter(d=>applies(d,record));}
@@ -192,7 +194,7 @@
   const checks=relevantRules(record).map(d=>ruleAvailability(d,catalog));
   const blocked=checks.filter(c=>c.state==='bloqueada'),ok=checks.filter(c=>c.state==='verificavel');
   const status=!checks.length?'nao-verificado':blocked.length===0?'verificado':ok.length===0?'nao-verificado':'parcial';
-  const flagOnly=ok.filter(c=>c.demonstration==='sinalizador').map(c=>({rule:c.rule,field:c.field,reference:c.reference&&c.reference.id,name:c.reference&&c.reference.name}));
+  const flagOnly=checks.filter(c=>c.demonstration==='sinalizador').map(c=>({rule:c.rule,field:c.field,reference:c.reference&&c.reference.id,name:c.reference&&c.reference.name}));
   return {status,verified:ok.map(c=>c.rule),flagOnly,blocked:blocked.map(c=>({rule:c.rule,family:c.family,field:c.field,requires:c.requires,blockers:c.blockers,reference:c.reference&&c.reference.id})),checks};
  }
  function groupBlocks(v){ // um bloqueio por referência, listando as regras afetadas (evita repetir o mesmo aviso dezenas de vezes)
@@ -231,7 +233,7 @@
   const validations=[],homologations=[];
   for(const r of Array.isArray(records)?records:[]){
    if(!r||!KINDS[r.kind]||!text(r.responsible)||!text(r.evidence)||!text(r.validated_on||r.validatedOn))continue;
-   const base={id:r.id,kind:r.kind,revision:text(r.revision),by:text(r.responsible),at:date(r.validated_on||r.validatedOn),evidence:text(r.evidence)};
+   const base={id:r.id,kind:r.kind,revision:text(r.revision),by:text(r.responsible),at:date(r.validated_on||r.validatedOn),evidence:text(r.evidence),...(text(r.sha256)?{sha256:text(r.sha256)}:{})};
    if(r.record_type==='homologacao'||r.recordType==='homologacao')homologations.push(base);
    else validations.push({...base,sha256:text(r.sha256),origin:'registro',...(text(r.effective_date||r.effectiveDate)&&text(r.effective_evidence||r.effectiveEvidence)?{effective:{date:text(r.effective_date||r.effectiveDate),evidence:text(r.effective_evidence||r.effectiveEvidence)}}:{})});
   }

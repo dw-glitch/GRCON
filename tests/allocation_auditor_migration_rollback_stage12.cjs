@@ -5,7 +5,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {PGlite}=require('@electric-sql/pglite'),root=path.resolve(__dirname,'..'),u=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const mig=f=>fs.readFileSync(path.join(root,'supabase/migrations',f),'utf8');
-const up=mig('20261106104652_allocation_auditor_complete_checkpoint.sql'),down=fs.readFileSync(path.join(root,'supabase/rollback/20261106104652_allocation_auditor_complete_checkpoint.down.sql'),'utf8');
+const up=mig('20261107120803_allocation_auditor_complete_checkpoint.sql'),down=fs.readFileSync(path.join(root,'supabase/rollback/20261107120803_allocation_auditor_complete_checkpoint.down.sql'),'utf8');
 (async()=>{
  const db=new PGlite();
  await db.exec(`create schema private;create schema auth;create role anon;create role authenticated;grant usage on schema private,auth to authenticated;
@@ -15,10 +15,14 @@ const up=mig('20261106104652_allocation_auditor_complete_checkpoint.sql'),down=f
   create table private.grcon_allocation_bases(id uuid,contract_id uuid,kind text,status text);create table private.grcon_allocation_base_rows(base_id uuid,payload jsonb);
   insert into public.grcon_workspaces values('${u(1)}');insert into public.grcon_contracts values('${u(3)}','${u(1)}',true);insert into public.grcon_memberships values('${u(1)}','${u(3)}','${u(11)}','operator',true);`);
  for(const f of ['20261027203851_allocation_auditor.sql','20261028090553_allocation_auditor_retry_safety.sql','20261028192535_allocation_assistant_sessions_rules.sql','20261030010508_allocation_assistant_release_safety.sql'])await db.exec(mig(f));
+ // Optional read-only production function snapshot: exercises the exact current
+ // RPC definition locally, without exporting rows or running tests in production.
+ if(process.env.GRCON_AUDITOR_PRODUCTION_BASELINE)await db.exec(fs.readFileSync(path.resolve(process.env.GRCON_AUDITOR_PRODUCTION_BASELINE),'utf8'));
  const state=async()=>(await db.query(`select position('input-chunk' in d)>0 as block, md5(d) as md5, to_regclass('private.grcon_allocation_audit_inputs') is not null as inputs_table from (select pg_get_functiondef('private.grcon_allocation_auditor(uuid,text,jsonb)'::regprocedure) as d) x`)).rows[0];
  const before=await state();assert.equal(before.block,false);assert.equal(before.inputs_table,false);
  // 1. aplica a migração
  await db.exec(up);const after=await state();assert.equal(after.block,true,'migração acrescenta o bloco');assert.equal(after.inputs_table,true);assert.notEqual(after.md5,before.md5);
+ if(process.env.GRCON_AUDITOR_BASELINE_REPORT)fs.writeFileSync(path.resolve(process.env.GRCON_AUDITOR_BASELINE_REPORT),JSON.stringify({productionFunctionSnapshot:Boolean(process.env.GRCON_AUDITOR_PRODUCTION_BASELINE),before,after,scope:'PGlite local; nenhuma linha real ou credencial exportada'},null,2));
  // 2. a sonda do cliente (input-detail numa análise real do contrato) distingue banco novo de banco antigo
  const rpcAs=async(op,input)=>{await db.exec(`reset role;set request.jwt.claim.sub='${u(11)}';set role authenticated;`);try{return (await db.query("select public.grcon_allocation_auditor($1,$2,$3::jsonb) as r",[u(1),op,JSON.stringify(input)])).rows[0].r;}finally{await db.exec('reset role');}};
  const run=await rpcAs('begin',{count:1,requestId:u(60),metadata:{snapshotVersion:2}});

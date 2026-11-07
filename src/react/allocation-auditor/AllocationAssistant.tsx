@@ -5,6 +5,7 @@ import {assistant,type Tab} from './assistantStore';
 import {buildItems,buildStages,countKinds,filterItems,friendlyError,nextAction,type Filter,type Item} from './chatView';
 import {PendenciasPanel} from './PendenciasPanel';
 import {ValidationsPanel} from './ValidationsPanel';
+import {LearningPreparationPanel} from './LearningPreparationPanel';
 import {service,type Data} from './service';
 export function AllocationAssistant(){
  const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot),s=useSyncExternalStore(service.subscribe,service.snapshot);
@@ -183,10 +184,11 @@ export function AllocationAssistant(){
    <div className="aac-attachments"><label>Anexar alocações<input type="file" multiple accept=".xlsx" disabled={busy} onChange={upload('allocation')}/></label><label>Anexar LDs<input type="file" multiple accept=".xlsx" disabled={busy} onChange={upload('ld')}/></label></div>
    {s.context.contextWarning&&<p className="aac-warn" role="note">{s.context.contextWarning}</p>}
    <hr/>
-   <ValidationsPanel validations={s.validations} status={s.validationsStatus} canRegister={s.canRegisterValidations} busy={busy} unavailableText={friendlyError('Registro de validações indisponível','VALIDATIONS_UNAVAILABLE').what+' '+friendlyError('x','VALIDATIONS_UNAVAILABLE').todo} onRegister={form=>service.registerValidation(form).catch(()=>{})} onRevoke={(id,reason)=>service.revokeValidation(id,reason).catch(()=>{})}/>
+   <ValidationsPanel applicability={s.context.applicability} onApplicability={(revision,evidence)=>service.setApplicability(revision,evidence)} validations={s.validations} status={s.validationsStatus} canRegister={s.canRegisterValidations} busy={busy} unavailableText={friendlyError('Registro de validações indisponível','VALIDATIONS_UNAVAILABLE').what+' '+friendlyError('x','VALIDATIONS_UNAVAILABLE').todo} onRegister={form=>service.registerValidation(form).then(()=>true).catch(()=>false)} onRevoke={(id,reason)=>service.revokeValidation(id,reason).catch(()=>{})}/>
    <hr/>
    <strong>Modelo de aprendizado</strong>
    <p>{s.context.mlModel?.card?.version?'Modelo '+s.context.mlModel.card.version+' ativo: gera apenas sugestões não normativas, nunca erros, pendências ou valores.':'Nenhum modelo ativo. O auditor usa só regras determinísticas e precedentes fiscais; sugestões de modelo ficam desligadas.'}</p>
+   <LearningPreparationPanel busy={busy}/>
    <hr/>
    <strong>Emissão oficial (opcional)</strong>
    <p>Separada da auditoria preventiva. Cria nova numeração oficial no Gerador e não altera a Central compartilhada. Para corrigir uma alocação externa, use o relatório e os arquivos corrigidos.</p>

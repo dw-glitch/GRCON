@@ -30,7 +30,7 @@ revoke all on private.grcon_allocation_reference_validations from public,anon,au
 
 create function private.grcon_allocation_reference_validations(target_workspace uuid,operation text,input jsonb default '{}'::jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare u uuid:=auth.uid();c uuid;r text;v private.grcon_allocation_reference_validations;items jsonb;n integer;kind_ text;
+declare u uuid:=auth.uid();c uuid;r text;v private.grcon_allocation_reference_validations;items jsonb;n integer;kind_ text;effective_day date;
 begin
  if u is null then raise exception 'Sessão necessária.' using errcode='42501'; end if;
  select m.contract_id,m.role into c,r from public.grcon_memberships m join public.grcon_contracts ct on ct.id=m.contract_id and ct.workspace_id=m.workspace_id and ct.active
@@ -49,7 +49,27 @@ begin
   if coalesce(input->>'recordType','') not in ('validacao','homologacao') or kind_ is null then raise exception 'Tipo de registro inválido.';end if;
   if length(btrim(coalesce(input->>'responsible','')))<3 or length(btrim(coalesce(input->>'evidence','')))<5 then raise exception 'Responsável e evidência são obrigatórios.';end if;
   if kind_='et-codificacao' and length(btrim(coalesce(input->>'revision','')))=0 then raise exception 'A revisão da ET deve ser informada; ela nunca é presumida.';end if;
-  if (input->>'validatedOn') is null or (input->>'validatedOn')::date>current_date+1 then raise exception 'Data da validação inválida.';end if;
+  if (input->>'validatedOn') is null or (input->>'validatedOn')::date>current_date then raise exception 'Data da validação inválida.';end if;
+  if nullif(input->>'effectiveDate','') is not null then
+   begin
+    effective_day:=to_date(input->>'effectiveDate','DD/MM/YYYY');
+    if to_char(effective_day,'DD/MM/YYYY')<>input->>'effectiveDate' then raise exception 'invalid date';end if;
+   exception when others then raise exception 'Data da vigência inválida.';
+   end;
+  end if;
+  -- Serialize active-count checks; identical retries still work at the limit.
+  perform 1 from public.grcon_contracts where id=c for update;
+  select * into v from private.grcon_allocation_reference_validations where contract_id=c and created_by=u and request_id=(input->>'requestId')::uuid;
+  if found then
+   if v.kind is distinct from kind_ or v.record_type is distinct from input->>'recordType'
+    or v.revision is distinct from nullif(btrim(coalesce(input->>'revision','')),'')
+    or v.sha256 is distinct from nullif(input->>'sha256','')
+    or v.validated_on is distinct from (input->>'validatedOn')::date
+    or v.effective_date is distinct from nullif(input->>'effectiveDate','')
+    or v.effective_evidence is distinct from nullif(btrim(coalesce(input->>'effectiveEvidence','')),'')
+    or v.evidence is distinct from btrim(input->>'evidence') or v.responsible is distinct from btrim(input->>'responsible') then raise exception 'Requisição já utilizada com conteúdo diferente.';end if;
+   return jsonb_build_object('id',v.id);
+  end if;
   select count(*) into n from private.grcon_allocation_reference_validations where contract_id=c and revoked_at is null;
   if n>=500 then raise exception 'Limite de registros ativos atingido.';end if;
   begin

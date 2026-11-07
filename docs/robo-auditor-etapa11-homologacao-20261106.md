@@ -1,3 +1,5 @@
+> Atualização de 07/11/2026: este documento preserva o histórico do Claude. O estado atual e os testes repetidos estão em `robo-auditor-conclusao-20261107.md`. RA-07 recebeu formulário e correções adicionais; cinco LDs reais foram lidas e uma amostra de 100 documentos chegou ao motor. As medições e capturas de navegador abaixo são do Claude, não uma aprovação visual da continuidade atual. Não foi contratado serviço; a disponibilidade/custo de um ambiente de homologação deve ser confirmada antes de qualquer provisionamento. Não se presume que exija plano pago.
+
 # Robô Auditor de Alocações — Etapa 11: homologação — 06/11/2026
 
 ## Conclusão
@@ -8,7 +10,7 @@
 |---|---|---|
 | **1. Testes unitários** | módulos puros (motor, parecer, reauditoria, relatório, catálogo de falhas, ML, contrato de campos) | ✔ `npm run test:allocation-auditor` (37 etapas) e `npm test` passam |
 | **2. Integração local** | Worker real + XLSX/ZIP reais; React real em JSDOM; **PGlite** (Postgres em memória) para banco/RLS | ✔ (inclui o novo `tests/allocation_auditor_homologation_stage11.cjs`) |
-| **3. Banco real de homologação** | migrações aplicadas num banco real separado da produção | ✘ **Bloqueado.** A conta Supabase tem **um único projeto, `GRCON` (produção)**, sem branches de desenvolvimento. Criar um branch/projeto é serviço pago e não foi autorizado. A migração `20261106104652_allocation_auditor_complete_checkpoint.sql` **não está aplicada** (a última migração do projeto é `20261104221515_rls_auth_uid_initplan`; consulta somente-leitura). O frontend que depende dela **não deve ir ao ar antes de ela ser homologada** |
+| **3. Banco real de homologação** | migrações aplicadas num banco real separado da produção | ✘ **Bloqueado.** A conta Supabase tem **um único projeto, `GRCON` (produção)**, sem branches de desenvolvimento. Criar um branch/projeto é serviço pago e não foi autorizado. A migração `20261107120803_allocation_auditor_complete_checkpoint.sql` **não está aplicada** (a última migração do projeto é `20261104221515_rls_auth_uid_initplan`; consulta somente-leitura). O frontend que depende dela **não deve ir ao ar antes de ela ser homologada** |
 | **4. Validação operacional com usuários** | equipe de Qualidade usando alocações reais | ✘ Não realizada |
 
 ## 2. Cenários ponta a ponta (nível 2)

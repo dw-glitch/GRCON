@@ -11,6 +11,8 @@ const Norms = require('../vendor/recon/allocation_normative_rules.js');
 const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '../docs/allocation-auditor-source-inventory.json'), 'utf8'));
 const CONTRACT = 'UHDT-D';
 const build = (extra = {}) => R.buildCatalog({ contract: CONTRACT, inventory, ...extra });
+const verifiedEt={kind:'et-codificacao',revision:'R',by:'Qualidade QA',at:'2026-11-06',evidence:'Conferência sintética da revisão',effective:{date:'24/08/2026',evidence:'Vigência contratual sintética para QA'}};
+const withEt=(extra={})=>build({...extra,validations:[verifiedEt,...(extra.validations||[])]});
 const entry = (catalog, id) => catalog.entries.find(e => e.id === id);
 const codes = e => e.blockers.map(b => b.code);
 
@@ -23,14 +25,14 @@ const codes = e => e.blockers.map(b => b.code);
   assert.equal(entry(loaded, 'caminho-data-book@E').level, 'carregado');
   const validated = build({ loadedBases: { databook: true }, validations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Qualidade', at: '2026-11-06', evidence: 'Conferido com a planilha original' }] });
   assert.equal(entry(validated, 'caminho-data-book@E').level, 'validado');
-  const homologated = build({ loadedBases: { databook: true }, validations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }], homologations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Fiscalização', at: '2026-11-07' }] });
+  const homologated = build({ loadedBases: { databook: true }, validations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }], homologations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Fiscalização', at: '2026-11-07', evidence:'Ata sintética de homologação' }] });
   assert.equal(entry(homologated, 'caminho-data-book@E').level, 'homologado');
   // Validação sem o que validar (nada carregado) não habilita nada.
   const orphan = build({ validations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }] });
   assert.equal(entry(orphan, 'caminho-data-book@E').level, 'localizado');
   assert.ok(codes(entry(orphan, 'caminho-data-book@E')).includes('REF-VALIDACAO-SEM-CARGA'));
   // Validação sem responsável ou sem evidência é ignorada; homologação exige validação antes.
-  const weak = build({ loadedBases: { databook: true }, validations: [{ kind: 'caminho-data-book', revision: 'E', by: '', evidence: 'ok' }, { kind: 'caminho-data-book', revision: 'E', by: 'X', evidence: '' }], homologations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Fiscalização', at: '2026-11-07' }] });
+  const weak = build({ loadedBases: { databook: true }, validations: [{ kind: 'caminho-data-book', revision: 'E', by: '', evidence: 'ok' }, { kind: 'caminho-data-book', revision: 'E', by: 'X', evidence: '' }], homologations: [{ kind: 'caminho-data-book', revision: 'E', by: 'Fiscalização', at: '2026-11-07', evidence:'Ata sintética de homologação' }] });
   assert.equal(entry(weak, 'caminho-data-book@E').level, 'carregado');
 }
 
@@ -59,7 +61,7 @@ const codes = e => e.blockers.map(b => b.code);
 
 // 3. Revisões diferentes não se confundem: a Rev. R não preenche lacunas das N, P e Q.
 {
-  const withR = build({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } });
+  const withR = withEt({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } });
   assert.equal(entry(withR, 'et-codificacao@R').level, 'validado');
   for (const rev of ['N', 'Q']) assert.notEqual(entry(withR, 'et-codificacao@' + rev).level, 'validado', 'validar a R não valida a ' + rev);
   const asP = build({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'P', evidence: 'Capa da ET Rev. P' } });
@@ -98,12 +100,12 @@ const codes = e => e.blockers.map(b => b.code);
   const none = R.verification(record, build());
   assert.equal(none.status, 'nao-verificado', 'sem validação nenhuma, nada é verificado');
   assert.ok(none.blocked.length >= 10 && none.verified.length === 0);
-  const confirmed = build({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } });
+  const confirmed = withEt({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } });
   const partial = R.verification({ docKind: 'ET' }, confirmed);
   assert.deepEqual(partial.blocked.map(b => b.rule), ['N381-NUM'], 'ET Rev. R validada e carregada habilita as regras do Grupo 1–7; só a N-381 (ainda sem validação) segue bloqueada');
   assert.ok(partial.verified.every(rule => /^ET-/.test(rule)) && partial.verified.length >= 10);
   const n381 = { kind: 'n-381', revision: 'M', by: 'Qualidade', at: '2026-11-06', evidence: 'Conferida com a N-381 Rev. M' };
-  const allEt = build({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' }, validations: [n381] });
+  const allEt = withEt({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' }, validations: [n381] });
   assert.equal(R.verification({ docKind: 'ET' }, allEt).status, 'verificado', 'com a N-381 validada, todas as regras aplicáveis ao registro ficam verificáveis');
   const mixed = R.verification(record, confirmed);
   assert.equal(mixed.status, 'parcial', 'regras de TAG/EAP/Workflow seguem bloqueadas: verificação parcial');
@@ -113,12 +115,12 @@ const codes = e => e.blockers.map(b => b.code);
   const wf = R.ruleAvailability(R.DEPENDENCIES.find(d => d.rule === 'WORKFLOW-UHDT-D'), build({ loadedBases: { workflow: true }, validations: [{ kind: 'workflows-uhdt-d', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }] }));
   assert.equal(wf.state, 'bloqueada');
   assert.ok(wf.blockers.some(b => b.code === 'REF-NAO-HOMOLOGADA'), 'validado, mas ainda sem homologação humana');
-  const wfOk = R.ruleAvailability(R.DEPENDENCIES.find(d => d.rule === 'WORKFLOW-UHDT-D'), build({ loadedBases: { workflow: true }, validations: [{ kind: 'workflows-uhdt-d', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }], homologations: [{ kind: 'workflows-uhdt-d', by: 'Fiscalização', at: '2026-11-07' }] }));
+  const wfOk = R.ruleAvailability(R.DEPENDENCIES.find(d => d.rule === 'WORKFLOW-UHDT-D'), build({ loadedBases: { workflow: true }, validations: [{ kind: 'workflows-uhdt-d', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }], homologations: [{ kind: 'workflows-uhdt-d', by: 'Fiscalização', at: '2026-11-07', evidence:'Ata sintética de homologação' }] }));
   assert.equal(wfOk.state, 'verificavel');
   // Sinalizador que a tela já grava (homologated.eap = true) é confirmação humana: vale para a base CARREGADA, com a origem registrada.
   const flag = build({ loadedBases: { eap: true }, homologated: { eap: true } });
   const eapFlag = entry(flag, 'anexo-iii-apendice-a@sem-revisao');
-  assert.equal(eapFlag.level, 'homologado');
+  assert.equal(eapFlag.level, 'carregado','sinalizador não substitui registro de homologação');
   assert.equal(eapFlag.homologated.origin, 'sinalizador-existente', 'a origem da confirmação fica registrada');
   // Sem base carregada, o sinalizador não tem o que homologar (nada é inventado).
   assert.equal(entry(build({ homologated: { eap: true } }), 'anexo-iii-apendice-a@sem-revisao').level, 'ausente');
@@ -142,14 +144,14 @@ const codes = e => e.blockers.map(b => b.code);
   assert.ok(['Verificações inconclusivas', 'Correções pendentes'].includes(row.status));
   assert.equal(C.summary([row]).clear, 0, 'o resumo não conta o registro como limpo');
   // Com tudo que o registro exige validado e carregado, não há bloqueio de referência.
-  const complete = build({ applicability: context.applicability, loadedBases: { tags: true }, validations: [{ kind: 'anexo-i-apendice-3', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }, { kind: 'n-381', revision: 'M', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }] });
+  const complete = withEt({ applicability: context.applicability, loadedBases: { tags: true }, validations: [{ kind: 'anexo-i-apendice-3', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }, { kind: 'n-381', revision: 'M', by: 'Qualidade', at: '2026-11-06', evidence: 'ok' }] });
   const full = R.verification({ docKind: 'ET', tag: 'P-101' }, complete);
   assert.equal(full.status, 'verificado');
 }
 
 // 7. Rastreabilidade: regra → documento oficial → revisão → item → campo → evidência → resultado, e as regras existem de verdade.
 {
-  const matrix = R.traceMatrix(build({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } }));
+  const matrix = R.traceMatrix(withEt({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } }));
   assert.equal(matrix.length, R.DEPENDENCIES.length);
   for (const row of matrix) for (const k of ['rule', 'family', 'officialDocument', 'revision', 'item', 'field', 'result']) assert.ok(row[k] !== undefined && row[k] !== '' || k === 'item', 'campo ' + k + ' presente em ' + row.rule);
   assert.ok(matrix.some(r => r.result === 'verificavel') && matrix.some(r => r.result === 'bloqueada'));
@@ -182,20 +184,21 @@ const codes = e => e.blockers.map(b => b.code);
   const flagged = build({ loadedBases: { eap: true }, homologated: { eap: true } });
   assert.equal(entry(flagged, 'anexo-iii-apendice-a@sem-revisao').demonstration, 'sinalizador');
   const v = R.verification({ docKind: 'ET', eap: '5.7.3.1' }, flagged);
-  assert.ok(v.flagOnly.some(x => x.rule === 'EAP-ANEXO-III-APA'), 'regra liberada só pelo sinalizador é listada');
-  const full = build({ loadedBases: { eap: true }, validations: [{ kind: 'anexo-iii-apendice-a', by: 'Qualidade', at: '2026-11-06', evidence: 'Conferido com o Anexo III' }], homologations: [{ kind: 'anexo-iii-apendice-a', by: 'Fiscalização', at: '2026-11-07' }] });
+  assert.ok(!v.verified.includes('EAP-ANEXO-III-APA'));
+  assert.ok(v.flagOnly.some(x => x.rule === 'EAP-ANEXO-III-APA'), 'regra bloqueada por depender só de sinalizador é listada');
+  const full = build({ loadedBases: { eap: true }, validations: [{ kind: 'anexo-iii-apendice-a', by: 'Qualidade', at: '2026-11-06', evidence: 'Conferido com o Anexo III' }], homologations: [{ kind: 'anexo-iii-apendice-a', by: 'Fiscalização', at: '2026-11-07', evidence:'Ata sintética de homologação' }] });
   assert.equal(entry(full, 'anexo-iii-apendice-a@sem-revisao').demonstration, 'registro completo');
   assert.equal(R.verification({ docKind: 'ET', eap: '5.7.3.1' }, full).flagOnly.length, 0);
   const app = build({ applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa da ET Rev. R' } });
   assert.equal(entry(app, 'et-codificacao@R').demonstration, 'confirmação de aplicabilidade');
-  // No motor: apontamento de sugestão (nunca bloqueia nem vira conformidade) e coluna "Demonstração" no Excel.
+  // No motor: apontamento pendente (sinalizador não comprova conformidade) e coluna "Demonstração" no Excel.
   const doc = 'C1O_RNEST_U32_5.7.3.1_ELE_TEST_TAG-A';
   const rec = { document: doc, revision: '0', title: 'RELATORIO DE INSPECAO DE RECEBIMENTO', eap: '5.7.3.1' };
   const context = { contract: CONTRACT, records: [rec], history: [], ldRecords: [], bases: {}, versions: {}, homologated: { eap: true }, applicability: { confirmed: true, contract: CONTRACT, source: C.ET, revision: 'R', evidence: 'Capa' } };
   context.references = R.buildCatalog({ contract: CONTRACT, applicability: context.applicability, homologated: context.homologated, loadedBases: { eap: true } });
   const row = C.auditRecord(rec, context, C.prepare(context));
   const f = row.findings.find(x => x.id === 'REF-FLAG-ONLY');
-  assert.ok(f && f.severity === 'suggestion' && /sinalizador/.test(f.message));
+  assert.ok(f && f.severity === 'pending' && /sinalizador/.test(f.message));
   assert.ok(row.verification.flagOnly.includes('EAP-ANEXO-III-APA'));
   const rows = R.exportRows(flagged);
   assert.equal(rows.references[0].at(-1), 'Demonstração'); assert.equal(rows.trace[0].at(-1), 'Demonstração');
@@ -219,3 +222,24 @@ const codes = e => e.blockers.map(b => b.code);
  assert.deepEqual(R.fromRecords(null),{validations:[],homologations:[]});
 }
 console.log('allocation_auditor_references: escada localizado/carregado/validado/homologado, revisões N/P/Q/R separadas, vigência, bloqueios sem falsa conformidade, rastreabilidade integrada ao motor e ao Excel OK');
+
+// Identidade do arquivo é cumulativa: informar revisão não elimina o filtro do hash.
+{
+ const file={name:'ET-5290.00-22000-912-1LV-001 Rev. R.pdf',sha256:'a'.repeat(64)};
+ const proof={kind:'et-codificacao',revision:'R',sha256:'b'.repeat(64),by:'Qualidade',at:'2026-11-07',evidence:'Conferência sintética'};
+ const build=v=>R.buildCatalog({contract:'QA',inventory:{files:[file]},validations:[v],homologations:[v]});
+ const et=cat=>cat.entries.find(e=>e.kind==='et-codificacao'&&e.revision==='R');
+ assert.equal(et(build(proof)).level,'carregado','hash diferente bloqueia validação e homologação mesmo na mesma revisão');
+ assert.equal(et(build({...proof,sha256:file.sha256})).level,'homologado');
+ const records=R.fromRecords([{record_type:'homologacao',kind:proof.kind,revision:'R',sha256:file.sha256,responsible:'Qualidade',validated_on:'2026-11-07',evidence:'Conferência sintética'}]);assert.equal(records.homologations[0].sha256,file.sha256);
+}
+
+// Aplicabilidade apenas declarada não confirma norma; registro completo exige prova da vigência.
+{
+ const app={confirmed:true,contract:CONTRACT,source:C.ET,revision:'R',evidence:'Declaração de aplicabilidade'};
+ const d='C1O_RNEST_U32_5.7.3.1_ELE_RIR_NT-EXEMPLO';
+ const input={document:d,revision:'0',title:'TITULO QA'},ctx={contract:CONTRACT,records:[input],bases:{},versions:{},applicability:app};
+ let result=C.auditRecord(input,{...ctx,references:build({applicability:app})});assert.equal(result.findings.find(f=>f.id==='ET-7173-NT').severity,'pending');
+ result=C.auditRecord(input,{...ctx,references:withEt({applicability:app})});assert.equal(result.findings.find(f=>f.id==='ET-7173-NT').severity,'error');
+ const noDate=build({applicability:app,validations:[{...verifiedEt,effective:undefined}]});assert.ok(R.ruleAvailability(R.DEPENDENCIES[0],noDate).blockers.some(b=>b.code==='REF-VIGENCIA-NAO-COMPROVADA'));
+}

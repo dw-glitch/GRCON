@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconAllocationAuditorCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='1.6.0';
+ const VERSION='1.6.1';
  const MlModule=()=>{try{if(typeof module==='object'&&module.exports&&typeof require==='function')return require('./allocation_auditor_ml.js');}catch(_){}return typeof globalThis!=='undefined'?globalThis.GrconAllocationAuditorMl:null;};
  // Catálogo de referências (Etapa 3): opcional e aditivo. Sem context.references o motor se comporta como antes.
  const References=(()=>{try{if(typeof module==='object'&&module.exports&&typeof require==='function')return require('./allocation_auditor_references.js');}catch(_){}return typeof globalThis!=='undefined'?globalThis.GrconAllocationAuditorReferences:undefined;})();
@@ -118,7 +118,7 @@
   if(af&&bf&&(!x.id||!y.id)&&norm(af.split(/[\\/]/).pop())!==norm(bf.split(/[\\/]/).pop()))return false;
   return true;
  }
- function applicable(context){const a=context.applicability||{};return a.confirmed===true&&a.contract===context.contract&&a.source===ET&&['N','P','Q','R'].includes(a.revision)&&Boolean(text(a.evidence));}
+ function applicable(context){const a=context.applicability||{};const declared=a.confirmed===true&&a.contract===context.contract&&a.source===ET&&['N','P','Q','R'].includes(a.revision)&&Boolean(text(a.evidence));if(!declared||!context.references||!References)return declared;const dep=References.DEPENDENCIES.find(d=>d.rule==='ET-7172-CHARACTERS');return References.ruleAvailability(dep,context.references).state==='verificavel';}
  function finding(id,category,field,message,evidence,opts={}){return {id,category,field,message,evidence,ruleVersion:VERSION,source:opts.source||'Integridade operacional',severity:opts.severity||'pending',origin:opts.origin||'LD',humanReview:true,...opts};}
  function buildTree(paths,version){const nodes=new Map();for(const entry of paths||[]){const p=text(entry.databook||entry.path).split('|');if(p.some(x=>!x.trim()))continue;for(let i=0;i<p.length;i++){const full=p.slice(0,i+1).join('|');nodes.set(full,{id:JSON.stringify([version,full]),parent:i?JSON.stringify([version,p.slice(0,i).join('|')]):null,label:p[i],path:full,version});}}return nodes;}
  function fiscalFamily(document){
@@ -480,7 +480,7 @@
    // Um único apontamento por registro (não um por referência), para não afogar os problemas reais; o detalhe vai na evidência.
    if(groups.length)add('REF-BLOCKED','reference','document','Verificação incompleta: '+groups.length+' referência(s) sem o nível exigido, '+v.blocked.length+' regra(s) bloqueada(s). Referência necessária: '+groups.map(g=>g.reference+(g.revision&&g.revision!=='qualquer'?' (rev. '+g.revision+')':'')+' — '+g.needed).join('; ')+'. Estas verificações não foram feitas; ausência de apontamento nelas não significa conformidade.',groups.map(g=>({code:g.code,reference:g.reference,revision:g.revision,needed:g.needed,rules:g.rules,fields:g.fields})),{severity:'pending',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
    // Verificação que só se sustenta num sinalizador (sem responsável/data) é dita; "nunca forçar flags" = não tratar sinalizador como demonstração.
-   if(v.flagOnly.length)add('REF-FLAG-ONLY','reference','document','Esta verificação depende de sinalizador de homologação sem responsável e data ('+[...new Set(v.flagOnly.map(x=>x.name))].join('; ')+'). Registre a validação com evidência para demonstrar fonte, revisão e vigência.',v.flagOnly,{severity:'suggestion',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
+   if(v.flagOnly.length)add('REF-FLAG-ONLY','reference','document','Esta verificação depende de sinalizador de homologação sem responsável e data ('+[...new Set(v.flagOnly.map(x=>x.name))].join('; ')+'). Registre a validação com evidência para demonstrar fonte, revisão e vigência.',v.flagOnly,{severity:'pending',source:'Catálogo de referências',origin:'Referências',normativeProof:false});
    verification={status:v.status,verified:v.verified,flagOnly:v.flagOnly.map(x=>x.rule),blocked:v.blocked.map(b=>({rule:b.rule,field:b.field,codes:b.blockers.map(x=>x.code),reference:b.reference})),catalog:context.references.fingerprint};
   }
   // Sugestões do modelo local (Etapas 9–10): opcionais e só "suggestion". Nunca alteram os achados acima; falha ou ausência do modelo não afeta a auditoria.

@@ -4,7 +4,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {PGlite}=require('@electric-sql/pglite'),ts=require('typescript'),C=require('../allocation_auditor_core.js'),X=require('../xlsx.full.min.js'),{webcrypto}=require('node:crypto');
 const root=path.resolve(__dirname,'..'),u=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),checks=[];
-const migration='20261106104652_allocation_auditor_complete_checkpoint.sql';
+const migration='20261107120803_allocation_auditor_complete_checkpoint.sql';
 const canonical=v=>v&&typeof v.toJSON==='function'?canonical(v.toJSON()):JSON.stringify(v===undefined?null:v&&typeof v==='object'?Array.isArray(v)?v.map(x=>JSON.parse(canonical(x))):Object.fromEntries(Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>[k,JSON.parse(canonical(v[k]))])):v);
 const digest=async v=>Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(v)))).toString('hex');
 const code=name=>ts.transpileModule(fs.readFileSync(path.join(root,'src/react/allocation-auditor',name),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;

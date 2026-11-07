@@ -1,4 +1,4 @@
--- ROLLBACK da migração 20261107090000_allocation_auditor_reference_validations.sql (RA-07).
+-- ROLLBACK da migração 20261107120824_allocation_auditor_reference_validations.sql (RA-07).
 -- Fora de supabase/migrations de propósito: nunca é aplicado automaticamente; exige autorização explícita do proprietário.
 -- Remove as funções e a tabela. A tabela só é removida se estiver vazia, ou com
 --   set local app.confirm_drop_validations='sim';

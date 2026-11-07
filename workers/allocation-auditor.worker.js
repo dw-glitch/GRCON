@@ -22,6 +22,44 @@ async function readFile(file){
 const safe=v=>typeof v==='string'&&/^[\s]*[=+\-@\t\r]/.test(v)?"'"+v:v;
 function sheet(book,name,rows){const s=XLSX.utils.aoa_to_sheet(rows.map(row=>row.map(safe)));s['!cols']=rows[0].map(()=>({wch:26}));XLSX.utils.book_append_sheet(book,s,name);}
 async function operation(op,input){
+ if(op==='ml-inspect'||op==='ml-prepare'){
+  const {book,bytes}=await readFile(input.file),M=self.GrconAllocationAuditorMl;
+  const candidates=[];
+  for(const name of book.SheetNames){try{
+   const ws=book.Sheets[name];if(!ws['!ref'])continue;
+   const end=XLSX.utils.decode_range(ws['!ref']).e;
+   const preview=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',range:{s:{r:0,c:0},e:{r:Math.min(end.r,999),c:Math.min(end.c,200)}}});
+   if(!preview.some(row=>{const m=C.headerMap(row);return m.document>=0&&m.returnedAt>=0&&m.fiscalComment>=0;}))continue;
+   const p=C.parseWorksheet(ws,XLSX,{contract:input.contract,sourceFile:input.file.name,sourceSheet:name});
+   if(p.columns.fiscalComment>=0&&p.columns.returnedAt>=0)candidates.push({name,parsed:p});
+  }catch{/* Non-documentary tabs are not eligible historical sources. */}}
+  if(op==='ml-inspect')return candidates.map(c=>({name:c.name,documents:c.parsed.records.length}));
+  const chosen=candidates.find(c=>c.name===input.sheet);if(!chosen)throw Error('Selecione uma aba com as colunas de retorno e resposta da Fiscal 01. Este arquivo é um histórico para preparar aprendizado, não uma alocação preventiva.');
+  const sourceHash=await self.GrconAllocationAuditPackage.hash(bytes);
+  const events=chosen.parsed.records.map(r=>{const raw=r.cellValues?.returnedAt?.raw;
+   return {...r,sourceHash,returnedAt:raw===null||raw===undefined?r.returnedAt:raw};});
+  const review=M.prepareReview(events),bookOut=new (self.ExcelJS||(importScripts('../exceljs.min.js'),self.ExcelJS)).Workbook();
+  const add=(name,headers,rows)=>{const ws=bookOut.addWorksheet(name,{views:[{state:'frozen',ySplit:1}]});ws.addRow(headers);rows.forEach(r=>ws.addRow(r.map(v=>typeof v==='string'?v.slice(0,32000):v)));
+   ws.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};ws.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF205471'}};ws.getRow(1).height=32;
+   ws.columns.forEach((c,i)=>{c.width=i===0?26:38;c.alignment={vertical:'top',wrapText:true};c.numFmt='@';});
+   ws.eachRow((row,n)=>{if(n>1){let lines=1;row.eachCell(c=>{lines=Math.max(lines,Math.ceil(String(c.value??'').length/34));});row.height=Math.min(409,Math.max(30,lines*16+12));}});
+   if(name==='LEIA PRIMEIRO'){ws.getColumn(2).width=100;ws.eachRow((row,n)=>{if(n>1)row.height=Math.max(36,Math.ceil(String(row.getCell(2).value??'').length/90)*18+14);});}
+   if(rows.length)ws.autoFilter={from:{row:1,column:1},to:{row:ws.rowCount,column:headers.length}};return ws;};
+  add('LEIA PRIMEIRO',['Etapa','O que significa / o que fazer'],[
+   ['Resultado','PREPARAÇÃO PARA REVISÃO HUMANA. Nenhum modelo foi treinado ou ativado.'],
+   ['1. Conferir lacunas',review.summary.withGaps+' de '+review.summary.total+' registros têm lacunas identificadas. Linhas históricas foram preservadas.'],
+   ['2. Recuperar o estado enviado','Localize a revisão e o título vigentes na submissão. Não substitua pelo estado atual de uma LD posterior.'],
+   ['3. Classificar exemplos','O palpite não é rótulo confirmado. Confira o comentário e registre confirmado, corrigido, rejeitado ou inconclusivo, categorias, nome, data e evidência.'],
+   ['Categorias','Título (title); código (code); TAG (tag); Data Book (databook); níveis EAP (hierarchy); workflow (workflow); disciplina/escopo (scope); histórico (history).'],
+   ['4. Autorizar o acervo','A autorização de treinamento deve indicar responsável, contratos e escopo. Este arquivo não concede essa autorização.'],
+   ['5. Treinar e avaliar','Após completar as fontes e revisar rótulos, execute o pipeline controlado. Separe documentos e períodos entre treino e teste. Ativação depende de avaliação independente.'],
+   ['Fonte',input.file.name+' · '+input.sheet+' · SHA-256 '+sourceHash],
+   ['Privacidade','Arquivo gerado localmente no navegador. Não anexa histórico à auditoria preventiva nem transmite a serviço de IA.']]);
+  add('LACUNAS',['Campo','Registros com lacuna'],Object.entries(review.summary.gaps));
+  const categoryLabel={title:'Título',code:'Código',tag:'TAG',databook:'Data Book',hierarchy:'Níveis EAP',workflow:'Workflow',scope:'Disciplina/escopo',history:'Histórico'};
+  add('REVISÃO HUMANA',['ID de origem','Arquivo','Aba','Linha na origem','Documento','Revisão enviada (fonte)','Alocação','Título enviado (fonte)','LD/versão enviada','Retorno fiscal','Decisão fiscal (fonte)','Comentário original','O que falta comprovar','Palpite automático (NÃO revisado)','Decisão humana (preencher)','Categorias confirmadas (preencher)','Responsável (preencher)','Data da revisão (preencher)','Evidência do estado enviado (preencher)'],review.rows.map(({id,event:e,missing,suggested})=>[id,e.sourceFile,e.sourceSheet,e.sourceRow,e.document,e.revision,e.allocation,e.title,e.ldVersion||e.ld,Number.isFinite(M.toTime(e.returnedAt))?new Date(M.toTime(e.returnedAt)).toISOString().slice(0,10):'',e.fiscalDecision,e.fiscalComment,missing.join('; ')||'Sem lacuna detectada — ainda exige confirmação humana',suggested.map(c=>categoryLabel[c]+' ('+c+')').join(', '),'','','','','']));
+  return {summary:review.summary,sourceHash,bytes:await bookOut.xlsx.writeBuffer()};
+ }
  if(op==='summarize')return {groups:self.GrconAllocationAssistant.groups(input.rows),summary:C.summary(input.rows)};
  if(op==='fingerprint'){const {bytes}=await readFile(input.file);return self.GrconAllocationAuditPackage.hash(bytes);}
  if(op==='inspect'){const {book}=await readFile(input.file);return book.SheetNames.map(name=>{
@@ -37,8 +75,8 @@ async function operation(op,input){
  if(op==='context'){cache.clear();context={...input,validateDocument:self.RECONAllocationNorms.validateDocument};
   // Catálogo de referências: o que foi localizado/carregado/validado/homologado. Falta de referência nunca vira conformidade.
   context.references=self.GrconAllocationAuditorReferences.buildCatalog({contract:context.contract,applicability:context.applicability,homologated:context.homologated,
-   loadedBases:{tags:Boolean(context.versions?.appendix),databook:Boolean(context.bases?.databook),eap:Boolean(context.bases?.eap),workflow:Boolean(context.bases?.workflows)},
-   validations:input.referenceValidations,homologations:input.referenceHomologations});
+   loadedBases:{tags:Boolean(context.bases?.appendix?.length),databook:Boolean(context.bases?.databook?.length),eap:Boolean(context.bases?.eap?.length),workflow:Boolean(context.bases?.workflows?.length)},
+   validations:input.referenceValidations,homologations:input.referenceHomologations,referenceDate:input.referenceDate||new Date().toISOString().slice(0,10)});
   prepared=C.prepare(context);return {records:context.records.length,treeNodes:prepared.tree.size};}
  if(op==='batch'){if(!context)throw Error('Contexto ausente.');return Promise.all(context.records.slice(input.first,input.first+input.count).map(async r=>{
   const duplicateKey=JSON.stringify([r.document,r.revision||'',r.allocation||r.sourceFile||'']);
