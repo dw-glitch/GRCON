@@ -225,5 +225,17 @@
     ...traceMatrix(catalog).map(r=>[r.rule,r.family,r.officialDocument,r.revision,r.item,r.field,r.evidence?r.evidence.level:'ausente',r.evidence&&r.evidence.validated?r.evidence.validated.evidence:'',r.result==='verificavel'?'Verificável':'BLOQUEADA',r.blockers.join(' | '),r.demonstration||''])]
   };
  }
- return Object.freeze({VERSION,LEVELS,KINDS,BUILT_IN,DEPENDENCIES,classifyFile,buildCatalog,ruleAvailability,relevantRules,verification,groupBlocks,traceMatrix,traceFinding,exportRows,rank});
+ // Registros do servidor (tabela de validações/homologações) → opções do catálogo. Só o que tem responsável, data e evidência entra.
+ function fromRecords(records){
+  const date=v=>{const m=text(v).match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+'/'+m[2]+'/'+m[1]:text(v);};
+  const validations=[],homologations=[];
+  for(const r of Array.isArray(records)?records:[]){
+   if(!r||!KINDS[r.kind]||!text(r.responsible)||!text(r.evidence)||!text(r.validated_on||r.validatedOn))continue;
+   const base={id:r.id,kind:r.kind,revision:text(r.revision),by:text(r.responsible),at:date(r.validated_on||r.validatedOn),evidence:text(r.evidence)};
+   if(r.record_type==='homologacao'||r.recordType==='homologacao')homologations.push(base);
+   else validations.push({...base,sha256:text(r.sha256),origin:'registro',...(text(r.effective_date||r.effectiveDate)&&text(r.effective_evidence||r.effectiveEvidence)?{effective:{date:text(r.effective_date||r.effectiveDate),evidence:text(r.effective_evidence||r.effectiveEvidence)}}:{})});
+  }
+  return {validations,homologations};
+ }
+ return Object.freeze({VERSION,LEVELS,KINDS,BUILT_IN,fromRecords,DEPENDENCIES,classifyFile,buildCatalog,ruleAvailability,relevantRules,verification,groupBlocks,traceMatrix,traceFinding,exportRows,rank});
 });

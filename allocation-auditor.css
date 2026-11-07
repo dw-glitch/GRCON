@@ -331,3 +331,10 @@ html[data-theme="dark"] .aa-app .aa-detail .ag-section-heading,html[data-theme="
 /* Etapa 8: mensagens de recuperação por gravidade (informação não é alarme). */
 .aac-error-info{background:var(--brand-50,#e5f3fa);color:var(--text-1,#172c39)}.aac-error-warning{background:#fff4d6;color:#5c3b00}
 .aac-error-detail{display:flex;gap:8px;align-items:center;flex-wrap:wrap;opacity:.85}.aac-error-detail button{padding:3px 8px!important;font-size:.72rem!important}
+
+/* RA-07: registro de validações de referências */
+.aac-validations{display:grid;gap:8px}.aac-validations p{margin:0;font-size:.8rem}
+.aac-validation-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.aac-validation-list li{display:grid;gap:3px;padding:8px 10px;border:1px solid var(--border-1,#cddbe2);border-radius:8px;font-size:.8rem}
+.aac-validation-list small{color:var(--text-2,#526777);overflow-wrap:anywhere}.aac-revoke{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.aac-validations select,.aac-validations textarea{border:1px solid var(--border-1,#cddbe2);border-radius:8px;padding:8px;background:var(--surface-1,#fff);color:inherit;font:inherit;font-size:.82rem;width:100%;box-sizing:border-box}

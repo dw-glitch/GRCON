@@ -41,9 +41,9 @@ export function withDeadline<T>(operation:string,start:(signal:AbortSignal)=>Pro
 // Identificador curto de operação para o registro técnico.
 export const newOperationId=()=>'op-'+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
 
-type Snapshot={groups:Data[];summary:Data;rows:Data[];records:Data[];history:Data[];events:Data[];runs:Data[];context:Data;busy:boolean;progress:number;total:number;error:string;message:string;runId:string;selected:number[];comparison:Data|null;errorCode:string};
+type Snapshot={groups:Data[];summary:Data;rows:Data[];records:Data[];history:Data[];events:Data[];runs:Data[];context:Data;busy:boolean;progress:number;total:number;error:string;message:string;runId:string;selected:number[];comparison:Data|null;errorCode:string;validations:Data[];validationsStatus:'unknown'|'ready'|'unavailable';canRegisterValidations:boolean};
 const g=window as unknown as Data;
-let state:Snapshot={groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[],comparison:null,errorCode:''};
+let state:Snapshot={groups:[],summary:{},rows:[],records:[],history:[],events:[],runs:[],context:{},busy:false,progress:0,total:0,error:'',message:'',runId:'',selected:[],comparison:null,errorCode:'',validations:[],validationsStatus:'unknown',canRegisterValidations:false};
 // Prazos e cancelamento por operação (RA-11) e registro técnico seguro: só identificadores, etapa, código e tempos.
 const ops=new OperationRegistry();let deadlineOverrides:Record<string,number>={};
 const errorsApi=()=>g.GrconAllocationAuditorErrors;
@@ -98,10 +98,11 @@ async function requireCheckpointSupport(){
 let pauseMark=0,analysisSerial=0,activeAnalysis=0; // a pausa só pode interromper a análise que foi pausada, nunca uma gravação ou exportação posterior
 function hardCancel(){const n=ops.cancelAll();if(worker)abortWorker(new OperationError('CANCELLED','Operação cancelada a seu pedido.'));return n;}
 const WRITE_OPS=new Set(['begin','chunk','input-chunk','finish','event']);
-async function rpc(operation:string,input:Data={}){
- const c=requireSession(),t=epoch,started=Date.now(),write=WRITE_OPS.has(operation);
+const VALIDATIONS_FN='grcon_allocation_reference_validations';
+async function rpc(operation:string,input:Data={},fn='grcon_allocation_auditor'){
+ const c=requireSession(),t=epoch,started=Date.now(),write=WRITE_OPS.has(operation)&&fn==='grcon_allocation_auditor';
  try{
-  const r=await withDeadline<any>(write?'rpc-write':'rpc',signal=>{const b:any=c.client.rpc('grcon_allocation_auditor',{target_workspace:c.membership.workspace_id,operation,input});if(b&&typeof b.abortSignal==='function')b.abortSignal(signal);return Promise.resolve(b);},{overrides:deadlineOverrides,registry:ops});
+  const r=await withDeadline<any>(write?'rpc-write':'rpc',signal=>{const b:any=c.client.rpc(fn,{target_workspace:c.membership.workspace_id,operation,input});if(b&&typeof b.abortSignal==='function')b.abortSignal(signal);return Promise.resolve(b);},{overrides:deadlineOverrides,registry:ops});
   current(t);
   if(r.error){const message=r.error.message||'Não foi possível acessar o histórico do auditor.';throw write?new OperationError('SAVE_FAILED',message,operation):Error(message);}
   logOp('rpc:'+operation,started);return r.data;
@@ -121,7 +122,7 @@ function clearResults(){if(state.rows.length&&state.total>0&&state.progress===st
 const canonical=(value:any):string=>value&&typeof value.toJSON==='function'?canonical(value.toJSON()):JSON.stringify(value===undefined?null:value&&typeof value==='object'?Array.isArray(value)?value.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,JSON.parse(canonical(value[k]))])):value);
 const digest=async(value:any)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(value))))).map(x=>x.toString(16).padStart(2,'0')).join('');
 const sameInput=(input:Data,result:Data)=>['document','sourceHash','sourceFile','sourceSheet','sourceRow','allocation'].every(k=>String(input[k]??'')===String(result[k]??''))&&(!input.revision||String(input.revision)===String(result.revision));
-async function referenceDigest(context:Data){return digest({versions:context.versions||{},applicability:context.applicability||{},bases:context.bases||{},history:context.history||[],ldRecords:(context.ldRecords||[]).map(({sourceTimestamp,...r}:Data)=>r)});}
+async function referenceDigest(context:Data){return digest({...((context.referenceValidations||[]).length||(context.referenceHomologations||[]).length?{validations:context.referenceValidations||[],homologations:context.referenceHomologations||[]}:{}),versions:context.versions||{},applicability:context.applicability||{},bases:context.bases||{},history:context.history||[],ldRecords:(context.ldRecords||[]).map(({sourceTimestamp,...r}:Data)=>r)});}
 function stopWorker(){epoch++;cancelled=true;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Análise substituída.')));pending.clear();}
 function emptySnapshot():Partial<Snapshot>{return {comparison:null,groups:[],summary:{},rows:[],records:[],history:[],events:[],context:{},progress:0,total:0,error:'',message:'Conversa sem análise vinculada. Anexe as fontes para começar.',runId:'',selected:[]};}
 function commitRestore(snapshot:Partial<Snapshot>,meta:Data|null,t:number){current(t);stopWorker();sourceFiles.clear();g.GrconAllocationGeneratorUi?.clearAuditLd?.();saveRequest='';savedEvents=snapshot.events?.length||0;saveMetadata=meta;emit(snapshot);}
@@ -366,8 +367,10 @@ export const service={
   if(!state.records.length)throw Error('Importe uma alocação ou selecione os documentos da LD.');if(state.records.length>50000)throw Error('Limite de 50.000 documentos por análise.');
   if(resume&&state.context.engine&&state.context.engine!==g.GrconAllocationAuditorCore.VERSION)throw Error('O motor mudou. Inicie uma nova auditoria; os resultados históricos permanecem preservados.');
   if(resume&&state.runId&&state.context.createdBy!==cloud().session.user.id)throw Error('Somente o autor pode continuar esta análise.');
+  await service.loadReferenceValidations().catch(()=>{}); // melhor esforço: sem o registro, as referências ficam "carregadas" e nada é validado por omissão
+  const refRecords=g.GrconAllocationAuditorReferences?.fromRecords?g.GrconAllocationAuditorReferences.fromRecords(state.validations):{validations:[],homologations:[]};
   let fresh:Data={},contextWarning='';try{fresh=await getContext();}catch(e){current(t);contextWarning='As bases complementares não puderam ser consultadas: '+((e as Error).message||String(e))+'. Auditoria parcial; verificações dependentes das bases permanecem inconclusivas.';}
-   current(t);const context:Data={...fresh,...state.context,saved:false,checkpoint:resume&&Boolean(state.context.checkpoint),ldRecords:fresh.ldRecords||state.context.ldRecords||[],bases:fresh.bases||state.context.bases||{},versions:fresh.versions||state.context.versions||{},baseMetadata:fresh.baseMetadata||[],contract:cloud().membership.contract_id,history:g.GrconAllocationAuditorCore.mergeHistory(fresh.centralHistory||[],state.history),records:state.records,homologated:{},contextWarning};
+   current(t);const context:Data={...fresh,...state.context,saved:false,checkpoint:resume&&Boolean(state.context.checkpoint),ldRecords:fresh.ldRecords||state.context.ldRecords||[],bases:fresh.bases||state.context.bases||{},versions:fresh.versions||state.context.versions||{},baseMetadata:fresh.baseMetadata||[],contract:cloud().membership.contract_id,history:g.GrconAllocationAuditorCore.mergeHistory(fresh.centralHistory||[],state.history),records:state.records,homologated:{},referenceValidations:refRecords.validations,referenceHomologations:refRecords.homologations,contextWarning};
   if(resume&&contextWarning)throw Error('Não foi possível confirmar as referências para retomar. Tente novamente quando as bases estiverem disponíveis.');
   if(resume&&canonical(context.versions)!==canonical(state.context.versions||{}))throw Error('As bases mudaram. Inicie uma nova análise.');
   if(resume&&state.context.checkpoint&&(state.context.sources||[]).some((s:Data)=>!sourceFiles.has(s.sha256)))throw Error('Reanexe todas as alocações e LDs originais antes de retomar.');
@@ -393,6 +396,25 @@ export const service={
  abort(){cancelled=true;pauseMark++;return hardCancel();},
  setDeadlines(overrides:Record<string,number>){deadlineOverrides={...overrides};},
  // Esquece o que já se sabe sobre o banco (ex.: depois que o administrador aplica a atualização do checkpoint).
+ // Validações/homologações de referências (RA-07): registro humano com responsável, data e evidência. Banco sem a migração: avisa e segue sem validações.
+ async loadReferenceValidations(){
+  try{const d=await rpc('list',{},VALIDATIONS_FN);emit({validations:Array.isArray(d?.validations)?d.validations:[],validationsStatus:'ready',canRegisterValidations:Boolean(d?.canRegister)});}
+  catch(e){
+   const m=String((e as Error)?.message||'');
+   if(/does not exist|could not find the function|schema cache|PGRST202/i.test(m)){emit({validations:[],validationsStatus:'unavailable',canRegisterValidations:false});return;}
+   if((e as Data)?.code==='STALE_CONTEXT')throw e;
+   emit({validationsStatus:'unknown'});
+  }
+ },
+ async registerValidation(form:Data){return task(async()=>{
+  const c=requireSession();
+  if(state.validationsStatus==='unavailable')throw new OperationError('VALIDATIONS_UNAVAILABLE','Registro de validações indisponível: o banco ainda não recebeu a atualização.','validations');
+  try{await rpc('register',{requestId:crypto.randomUUID(),...form},VALIDATIONS_FN);}
+  catch(e){if(/does not exist|could not find the function|schema cache|PGRST202/i.test(String((e as Error)?.message||''))){emit({validationsStatus:'unavailable',canRegisterValidations:false});throw new OperationError('VALIDATIONS_UNAVAILABLE','Registro de validações indisponível: o banco ainda não recebeu a atualização.','validations');}throw e;}
+  await service.loadReferenceValidations();
+  emit({message:'Validação registrada por '+String(form.responsible||c.session.user.id)+'. Ela vale a partir de agora; reexecute a auditoria para aplicá-la aos resultados.'});
+ });},
+ async revokeValidation(id:string,reason:string){return task(async()=>{requireSession();await rpc('revoke',{id,reason},VALIDATIONS_FN);await service.loadReferenceValidations();emit({message:'Validação revogada. Reexecute a auditoria para refletir a mudança.'});});},
  resetCapabilities(){checkpointSupport='unknown';checkpointCheckedAt=0;},
  // Diagnóstico técnico seguro (sem documentos, sem nomes de arquivo, sem credenciais) para enviar ao suporte.
  diagnostics(){const E=errorsApi();return JSON.stringify({generatedAt:new Date().toISOString(),engine:g.GrconAllocationAuditorCore?.VERSION,errors:E?.VERSION,progress:state.progress,total:state.total,busy:state.busy,lastError:E?E.sanitize(state.error):'',lastErrorCode:state.errorCode,operations:ops.log.slice(-50)},null,1);},

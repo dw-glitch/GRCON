@@ -4,6 +4,7 @@ import {createPortal} from 'react-dom';
 import {assistant,type Tab} from './assistantStore';
 import {buildItems,buildStages,countKinds,filterItems,friendlyError,nextAction,type Filter,type Item} from './chatView';
 import {PendenciasPanel} from './PendenciasPanel';
+import {ValidationsPanel} from './ValidationsPanel';
 import {service,type Data} from './service';
 export function AllocationAssistant(){
  const chat=useSyncExternalStore(assistant.subscribe,assistant.snapshot),s=useSyncExternalStore(service.subscribe,service.snapshot);
@@ -77,6 +78,8 @@ export function AllocationAssistant(){
  },[chat.open,O,s.rows,s.events,s.context.contextWarning]);
  const items=useMemo(()=>chat.open?buildItems(s.rows,opinion,s.events,s.comparison):[],[chat.open,s.rows,opinion,s.events,s.comparison]);
  const kinds=countKinds(items),shown=useMemo(()=>filterItems(items,filter),[items,filter]);
+ // Ao abrir a aba Arquivos a lista de validações é recarregada: outra pessoa pode ter registrado ou revogado.
+ useEffect(()=>{if(chat.open&&chat.tab==='arquivos')void service.loadReferenceValidations().catch(()=>{});},[chat.open,chat.tab]);
  if(!chat.open)return null;
  const sources=(s.context.sources||[]) as Data[];
  const stages=buildStages({records:s.records,rows:s.rows,progress:s.progress,total:s.total,busy,sources,pendingSheets:chat.pendingSheets.length,pendingAllocations:chat.pendingAllocations.length,opinion,contextWarning:s.context.contextWarning});
@@ -179,6 +182,8 @@ export function AllocationAssistant(){
    <ul>{sources.map((f:Data)=><li key={f.sha256}>{f.name} · {f.kind==='ld'?'LD':'Alocação'}{f.model==='mapped'?' · layout mapeado (sem correção automática da planilha)':''}</li>)}</ul>
    <div className="aac-attachments"><label>Anexar alocações<input type="file" multiple accept=".xlsx" disabled={busy} onChange={upload('allocation')}/></label><label>Anexar LDs<input type="file" multiple accept=".xlsx" disabled={busy} onChange={upload('ld')}/></label></div>
    {s.context.contextWarning&&<p className="aac-warn" role="note">{s.context.contextWarning}</p>}
+   <hr/>
+   <ValidationsPanel validations={s.validations} status={s.validationsStatus} canRegister={s.canRegisterValidations} busy={busy} unavailableText={friendlyError('Registro de validações indisponível','VALIDATIONS_UNAVAILABLE').what+' '+friendlyError('x','VALIDATIONS_UNAVAILABLE').todo} onRegister={form=>service.registerValidation(form).catch(()=>{})} onRevoke={(id,reason)=>service.revokeValidation(id,reason).catch(()=>{})}/>
    <hr/>
    <strong>Modelo de aprendizado</strong>
    <p>{s.context.mlModel?.card?.version?'Modelo '+s.context.mlModel.card.version+' ativo: gera apenas sugestões não normativas, nunca erros, pendências ou valores.':'Nenhum modelo ativo. O auditor usa só regras determinísticas e precedentes fiscais; sugestões de modelo ficam desligadas.'}</p>

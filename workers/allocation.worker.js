@@ -13,7 +13,8 @@ importScripts('../xlsx.full.min.js','../exceljs.min.js','../jszip.min.js',
 const A=self.AllocationCore,C=self.RECONTriagemCore,W=self.AllocationWorkbook,Engine=self.GrconAllocationGeneratorCore;
 const bytesToBase64=bytes=>{let value='';for(let i=0;i<bytes.length;i+=8192)value+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(value);};
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');
-function read(bytes){return XLSX.read(bytes,{type:'array',cellDates:true,cellFormula:true,cellNF:true,sheetStubs:true});}
+// O Gerador lê como sempre; só a LD importada para o Auditor ('audit-ld') pede o valor exibido das células (cellNF) e células vazias (sheetStubs).
+function read(bytes,audit=false){return XLSX.read(bytes,{type:'array',cellDates:true,cellFormula:true,...(audit?{cellNF:true,sheetStubs:true}:{})});}
 function parseAuditLd(book,name){
  const parsed=C.parseWorkbook(book,name,Date.now()),I=self.GrconAllocationAuditorCore;
  if(!parsed.records.length)throw Error('Nenhum documento foi reconhecido nas abas técnicas da LD '+name+'. Confira as abas e a coluna Documento antes de importar.');
@@ -106,7 +107,8 @@ function parse(kind,book,name){
   throw Error('Nenhuma aba de caminhos Databook encontrada. Use CAMINHO DB_SIGEM (com ou sem sufixo de revisão) ou uma tabela com a coluna Caminho Databook.');
  }
  if(kind==='eap')return A.parseProjectLevelBase(book,XLSX);
- if(kind==='ld')return parseAuditLd(book,name);
+ if(kind==='ld')return C.parseWorkbook(book,name,Date.now()); // importação de LD do Gerador: comportamento original, inalterado
+ if(kind==='audit-ld')return parseAuditLd(book,name); // LD do Auditor: leitura estrita (cabeçalho ambíguo e células ilegíveis são recusados)
  if(kind==='confirmation')return self.RECONAllocationConfirmations.parseWorkbook(book,XLSX,{name}).rows;
  if(kind==='list')return A.parseRelationWorkbook(book,XLSX).entries.map(e=>({document:e.raw}));
  if(kind==='history')return A.parseHistoricalAllocationWorkbook(book,XLSX,name).rows;
@@ -127,7 +129,7 @@ async function parseFile(kind,file){
   const previous=self.RECONAllocationTemplate;self.RECONAllocationTemplate={base64:bytesToBase64(bytes)};try{await W.buildAllocation([],ExcelJS,{});}finally{self.RECONAllocationTemplate=previous;}
   return [{base64:bytesToBase64(bytes),sha256:await hash(bytes)}];
  }
- const parsed=parse(kind,read(bytes),file.name);
+ const parsed=parse(kind,read(bytes,kind==='audit-ld'),file.name);
  if(!parsed||(Array.isArray(parsed)&&!parsed.length))throw Error('Nenhum registro reconhecido. Confira os cabeçalhos e abas.');
  return parsed;
 }
@@ -158,7 +160,7 @@ self.onmessage=async({data})=>{const {id,operation,input}=data;try{
   result=await self.GrconAllocationLdExport.reviseAudit(input.file,input.rows,input.sourceHash,XLSX,JSZip,self.RECONTitleWriter,self.RECONLdPreservation);
  }
  else if(operation==='audit-revise-ld'){
-  const original=read(new Uint8Array(await input.file.arrayBuffer()));
+  const original=read(new Uint8Array(await input.file.arrayBuffer()),true);
   for(const row of input.rows){
    const sheet=original.Sheets[row.sheet];if(!sheet)throw Error('A aba de origem não existe na LD selecionada.');
    const values=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false})[Number(row.row)-1]||[];

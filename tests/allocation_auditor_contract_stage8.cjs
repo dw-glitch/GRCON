@@ -66,7 +66,7 @@ const keepAlive=setInterval(()=>{},50);
   'Arquivo XLSX inválido ou corrompido. Abra uma cópia no Excel':'FILE_INVALID','Falha na leitura do Excel: célula ilegível':'SHEET_READ','Anexe a LD correspondente para continuar':'LD_NOT_FOUND',
   'Há várias ocorrências do documento. Informe também a revisão':'AMBIGUOUS_DOCUMENT','Aplicabilidade e revisão da ET não comprovadas':'REVISION_INCOMPATIBLE','Bases complementares indisponíveis':'SOURCE_UNAVAILABLE',
   'Entre em um contrato para auditar alocações.':'AUTH','Não foi possível salvar a análise':'SAVE_FAILED','Tempo esgotado na operação batch':'TIMEOUT','Operação cancelada a seu pedido.':'CANCELLED',
-  'A IA excedeu o tempo de resposta':'AI_FAILED','O motor mudou. Inicie uma nova auditoria':'RESUME_INCOMPATIBLE','Relatório fora do contrato de abas.':'EXPORT_FAILED','Conta ou contrato alterado. Reabra a análise.':'STALE_CONTEXT','Failed to fetch':'NETWORK','Histórico completo indisponível: o banco ainda não recebeu a atualização do checkpoint.':'CHECKPOINT_UNAVAILABLE'};
+  'A IA excedeu o tempo de resposta':'AI_FAILED','O motor mudou. Inicie uma nova auditoria':'RESUME_INCOMPATIBLE','Relatório fora do contrato de abas.':'EXPORT_FAILED','Conta ou contrato alterado. Reabra a análise.':'STALE_CONTEXT','Failed to fetch':'NETWORK','Histórico completo indisponível: o banco ainda não recebeu a atualização do checkpoint.':'CHECKPOINT_UNAVAILABLE','Registro de validações indisponível: o banco ainda não recebeu a atualização.':'VALIDATIONS_UNAVAILABLE'};
  for(const [message,code] of Object.entries(required)){
   const d=Errors.describe(new Error(message));assert.equal(d.code,code,message);
   for(const part of ['what','compromised','todo'])assert.ok(d[part]&&d[part].length>20,code+' sem '+part);

@@ -202,4 +202,20 @@ const codes = e => e.blockers.map(b => b.code);
   assert.ok(rows.references.some(r => r.at(-1) === 'sinalizador'));
 }
 
+// RA-07: registros do servidor viram opções do catálogo; só o que tem responsável, data e evidência entra
+{
+ const recs=[{id:'1',record_type:'validacao',kind:'et-codificacao',revision:'R',responsible:'Maria Souza',validated_on:'2026-11-05',evidence:'Ata 12/2026',effective_date:'24/08/2026',effective_evidence:'Memorial UHDT-D'},
+  {id:'2',record_type:'homologacao',kind:'workflows-uhdt-d',responsible:'João Lima',validated_on:'2026-11-05',evidence:'Aprovação formal'},
+  {id:'3',record_type:'validacao',kind:'inventado',responsible:'x',validated_on:'2026-11-05',evidence:'y'},{id:'4',record_type:'validacao',kind:'n-381',revision:'M',responsible:'',validated_on:'2026-11-05',evidence:'sem responsável'},
+  {id:'5',record_type:'validacao',kind:'n-381',revision:'M',responsible:'Ana',validated_on:'2026-11-05',evidence:''},{id:'6',record_type:'validacao',kind:'n-381',revision:'M',responsible:'Ana',evidence:'sem data'}];
+ const o=R.fromRecords(recs);assert.equal(o.validations.length,1,'só o registro completo e conhecido entra');assert.equal(o.homologations.length,1);
+ assert.deepEqual([o.validations[0].by,o.validations[0].at,o.validations[0].evidence,o.validations[0].origin],['Maria Souza','05/11/2026','Ata 12/2026','registro']);assert.equal(o.validations[0].effective.date,'24/08/2026');
+ const cat=R.buildCatalog({contract:'QA',validations:o.validations,homologations:o.homologations});const et=r=>cat.entries.find(e=>e.kind==='et-codificacao'&&e.revision===r);
+ assert.equal(et('R').level,'validado','Rev. R carregada + validação registrada = validada');assert.equal(et('P').level,'carregado','outra revisão não herda a validação');assert.equal(et('Q').level,'ausente');
+ assert.equal(et('R').effective.proof,'documentada','vigência com evidência passa de "declarada" a "documentada"');
+ const wf=cat.entries.find(e=>e.kind==='workflows-uhdt-d');assert.notEqual(wf.level,'homologado','homologação sem validação e sem base carregada nunca eleva o nível');
+ const wfLoaded=R.buildCatalog({contract:'QA',loadedBases:{workflow:true},validations:[],homologations:o.homologations}).entries.find(e=>e.kind==='workflows-uhdt-d');assert.notEqual(wfLoaded.level,'homologado','homologar exige validar antes');
+ const both=R.buildCatalog({contract:'QA',loadedBases:{workflow:true},validations:[{kind:'workflows-uhdt-d',by:'Maria',at:'05/11/2026',evidence:'Conferido'}],homologations:o.homologations}).entries.find(e=>e.kind==='workflows-uhdt-d');assert.equal(both.level,'homologado','validação + homologação registradas');
+ assert.deepEqual(R.fromRecords(null),{validations:[],homologations:[]});
+}
 console.log('allocation_auditor_references: escada localizado/carregado/validado/homologado, revisões N/P/Q/R separadas, vigência, bloqueios sem falsa conformidade, rastreabilidade integrada ao motor e ao Excel OK');

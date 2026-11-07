@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 1 | Revisão do código do branch (PR em rascunho). A revisão do Codex está sem cota; o `CLAUDE.md` pede esperar a revisão antes de mesclar | proprietário | pendente |
 | 2 | **Homologar a migração e o rollback num banco de homologação** (hoje **não existe**: a conta tem só o projeto de produção; criar branch/projeto é serviço pago) | proprietário | **bloqueado** |
-| 3 | Aplicar `20261106104652_allocation_auditor_complete_checkpoint.sql` em produção | proprietário | pendente |
+| 3 | Aplicar **em ordem** `20261106104652_allocation_auditor_complete_checkpoint.sql` e `20261107090000_allocation_auditor_reference_validations.sql` (RA-07) em produção. Ambas ainda **não existem** em produção (consulta somente-leitura em 07/11/2026) e cada uma tem rollback em `supabase/rollback/` | proprietário | pendente |
 | 4 | Merge na `main` → deploy automático (GitHub → Cloudflare Workers Builds) | proprietário | pendente |
 | 5 | Verificação pós-deploy (seção 5) | eu, após autorização | pendente |
 
@@ -37,7 +37,7 @@ Consulta somente-leitura em produção (06/11/2026): a função `private.grcon_a
 ## 4. Preservação dos demais módulos
 - **Merge com a `main` atual** (`0c3572b1`, inclui `#430`): simulado numa árvore temporária — **sem conflitos**; `npm run build`, `npm test` (agora incluindo `test:allocation-auditor`) e `build:cloudflare` + `verify:cloudflare` (348 arquivos) passam.
 - **Superfície alterada fora do auditor** (63 arquivos no branch; 11 fora do auditor): `cloudflare/worker-entry.mjs` (apenas o manipulador da consulta de IA: log seguro e erro 422), `cloudflare/allocation-audit-ai.mjs` (importa o contrato de campos), `grcon_module_loader.js`, `scripts/verify-cloudflare-production.mjs`, `package.json` e testes do assistente de alocação.
-- **Ponto de atenção:** `workers/allocation.worker.js` (o worker do **Gerador de Alocação**) mudou: a importação de **LD** (`parse('ld')`) agora usa `parseAuditLd`, que **rejeita cabeçalho ambíguo e células ilegíveis** (antes aceitava). É o comportamento exigido pelo auditor (Etapa 1), mas atinge a importação de LD do Gerador. **Validar com LDs reais antes de publicar.**
+- **Risco tratado em 07/11/2026:** `workers/allocation.worker.js` (o worker do **Gerador**) havia passado a usar a leitura estrita de LD também na importação de LD do Gerador. Agora a leitura estrita é um tipo separado (`audit-ld`), usado **só** pelo Auditor; `parse('ld')` do Gerador voltou **exatamente** ao comportamento original (leitura do XLSX sem `cellNF`/`sheetStubs`, sem recusar cabeçalho ambíguo), com teste que prova as duas rotas. Mesmo assim, vale **uma conferência com uma LD real** do Gerador antes de publicar.
 - `npm test` agora também executa `npm run test:allocation-auditor` (decisão sua; a CI de deploy já o rodava).
 
 ## 5. Verificação de compatibilidade (pré e pós-deploy)
@@ -47,7 +47,7 @@ Pós-deploy (após autorização): `node scripts/verify-cloudflare-production.mj
 ## 6. Riscos de publicação
 1. **Migração não homologada** (sem banco de homologação) e rollback provado só no PGlite.
 2. **RA-02** pode aumentar o número de erros em alocações reais (títulos/TAGs que antes passavam em silêncio).
-3. **Importação de LD do Gerador** mais estrita (seção 4).
+3. ~~Importação de LD do Gerador mais estrita~~ — isolada (seção 4); resta a conferência com LD real.
 4. **Desempenho** do pacote com milhares de documentos (13 s para 2.500; 81 s para 10.000; ~1,2 GB no Node) — não medido em navegador de usuário.
 5. **Prazos** da Etapa 8 não calibrados; **IA** nunca exercitada contra o Workers AI real.
 6. **Sem validação com usuários**; ML bloqueado (sem acervo autorizado); RA-07 parcial; RA-16 sem dados reais.
@@ -59,4 +59,4 @@ Pós-deploy (após autorização): `node scripts/verify-cloudflare-production.mj
 **Corpo:** resumo por etapa (1–12) com a matriz RA (13 resolvidos localmente, RA-07 parcial, RA-12 infraestrutura com treinamento bloqueado, RA-16 parcial), **pré-requisitos** (homologar a migração e o rollback; validar a importação de LD do Gerador; revisão humana), **ordem** (migração → merge → verificação pós-deploy), **rollback** (seção 3) e limitações (seção 6).
 
 ## 8. Matriz final
-**Resolvidos localmente (não em produção):** RA-01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 14, 15. **Parcial:** RA-07 (falta a tela de registro de validação/homologação com responsável e evidência), RA-16 (cobertura ponta a ponta local feita; falta dados reais/homologação). **Infraestrutura pronta, treinamento bloqueado:** RA-12.
+**Resolvidos localmente (não em produção):** RA-01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 13, 14, 15. **Resolvido localmente também:** RA-07 (registro de validações/homologações na tela, com responsável, data e evidência; migração e rollback testados em PGlite; depende da migração `20261107090000`, ainda não aplicada). **Parcial:** RA-16 (cobertura ponta a ponta local feita; falta dados reais/homologação). **Infraestrutura pronta, treinamento bloqueado:** RA-12.

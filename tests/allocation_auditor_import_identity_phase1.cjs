@@ -78,12 +78,17 @@ function loadService(){
  });
  await check('Parser da LD preserva revisão formatada e erro de célula',async()=>{
   const sheet=X.utils.aoa_to_sheet([['DOCUMENTO','REVISAO','TITULO'],[document,1,'DOCUMENTO TECNICO']]);sheet.B2.z='00';
-  const p=await generator.call('parse',{kind:'ld',file:fixture(sheet,ld.source,' ELE ')});assert.equal(p.records[0].revision,'01');assert.equal(p.records[0].cellValues.revision.raw,1);
-  sheet.B2={t:'e',v:7};const invalid=await generator.call('parse',{kind:'ld',file:fixture(sheet,ld.source,'ELE')});assert.ok(invalid.records[0].sourceIssues.length);assert.ok(has(run(row,invalid.records),'LD-CELL-UNREADABLE'));
+  const p=await generator.call('parse',{kind:'audit-ld',file:fixture(sheet,ld.source,' ELE ')});assert.equal(p.records[0].revision,'01');assert.equal(p.records[0].cellValues.revision.raw,1);
+  sheet.B2={t:'e',v:7};const invalid=await generator.call('parse',{kind:'audit-ld',file:fixture(sheet,ld.source,'ELE')});assert.ok(invalid.records[0].sourceIssues.length);assert.ok(has(run(row,invalid.records),'LD-CELL-UNREADABLE'));
  });
  await check('LD com cabeçalho ambíguo bloqueia associação e título ilegível gera pendência',async()=>{
-  await assert.rejects(generator.call('parse',{kind:'ld',file:fixtureRows([['DOCUMENTO','DOCUMENTO TECNICO','REVISAO'],[document,document,'01']],ld.source)}),/cabeçalho ambíguo/);
-  const sheet=X.utils.aoa_to_sheet([['DOCUMENTO','REVISAO','TITULO DO DOCUMENTO TECNICO'],[document,'01','DOCUMENTO TECNICO']]);sheet.C2={t:'e',v:7};const p=await generator.call('parse',{kind:'ld',file:fixture(sheet,ld.source,'ELE')});assert.equal(p.records[0].cellValues.title.cell,'C2');assert.ok(has(run(row,p.records),'LD-CELL-UNREADABLE'));
+  await assert.rejects(generator.call('parse',{kind:'audit-ld',file:fixtureRows([['DOCUMENTO','DOCUMENTO TECNICO','REVISAO'],[document,document,'01']],ld.source)}),/cabeçalho ambíguo/);
+  // Etapa 12: a importação de LD do GERADOR ('ld') continua exatamente como antes (não recusa cabeçalho ambíguo nem lê o valor exibido das células); só a LD do Auditor ('audit-ld') é estrita.
+  {const ambiguous=fixtureRows([['DOCUMENTO','DOCUMENTO TECNICO','REVISAO'],[document,document,'01']],ld.source);
+   await assert.doesNotReject(generator.call('parse',{kind:'ld',file:ambiguous}),'Gerador: LD com cabeçalho ambíguo segue aceita como antes');
+   const plain=await generator.call('parse',{kind:'ld',file:fixtureRows([['DOCUMENTO','REVISAO','TITULO DO DOCUMENTO TECNICO'],[document,'01','DOCUMENTO TECNICO']],ld.source)});
+   assert.ok(plain.records.length>=1&&!('cellValues' in plain.records[0]),'Gerador: registros sem os campos extras da leitura estrita');}
+  const sheet=X.utils.aoa_to_sheet([['DOCUMENTO','REVISAO','TITULO DO DOCUMENTO TECNICO'],[document,'01','DOCUMENTO TECNICO']]);sheet.C2={t:'e',v:7};const p=await generator.call('parse',{kind:'audit-ld',file:fixture(sheet,ld.source,'ELE')});assert.equal(p.records[0].cellValues.title.cell,'C2');assert.ok(has(run(row,p.records),'LD-CELL-UNREADABLE'));
  });
  await check('Serviço real pede identificação e conserva 0037 após confirmação',async()=>{
   const service=loadService();const f=fixtureRows([['DOCUMENTO','REVISAO'],[document,'01']]);const result=await service.importMany([f]);assert.equal(result.unidentified.length,1);
@@ -100,7 +105,7 @@ function loadService(){
   const dir=process.env.GRCON_AUDIT_SOURCES,crypto=require('node:crypto'),digest=bytes=>crypto.createHash('sha256').update(bytes).digest('hex'),times=[],before=new Map();
   const files=fs.readdirSync(dir).filter(name=>name==='CENTRAL DE ALOCAÇÃO.xlsx'||/^LD-5290/.test(name));let ldRecords=0,sourceIssues=0;
   for(const name of files){const bytes=fs.readFileSync(path.join(dir,name));before.set(name,digest(bytes));const start=performance.now();
-   const parsed=name.startsWith('LD-')?await generator.call('parse',{kind:'ld',file:file(name,bytes)}):await audit.call('parse',{file:file(name,bytes),sheet:'Central de alocação',contract:'QA'});
+   const parsed=name.startsWith('LD-')?await generator.call('parse',{kind:'audit-ld',file:file(name,bytes)}):await audit.call('parse',{file:file(name,bytes),sheet:'Central de alocação',contract:'QA'});
    if(name.startsWith('LD-'))ldRecords+=parsed.records.length;else {assert.equal(parsed.records.length,15441);assert.equal(new Set(parsed.records.filter(r=>r.fiscalComment).map(r=>r.fiscalComment)).size,436);}
    sourceIssues+=parsed.records.reduce((n,r)=>n+(r.sourceIssues?.length||0),0);times.push({kind:name.startsWith('LD-')?'LD':'Central',records:parsed.records.length,milliseconds:Math.round(performance.now()-start)});
   }
